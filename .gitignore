@@ -15,3 +15,7 @@ react/frontend/node_modules/
 # Misc
 .DS_Store
 *.log
+
+# Backups
+*.tar.gz
+migration_backup_*.tar.gz
