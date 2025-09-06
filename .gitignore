@@ -3,9 +3,13 @@ venv/
 .flaskenv
 .env
 __pycache__/
+*/__pycache__/
+**/__pycache__/
 *.pyc
 *.pyo
 *.pyd
+*.pdb
+.pytest_cache/
 
 # Node
 node_modules/
@@ -15,7 +19,41 @@ react/frontend/node_modules/
 # Misc
 .DS_Store
 *.log
+*.tmp
+*.temp
+.coverage
+htmlcov/
+
+# IDEs
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# OS
+Thumbs.db
+.DS_Store?
+ehthumbs.db
+
+# Build artifacts
+*.egg-info/
+build/
+dist/
+
+# Database
+*.db
+*.sqlite
+*.sqlite3
+database.db*
 
 # Backups
 *.tar.gz
 migration_backup_*.tar.gz
+*.backup
+
+# Environment & Config
+.flaskenv
+.env.local
+.env.development
+.env.production
