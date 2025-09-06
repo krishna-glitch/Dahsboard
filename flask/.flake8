@@ -1,0 +1,29 @@
+[flake8]
+# Flask Backend Linting Configuration
+max-line-length = 120
+exclude = 
+    __pycache__,
+    .git,
+    .pytest_cache,
+    venv,
+    .venv,
+    node_modules,
+    build,
+    dist
+
+# Ignore specific errors
+ignore = 
+    # Line too long (handled by max-line-length)
+    E501,
+    # Trailing whitespace (can be auto-fixed)
+    W291,
+    # Print statements (acceptable in test files)
+    T001
+
+# Error codes:
+# E501: line too long 
+# W291: trailing whitespace
+# W191: indentation contains tabs
+# F403: 'from module import *' used
+# T001: print found
+# T100: TODO/FIXME comment found

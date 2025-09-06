@@ -1,0 +1,324 @@
+/**
+ * Modern Layout System - CSS Grid Replacement for Bootstrap Columns
+ * Replaces fixed sidebar approach with responsive grid
+ */
+
+/* Root Layout Container */
+.modern-dashboard {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  grid-template-rows: auto 1fr;
+  grid-template-areas: 
+    "header header"
+    "filters content";
+  min-height: 100vh;
+  gap: 0;
+  background: #f8f9fa;
+}
+
+/* Header Area - Dashboard Context */
+.modern-dashboard .dashboard-header {
+  grid-area: header;
+  background: white;
+  border-bottom: 1px solid #dee2e6;
+  padding: 1rem 2rem;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  position: var(--header-position-dashboard);
+  top: var(--header-top-dashboard);
+  z-index: var(--header-zindex-dashboard);
+}
+
+/* Header Area - Landing Page Context */
+.landing-page .dashboard-header {
+  position: var(--header-position-landing);
+  z-index: var(--header-zindex-landing);
+}
+
+.dashboard-title {
+  margin: 0;
+  font-size: 1.5rem;
+  font-weight: 600;
+  color: #212529;
+}
+
+.dashboard-subtitle {
+  margin: 0;
+  font-size: 0.9rem;
+  color: #6c757d;
+}
+
+/* Filter Panel */
+.filter-panel {
+  grid-area: filters;
+  background: white;
+  border-right: 1px solid #dee2e6;
+  width: 280px;
+  transition: width 0.3s ease, transform 0.3s ease;
+  overflow: hidden;
+}
+
+.filter-panel.collapsed {
+  width: 60px;
+}
+
+.filter-panel-header {
+  padding: 1rem;
+  border-bottom: 1px solid #dee2e6;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  background: #f8f9fa;
+}
+
+.filter-panel-title {
+  font-weight: 600;
+  margin: 0;
+  font-size: 0.9rem;
+  color: #495057;
+}
+
+.filter-toggle {
+  background: none;
+  border: none;
+  padding: 0.25rem;
+  border-radius: 4px;
+  color: #6c757d;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.filter-toggle:hover {
+  background: #e9ecef;
+  color: #495057;
+}
+
+.filter-panel-content {
+  padding: 1rem;
+  height: calc(100vh - 120px);
+  overflow-y: auto;
+}
+
+.filter-panel.collapsed .filter-panel-content {
+  padding: 0.5rem;
+}
+
+/* Main Content Area */
+.main-content {
+  grid-area: content;
+  padding: 2rem;
+  overflow-y: auto;
+  max-height: calc(100vh - 80px);
+}
+
+/* Metrics Grid - Using Design Tokens */
+.modern-dashboard .metrics-grid,
+.landing-content .metrics-grid,
+.modern-dashboard-home .metrics-grid {
+  display: grid;
+  grid-template-columns: var(--metrics-grid-columns);
+  gap: var(--metrics-grid-gap);
+  margin-bottom: var(--spacing-section-md, 32px);
+  align-items: stretch;
+}
+
+/* Chart Container */
+.modern-dashboard .chart-container {
+  background: white;
+  border-radius: 8px;
+  box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+  padding: 1.5rem;
+  margin-bottom: 2rem;
+}
+
+.modern-dashboard .chart-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 1rem;
+  padding-bottom: 1rem;
+  border-bottom: 1px solid #e9ecef;
+}
+
+.modern-dashboard .chart-title {
+  font-size: 1.1rem;
+  font-weight: 600;
+  margin: 0;
+  color: #212529;
+}
+
+.chart-controls {
+  display: flex;
+  gap: 0.5rem;
+  align-items: center;
+}
+
+/* Responsive Breakpoints */
+@media (max-width: 1200px) {
+  .modern-dashboard {
+    grid-template-columns: auto 1fr;
+  }
+  
+  .filter-panel {
+    width: 240px;
+  }
+  
+  .main-content {
+    padding: 1.5rem;
+  }
+}
+
+@media (max-width: 992px) {
+  .modern-dashboard {
+    grid-template-areas: 
+      "header"
+      "content";
+    grid-template-columns: 1fr;
+    grid-template-rows: auto 1fr;
+  }
+  
+  .filter-panel {
+    position: fixed;
+    top: 80px;
+    left: 0;
+    height: calc(100vh - 80px);
+    z-index: 1000;
+    transform: translateX(-100%);
+    width: 280px;
+    box-shadow: 2px 0 10px rgba(0,0,0,0.1);
+  }
+  
+  .filter-panel.open {
+    transform: translateX(0);
+  }
+  
+  .filter-panel.collapsed {
+    transform: translateX(-100%);
+  }
+  
+  .main-content {
+    padding: 1rem;
+  }
+  
+  .dashboard-header {
+    padding: 1rem;
+  }
+}
+
+@media (max-width: 768px) {
+  .modern-dashboard .metrics-grid,
+  .landing-content .metrics-grid,
+  .modern-dashboard-home .metrics-grid {
+    grid-template-columns: var(--metrics-grid-columns-tablet);
+    gap: var(--metrics-grid-gap-mobile);
+  }
+  
+  .modern-dashboard .chart-header {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 1rem;
+  }
+  
+  .modern-dashboard .chart-controls {
+    width: 100%;
+    justify-content: flex-end;
+  }
+}
+
+@media (max-width: 576px) {
+  .modern-dashboard .metrics-grid,
+  .landing-content .metrics-grid,
+  .modern-dashboard-home .metrics-grid {
+    grid-template-columns: var(--metrics-grid-columns-mobile);
+  }
+  
+  .main-content {
+    padding: 0.75rem;
+  }
+  
+  .dashboard-header {
+    padding: 0.75rem;
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 0.5rem;
+  }
+}
+
+/* Mobile Filter Overlay */
+.mobile-filter-overlay {
+  display: none;
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: rgba(0,0,0,0.5);
+  z-index: 999;
+}
+
+@media (max-width: 992px) {
+  .mobile-filter-overlay.active {
+    display: block;
+  }
+}
+
+/* Collapsed Filter Icons */
+.collapsed-filter-icons {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  padding: 0.5rem 0;
+}
+
+.filter-icon-btn {
+  width: 40px;
+  height: 40px;
+  border: none;
+  background: #f8f9fa;
+  border-radius: 6px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: #6c757d;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  position: relative;
+}
+
+.filter-icon-btn:hover {
+  background: #e9ecef;
+  color: #495057;
+}
+
+.filter-icon-btn.active {
+  background: #0d6efd;
+  color: white;
+}
+
+/* Filter Badge */
+.filter-badge {
+  position: absolute;
+  top: -4px;
+  right: -4px;
+  background: #dc3545;
+  color: white;
+  border-radius: 50%;
+  width: 16px;
+  height: 16px;
+  font-size: 10px;
+  font-weight: bold;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+/* Professional Icon Animations */
+.spin {
+  animation: spin 2s linear infinite;
+}
+
+@keyframes spin {
+  from { transform: rotate(0deg); }
+  to { transform: rotate(360deg); }
+}

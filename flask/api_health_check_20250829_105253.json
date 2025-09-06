@@ -1,0 +1,212 @@
+{
+  "timestamp": "2025-08-29T10:52:53.538576",
+  "health_percentage": 0.0,
+  "total_endpoints": 29,
+  "healthy_endpoints": 0,
+  "average_response_time_ms": 0.0,
+  "results": [
+    {
+      "endpoint": "/api/v1/water_quality/data",
+      "method": "GET",
+      "error": "HTTPConnectionPool(host='localhost', port=5000): Max retries exceeded with url: /api/v1/water_quality/data (Caused by NewConnectionError('<urllib3.connection.HTTPConnection object at 0x7f682b5f0590>: Failed to establish a new connection: [Errno 111] Connection refused'))",
+      "healthy": false,
+      "status": "\u274c ERROR"
+    },
+    {
+      "endpoint": "/api/v1/redox_analysis/data",
+      "method": "GET",
+      "error": "HTTPConnectionPool(host='localhost', port=5000): Max retries exceeded with url: /api/v1/redox_analysis/data (Caused by NewConnectionError('<urllib3.connection.HTTPConnection object at 0x7f682b5f0c80>: Failed to establish a new connection: [Errno 111] Connection refused'))",
+      "healthy": false,
+      "status": "\u274c ERROR"
+    },
+    {
+      "endpoint": "/api/v1/site_comparison/data",
+      "method": "GET",
+      "error": "HTTPConnectionPool(host='localhost', port=5000): Max retries exceeded with url: /api/v1/site_comparison/data (Caused by NewConnectionError('<urllib3.connection.HTTPConnection object at 0x7f682b5f13a0>: Failed to establish a new connection: [Errno 111] Connection refused'))",
+      "healthy": false,
+      "status": "\u274c ERROR"
+    },
+    {
+      "endpoint": "/api/v1/alerts/data",
+      "method": "GET",
+      "error": "HTTPConnectionPool(host='localhost', port=5000): Max retries exceeded with url: /api/v1/alerts/data (Caused by NewConnectionError('<urllib3.connection.HTTPConnection object at 0x7f682b5f1a90>: Failed to establish a new connection: [Errno 111] Connection refused'))",
+      "healthy": false,
+      "status": "\u274c ERROR"
+    },
+    {
+      "endpoint": "/api/v1/home/data",
+      "method": "GET",
+      "error": "HTTPConnectionPool(host='localhost', port=5000): Max retries exceeded with url: /api/v1/home/data (Caused by NewConnectionError('<urllib3.connection.HTTPConnection object at 0x7f682b5f2150>: Failed to establish a new connection: [Errno 111] Connection refused'))",
+      "healthy": false,
+      "status": "\u274c ERROR"
+    },
+    {
+      "endpoint": "/api/v1/admin/users",
+      "method": "GET",
+      "error": "HTTPConnectionPool(host='localhost', port=5000): Max retries exceeded with url: /api/v1/admin/users (Caused by NewConnectionError('<urllib3.connection.HTTPConnection object at 0x7f682b5f2660>: Failed to establish a new connection: [Errno 111] Connection refused'))",
+      "healthy": false,
+      "status": "\u274c ERROR"
+    },
+    {
+      "endpoint": "/api/v1/admin/summary",
+      "method": "GET",
+      "error": "HTTPConnectionPool(host='localhost', port=5000): Max retries exceeded with url: /api/v1/admin/summary (Caused by NewConnectionError('<urllib3.connection.HTTPConnection object at 0x7f682b5f1a90>: Failed to establish a new connection: [Errno 111] Connection refused'))",
+      "healthy": false,
+      "status": "\u274c ERROR"
+    },
+    {
+      "endpoint": "/api/v1/reports/history",
+      "method": "GET",
+      "error": "HTTPConnectionPool(host='localhost', port=5000): Max retries exceeded with url: /api/v1/reports/history (Caused by NewConnectionError('<urllib3.connection.HTTPConnection object at 0x7f682b5f13d0>: Failed to establish a new connection: [Errno 111] Connection refused'))",
+      "healthy": false,
+      "status": "\u274c ERROR"
+    },
+    {
+      "endpoint": "/api/v1/reports/templates",
+      "method": "GET",
+      "error": "HTTPConnectionPool(host='localhost', port=5000): Max retries exceeded with url: /api/v1/reports/templates (Caused by NewConnectionError('<urllib3.connection.HTTPConnection object at 0x7f682b5f0890>: Failed to establish a new connection: [Errno 111] Connection refused'))",
+      "healthy": false,
+      "status": "\u274c ERROR"
+    },
+    {
+      "endpoint": "/api/v1/reports/scheduled",
+      "method": "GET",
+      "error": "HTTPConnectionPool(host='localhost', port=5000): Max retries exceeded with url: /api/v1/reports/scheduled (Caused by NewConnectionError('<urllib3.connection.HTTPConnection object at 0x7f682b5f2f00>: Failed to establish a new connection: [Errno 111] Connection refused'))",
+      "healthy": false,
+      "status": "\u274c ERROR"
+    },
+    {
+      "endpoint": "/api/v1/reports/generate",
+      "method": "POST",
+      "error": "HTTPConnectionPool(host='localhost', port=5000): Max retries exceeded with url: /api/v1/reports/generate (Caused by NewConnectionError('<urllib3.connection.HTTPConnection object at 0x7f682b5f3830>: Failed to establish a new connection: [Errno 111] Connection refused'))",
+      "healthy": false,
+      "status": "\u274c ERROR"
+    },
+    {
+      "endpoint": "/api/v1/performance/summary",
+      "method": "GET",
+      "error": "HTTPConnectionPool(host='localhost', port=5000): Max retries exceeded with url: /api/v1/performance/summary (Caused by NewConnectionError('<urllib3.connection.HTTPConnection object at 0x7f682b5f36e0>: Failed to establish a new connection: [Errno 111] Connection refused'))",
+      "healthy": false,
+      "status": "\u274c ERROR"
+    },
+    {
+      "endpoint": "/api/v1/performance_status/comprehensive-status",
+      "method": "GET",
+      "error": "HTTPConnectionPool(host='localhost', port=5000): Max retries exceeded with url: /api/v1/performance_status/comprehensive-status (Caused by NewConnectionError('<urllib3.connection.HTTPConnection object at 0x7f682b5f2cf0>: Failed to establish a new connection: [Errno 111] Connection refused'))",
+      "healthy": false,
+      "status": "\u274c ERROR"
+    },
+    {
+      "endpoint": "/api/v1/performance_status/feature-test",
+      "method": "POST",
+      "error": "HTTPConnectionPool(host='localhost', port=5000): Max retries exceeded with url: /api/v1/performance_status/feature-test (Caused by NewConnectionError('<urllib3.connection.HTTPConnection object at 0x7f682b5f0c20>: Failed to establish a new connection: [Errno 111] Connection refused'))",
+      "healthy": false,
+      "status": "\u274c ERROR"
+    },
+    {
+      "endpoint": "/api/v1/performance_status/optimization-recommendations",
+      "method": "GET",
+      "error": "HTTPConnectionPool(host='localhost', port=5000): Max retries exceeded with url: /api/v1/performance_status/optimization-recommendations (Caused by NewConnectionError('<urllib3.connection.HTTPConnection object at 0x7f682b5f19a0>: Failed to establish a new connection: [Errno 111] Connection refused'))",
+      "healthy": false,
+      "status": "\u274c ERROR"
+    },
+    {
+      "endpoint": "/api/v1/system_health/summary",
+      "method": "GET",
+      "error": "HTTPConnectionPool(host='localhost', port=5000): Max retries exceeded with url: /api/v1/system_health/summary (Caused by NewConnectionError('<urllib3.connection.HTTPConnection object at 0x7f682b5f2240>: Failed to establish a new connection: [Errno 111] Connection refused'))",
+      "healthy": false,
+      "status": "\u274c ERROR"
+    },
+    {
+      "endpoint": "/api/v1/system_health/services",
+      "method": "GET",
+      "error": "HTTPConnectionPool(host='localhost', port=5000): Max retries exceeded with url: /api/v1/system_health/services (Caused by NewConnectionError('<urllib3.connection.HTTPConnection object at 0x7f682b5f3fb0>: Failed to establish a new connection: [Errno 111] Connection refused'))",
+      "healthy": false,
+      "status": "\u274c ERROR"
+    },
+    {
+      "endpoint": "/api/v1/system_health/imports",
+      "method": "GET",
+      "error": "HTTPConnectionPool(host='localhost', port=5000): Max retries exceeded with url: /api/v1/system_health/imports (Caused by NewConnectionError('<urllib3.connection.HTTPConnection object at 0x7f682b5f3d10>: Failed to establish a new connection: [Errno 111] Connection refused'))",
+      "healthy": false,
+      "status": "\u274c ERROR"
+    },
+    {
+      "endpoint": "/api/v1/system_health/recommendations",
+      "method": "GET",
+      "error": "HTTPConnectionPool(host='localhost', port=5000): Max retries exceeded with url: /api/v1/system_health/recommendations (Caused by NewConnectionError('<urllib3.connection.HTTPConnection object at 0x7f682b5f1670>: Failed to establish a new connection: [Errno 111] Connection refused'))",
+      "healthy": false,
+      "status": "\u274c ERROR"
+    },
+    {
+      "endpoint": "/api/v1/data_diagnostics/run",
+      "method": "GET",
+      "error": "HTTPConnectionPool(host='localhost', port=5000): Max retries exceeded with url: /api/v1/data_diagnostics/run (Caused by NewConnectionError('<urllib3.connection.HTTPConnection object at 0x7f682b5f14c0>: Failed to establish a new connection: [Errno 111] Connection refused'))",
+      "healthy": false,
+      "status": "\u274c ERROR"
+    },
+    {
+      "endpoint": "/api/v1/data_diagnostics/summary",
+      "method": "GET",
+      "error": "HTTPConnectionPool(host='localhost', port=5000): Max retries exceeded with url: /api/v1/data_diagnostics/summary (Caused by NewConnectionError('<urllib3.connection.HTTPConnection object at 0x7f682b5f27b0>: Failed to establish a new connection: [Errno 111] Connection refused'))",
+      "healthy": false,
+      "status": "\u274c ERROR"
+    },
+    {
+      "endpoint": "/api/v1/correlation/matrix",
+      "method": "POST",
+      "error": "HTTPConnectionPool(host='localhost', port=5000): Max retries exceeded with url: /api/v1/correlation/matrix (Caused by NewConnectionError('<urllib3.connection.HTTPConnection object at 0x7f682b5f33b0>: Failed to establish a new connection: [Errno 111] Connection refused'))",
+      "healthy": false,
+      "status": "\u274c ERROR"
+    },
+    {
+      "endpoint": "/api/v1/correlation/significant",
+      "method": "POST",
+      "error": "HTTPConnectionPool(host='localhost', port=5000): Max retries exceeded with url: /api/v1/correlation/significant (Caused by NewConnectionError('<urllib3.connection.HTTPConnection object at 0x7f682b5f3830>: Failed to establish a new connection: [Errno 111] Connection refused'))",
+      "healthy": false,
+      "status": "\u274c ERROR"
+    },
+    {
+      "endpoint": "/api/v1/correlation/patterns",
+      "method": "POST",
+      "error": "HTTPConnectionPool(host='localhost', port=5000): Max retries exceeded with url: /api/v1/correlation/patterns (Caused by NewConnectionError('<urllib3.connection.HTTPConnection object at 0x7f682b5f3950>: Failed to establish a new connection: [Errno 111] Connection refused'))",
+      "healthy": false,
+      "status": "\u274c ERROR"
+    },
+    {
+      "endpoint": "/api/v1/config",
+      "method": "GET",
+      "error": "HTTPConnectionPool(host='localhost', port=5000): Max retries exceeded with url: /api/v1/config (Caused by NewConnectionError('<urllib3.connection.HTTPConnection object at 0x7f682b5f33e0>: Failed to establish a new connection: [Errno 111] Connection refused'))",
+      "healthy": false,
+      "status": "\u274c ERROR"
+    },
+    {
+      "endpoint": "/api/v1/auth/status",
+      "method": "GET",
+      "error": "HTTPConnectionPool(host='localhost', port=5000): Max retries exceeded with url: /api/v1/auth/status (Caused by NewConnectionError('<urllib3.connection.HTTPConnection object at 0x7f682b5f12e0>: Failed to establish a new connection: [Errno 111] Connection refused'))",
+      "healthy": false,
+      "status": "\u274c ERROR"
+    },
+    {
+      "endpoint": "/api/v1/auth/login",
+      "method": "POST",
+      "error": "HTTPConnectionPool(host='localhost', port=5000): Max retries exceeded with url: /api/v1/auth/login (Caused by NewConnectionError('<urllib3.connection.HTTPConnection object at 0x7f682b5f2030>: Failed to establish a new connection: [Errno 111] Connection refused'))",
+      "healthy": false,
+      "status": "\u274c ERROR"
+    },
+    {
+      "endpoint": "/api/v1/upload/history",
+      "method": "GET",
+      "error": "HTTPConnectionPool(host='localhost', port=5000): Max retries exceeded with url: /api/v1/upload/history (Caused by NewConnectionError('<urllib3.connection.HTTPConnection object at 0x7f682b5f1f10>: Failed to establish a new connection: [Errno 111] Connection refused'))",
+      "healthy": false,
+      "status": "\u274c ERROR"
+    },
+    {
+      "endpoint": "/api/v1/upload/file",
+      "method": "POST",
+      "error": "HTTPConnectionPool(host='localhost', port=5000): Max retries exceeded with url: /api/v1/upload/file (Caused by NewConnectionError('<urllib3.connection.HTTPConnection object at 0x7f682b61c140>: Failed to establish a new connection: [Errno 111] Connection refused'))",
+      "healthy": false,
+      "status": "\u274c ERROR"
+    }
+  ]
+}

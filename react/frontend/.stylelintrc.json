@@ -1,0 +1,43 @@
+{
+  "extends": ["stylelint-config-standard"],
+  "rules": {
+    "selector-disallowed-list": [
+      ".metric-card",
+      ".metric-card::before",
+      ".metric-card:hover",
+      ".metric-card-value",
+      ".metric-card-title",
+      ".data-table"
+    ]
+  },
+  "overrides": [
+    {
+      "files": ["src/App.css"],
+      "rules": {
+        "selector-disallowed-list": [
+          ".glass-navbar",
+          ".nav-links",
+          ".nav-dropdown-trigger",
+          ".dropdown-container",
+          ".nav-cta",
+          ".welcome-text",
+          ".cta-button"
+        ]
+      }
+    },
+    {
+      "files": ["src/styles/components.css"],
+      "rules": {
+        "selector-disallowed-list": [
+          ".chart-container",
+          ".chart-header",
+          ".chart-title",
+          ".metrics-grid",
+          ".glass-navbar",
+          ".nav-links",
+          ".data-table"
+        ]
+      }
+    }
+  ]
+}

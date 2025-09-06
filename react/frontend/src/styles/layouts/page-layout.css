@@ -1,0 +1,506 @@
+/* Page Layout Styles - Integrates with existing components */
+
+/* =============================================================================
+   PAGE LAYOUT FOUNDATION
+   ============================================================================= */
+
+.page-layout {
+  min-height: calc(100vh - 80px); /* Account for navigation height */
+  background: var(--surface-color);
+}
+
+.page-main {
+  width: 100%;
+  max-width: 1920px;
+  margin: 0 auto;
+  background: var(--surface-color);
+}
+
+/* =============================================================================
+   PAGE HEADER (Semantic HTML5)
+   ============================================================================= */
+
+.page-header {
+  background: var(--light-color);
+  color: var(--text-primary);
+  padding: var(--spacing-md) var(--spacing-md);
+  margin-bottom: var(--spacing-lg);
+  position: relative;
+  overflow: hidden;
+  border-bottom: 1px solid var(--border-color);
+  border-radius: var(--border-radius-lg) var(--border-radius-lg) 0 0;
+}
+
+.page-header-content {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  text-align: center;
+  position: relative;
+  z-index: 1;
+}
+
+.page-title-section {
+  flex: 1;
+  text-align: center;
+}
+
+.page-title {
+  font-size: var(--font-size-2xl);
+  font-weight: 600;
+  margin: 0;
+  letter-spacing: -0.02em;
+}
+
+.page-description {
+  font-size: var(--font-size-lg);
+  color: var(--light-color); /* Explicitly set to white */
+  font-weight: 500;
+  margin: 0;
+  line-height: 1.5;
+}
+
+.page-actions {
+  display: flex;
+  align-items: center;
+  gap: var(--spacing-md);
+  flex-shrink: 0;
+}
+
+/* =============================================================================
+   LAYOUT TYPES
+   ============================================================================= */
+
+/* Sidebar Layout (Default) */
+.page-layout--with-sidebar .page-content {
+  padding: 0;
+}
+
+.page-with-sidebar {
+  display: grid;
+  grid-template-columns: 380px 1fr;
+  grid-template-areas: "sidebar content";
+  gap: 0;
+  min-height: calc(100vh - 200px);
+  transition: grid-template-columns 0.3s ease;
+}
+
+.page-with-sidebar.collapsed {
+  grid-template-columns: 120px 1fr;
+}
+
+.page-sidebar {
+  grid-area: sidebar;
+  background: var(--light-color);
+  border-right: 1px solid var(--border-color);
+  position: sticky;
+  top: 80px; /* Height of navigation */
+  height: calc(100vh - 80px);
+  overflow-y: auto;
+  overflow-x: visible;
+  z-index: 1000;
+}
+
+/* Override the overflow fix for sidebar */
+.page-sidebar {
+  overflow: visible !important;
+}
+
+.page-content-area {
+  grid-area: content;
+  padding: var(--spacing-xl);
+  background: var(--surface-color);
+  min-width: 0;
+  overflow-x: hidden;
+}
+
+/* Full Width Layout */
+.page-layout--full-width .page-content {
+  padding: var(--spacing-xl);
+}
+
+.page-full-width {
+  width: 100%;
+  max-width: none;
+}
+
+/* Grid Layout */
+.page-layout--grid .page-content {
+  padding: var(--spacing-xl);
+}
+
+.page-grid {
+  display: grid;
+  width: 100%;
+  margin-bottom: var(--spacing-xl);
+}
+
+.page-grid.gap-xs { gap: var(--spacing-xs); }
+.page-grid.gap-sm { gap: var(--spacing-sm); }
+.page-grid.gap-md { gap: var(--spacing-md); }
+.page-grid.gap-lg { gap: var(--spacing-lg); }
+.page-grid.gap-xl { gap: var(--spacing-xl); }
+
+/* =============================================================================
+   SIDEBAR DROPDOWN FIXES
+   ============================================================================= */
+
+/* Fix dropdown positioning and overflow issues */
+.page-sidebar {
+  /* Allow dropdowns to expand beyond sidebar boundaries */
+  overflow: visible !important;
+}
+
+.page-sidebar .card-body {
+  /* Ensure card body allows dropdowns to overflow */
+  overflow: visible !important;
+}
+
+/* Bootstrap form-select dropdown fix */
+.page-sidebar .form-select {
+  position: relative;
+  z-index: 1001;
+}
+
+/* Bootstrap dropdown menu positioning */
+.page-sidebar .dropdown,
+.page-sidebar .dropdown-menu {
+  position: relative;
+  z-index: 1002 !important;
+}
+
+/* React-select dropdown positioning */
+.page-sidebar .css-1dimb5e-singleValue,
+.page-sidebar .css-1pahdxg-control,
+.page-sidebar .css-1s2u09g-control {
+  z-index: 1001;
+}
+
+.page-sidebar .css-26l3qy-menu {
+  z-index: 1002 !important;
+}
+
+/* Specific fix for Bootstrap form-select dropdown */
+.page-sidebar select.form-select {
+  -webkit-appearance: menulist;
+  -moz-appearance: menulist;
+  appearance: menulist;
+}
+
+/* Ensure all form elements can be clicked */
+.page-sidebar .form-control,
+.page-sidebar .form-select,
+.page-sidebar .btn {
+  pointer-events: auto !important;
+}
+
+/* =============================================================================
+   CONTENT COMPONENTS
+   ============================================================================= */
+
+/* Chart Grid for Dashboard Data */
+.dashboard-charts {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(500px, 1fr));
+  gap: var(--spacing-lg);
+  margin-bottom: var(--spacing-xl);
+}
+
+.dashboard-charts.single-column {
+  grid-template-columns: 1fr;
+}
+
+.dashboard-charts.two-column {
+  grid-template-columns: repeat(2, 1fr);
+}
+
+.dashboard-charts.three-column {
+  grid-template-columns: repeat(3, 1fr);
+}
+
+/* Metrics Grid - Generic fallback for pages not using landing-pages.css or modern-layout.css */
+.metrics-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+  gap: var(--spacing-component-lg, 24px);
+  margin-bottom: var(--spacing-section-md, 32px);
+  align-items: stretch;
+}
+
+/* Data Table Container */
+.data-table-container {
+  background: var(--light-color);
+  border: 1px solid var(--border-color);
+  border-radius: var(--border-radius-xl);
+  box-shadow: var(--shadow-sm);
+  overflow: hidden;
+  margin-bottom: var(--spacing-lg);
+}
+
+/* Content Sections */
+.content-section {
+  background: var(--light-color);
+  border: 1px solid var(--border-color);
+  border-radius: var(--border-radius-xl);
+  padding: var(--spacing-lg);
+  margin-bottom: var(--spacing-lg);
+  box-shadow: var(--shadow-sm);
+  transition: all var(--transition-normal);
+}
+
+.content-section:hover {
+  box-shadow: var(--shadow-md);
+  transform: translateY(-2px);
+}
+
+.content-section h2,
+.content-section h3 {
+  margin-top: 0;
+  color: var(--text-primary);
+}
+
+/* =============================================================================
+   RESPONSIVE DESIGN
+   ============================================================================= */
+
+/* Large Desktop: 1200px+ */
+@media (min-width: 1200px) {
+  .page-with-sidebar {
+    grid-template-columns: 420px 1fr;
+  }
+  
+  .page-content-area {
+    padding: var(--spacing-xxl);
+  }
+  
+  .dashboard-charts.three-column {
+    grid-template-columns: repeat(3, 1fr);
+  }
+}
+
+/* Desktop: 1024px - 1199px */
+@media (max-width: 1199px) {
+  .page-header {
+    padding: var(--spacing-lg);
+  }
+  
+  .page-title {
+    font-size: var(--font-size-3xl);
+  }
+  
+  .dashboard-charts.three-column {
+    grid-template-columns: repeat(2, 1fr);
+  }
+}
+
+/* Tablet: 768px - 1023px */
+@media (max-width: 1023px) {
+  .page-with-sidebar {
+    grid-template-columns: 1fr;
+    grid-template-rows: auto 1fr;
+    grid-template-areas:
+      "sidebar"
+      "content";
+  }
+  
+  .page-sidebar {
+    position: relative;
+    height: auto;
+    top: 0;
+    border-right: none;
+    border-bottom: 1px solid var(--border-color);
+  }
+  
+  .page-content-area {
+    padding: var(--spacing-lg);
+  }
+  
+  .page-header-content {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: var(--spacing-md);
+  }
+  
+  .page-actions {
+    width: 100%;
+    justify-content: flex-start;
+  }
+  
+  .dashboard-charts.two-column,
+  .dashboard-charts.three-column {
+    grid-template-columns: 1fr;
+  }
+  
+  .metrics-grid {
+    grid-template-columns: repeat(2, 1fr);
+  }
+}
+
+/* Mobile: 480px - 767px */
+@media (max-width: 767px) {
+  .page-layout {
+    min-height: calc(100vh - 60px);
+  }
+  
+  .page-header {
+    padding: var(--spacing-md);
+    margin-bottom: var(--spacing-lg);
+  }
+  
+  .page-title {
+    font-size: var(--font-size-2xl);
+  }
+  
+  .page-description {
+    font-size: var(--font-size-base);
+  }
+  
+  .page-content-area,
+  .page-layout--full-width .page-content,
+  .page-layout--grid .page-content {
+    padding: var(--spacing-md);
+  }
+  
+  .dashboard-charts {
+    grid-template-columns: 1fr;
+    gap: var(--spacing-md);
+  }
+  
+  .metrics-grid {
+    grid-template-columns: 1fr;
+    gap: var(--spacing-md);
+  }
+  
+  .content-section {
+    padding: var(--spacing-md);
+  }
+}
+
+/* Small Mobile: <480px */
+@media (max-width: 479px) {
+  .page-header {
+    padding: var(--spacing-sm);
+    margin-bottom: var(--spacing-md);
+  }
+  
+  .page-title {
+    font-size: var(--font-size-xl);
+  }
+  
+  .page-content-area,
+  .page-layout--full-width .page-content,
+  .page-layout--grid .page-content {
+    padding: var(--spacing-sm);
+  }
+  
+  .dashboard-charts,
+  .metrics-grid {
+    gap: var(--spacing-sm);
+  }
+  
+  .content-section {
+    padding: var(--spacing-sm);
+  }
+}
+
+/* =============================================================================
+   ACCESSIBILITY ENHANCEMENTS
+   ============================================================================= */
+
+/* Focus Management */
+.page-layout *:focus-visible {
+  outline: 2px solid var(--primary-color);
+  outline-offset: 2px;
+  border-radius: var(--border-radius-sm);
+}
+
+/* Skip Links */
+.skip-to-content {
+  position: absolute;
+  top: -40px;
+  left: 6px;
+  background: var(--primary-color);
+  color: var(--light-color);
+  padding: var(--spacing-sm) var(--spacing-md);
+  z-index: 1001;
+  text-decoration: none;
+  border-radius: var(--border-radius-sm);
+  font-weight: 600;
+  font-size: var(--font-size-sm);
+}
+
+.skip-to-content:focus {
+  top: 6px;
+}
+
+/* Screen Reader Content */
+.visually-hidden {
+  position: absolute !important;
+  width: 1px !important;
+  height: 1px !important;
+  padding: 0 !important;
+  margin: -1px !important;
+  overflow: hidden !important;
+  clip: rect(0, 0, 0, 0) !important;
+  white-space: nowrap !important;
+  border: 0 !important;
+}
+
+/* Reduced Motion */
+@media (prefers-reduced-motion: reduce) {
+  .content-section,
+  .page-header::before {
+    transition: none;
+    animation: none;
+  }
+  
+  .content-section:hover {
+    transform: none;
+  }
+}
+
+/* High Contrast */
+@media (prefers-contrast: high) {
+  .page-header {
+    border: 2px solid var(--text-primary);
+  }
+  
+  .content-section {
+    border: 2px solid var(--text-primary);
+  }
+}
+
+/* =============================================================================
+   PRINT STYLES
+   ============================================================================= */
+
+@media print {
+  .page-layout {
+    background: white;
+  }
+  
+  .page-sidebar {
+    display: none;
+  }
+  
+  .page-with-sidebar {
+    grid-template-columns: 1fr;
+    grid-template-areas: "content";
+  }
+  
+  .page-header {
+    background: white;
+    color: black;
+    box-shadow: none;
+    border: 2px solid black;
+  }
+  
+  .page-header::before {
+    display: none;
+  }
+  
+  .content-section {
+    box-shadow: none;
+    border: 1px solid black;
+  }
+}

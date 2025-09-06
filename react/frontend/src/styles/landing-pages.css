@@ -1,0 +1,97 @@
+/* Unified layout for Home, About, Introduction pages */
+
+.landing-page {
+  min-height: 100vh;
+  background: var(--surface-secondary);
+  display: grid;
+  grid-template-rows: auto 1fr;
+}
+
+/* Landing page specific header positioning */
+.landing-page .dashboard-header,
+.landing-header {
+  background: var(--surface-primary);
+  border-bottom: 1px solid var(--border-primary);
+  /* Responsive header padding to reduce wasted space on laptops */
+  padding: clamp(0.75rem, 2vw, 1.25rem) clamp(1rem, 3vw, 2rem);
+  /* Static positioning for landing pages only */
+  position: static;
+  z-index: 1;
+}
+
+.landing-title {
+  margin: 0;
+  font: var(--typography-heading-large);
+  color: var(--text-primary);
+}
+
+.landing-subtitle {
+  margin: 0.25rem 0 0 0;
+  color: var(--text-secondary);
+  font: var(--typography-body-medium);
+}
+
+.landing-content {
+  /* Expand slightly on desktops and compress padding on smaller screens */
+  max-width: clamp(1024px, 94vw, 1440px);
+  width: 100%;
+  margin: 0 auto;
+  padding: clamp(1rem, 2.5vw, 2rem);
+}
+
+/* Ensure landing grid stacks header then content without pushing to bottom */
+.landing-page {
+  align-content: start;
+  justify-items: stretch;
+}
+
+/* Navigation cards grid */
+.navigation-grid,
+.landing-content .navigation-grid {
+  display: grid;
+  /* Allow an extra column on medium screens while keeping cards readable */
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  gap: clamp(12px, 2vw, 24px);
+  margin-top: 1.25rem;
+  align-items: stretch;
+  grid-auto-rows: 1fr; /* make rows equal height for a neater look */
+}
+
+.nav-card {
+  background: var(--surface-primary, #fff);
+  border: 1px solid var(--border-primary, #e9ecef);
+  border-radius: 8px;
+  box-shadow: 0 1px 3px rgba(0,0,0,0.06);
+  padding: 1rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+.nav-card-header { display: flex; align-items: center; gap: 0.75rem; }
+.nav-card-icon { width: 36px; height: 36px; border-radius: 8px; display: grid; place-items: center; background: #f1f3f5; color: #0d6efd; }
+.nav-card-title { margin: 0; font-weight: 600; color: var(--text-primary); font-size: 1rem; }
+.nav-card-description { margin: 0; color: var(--text-secondary); font-size: 0.9rem; }
+.nav-card-actions { margin-top: 0.25rem; }
+
+/* Quick access tidy spacing */
+.quick-access-section { margin-top: 2rem; }
+.quick-access-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 12px; }
+.quick-access-item { display: flex; align-items: center; gap: 8px; padding: 0.75rem 1rem; background: #fff; border: 1px solid #e9ecef; border-radius: 6px; }
+
+/* Landing page specific responsive adjustments only */
+@media (max-width: 768px) {
+  .navigation-grid {
+    gap: var(--spacing-component-md, 16px);
+  }
+}
+
+@media (max-width: 768px) {
+  .landing-header { padding: 1rem; }
+  .landing-content { padding: 1rem; }
+  .nav-card { padding: 0.875rem; }
+}
+
+/* Consistent section spacing */
+.landing-section { margin-bottom: var(--spacing-section-lg); }
+.landing-section .section-title { margin: 0 0 var(--spacing-component-md) 0; color: var(--text-primary); }

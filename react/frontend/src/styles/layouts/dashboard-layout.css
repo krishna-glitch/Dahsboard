@@ -1,0 +1,401 @@
+/* Modern Dashboard Layout - CSS Grid + Semantic HTML5 */
+
+/* =============================================================================
+   MAIN DASHBOARD LAYOUT GRID
+   ============================================================================= */
+
+.dashboard-layout {
+  display: grid;
+  grid-template-columns: 1fr;
+  grid-template-rows: auto 1fr auto;
+  grid-template-areas:
+    "header"
+    "body"
+    "footer";
+  min-height: 100vh;
+  background: var(--surface-color);
+  font-family: var(--font-family-primary);
+}
+
+.dashboard-header {
+  grid-area: header;
+  position: sticky;
+  top: 0;
+  z-index: 100;
+  background: rgba(255, 255, 255, 0.95);
+  backdrop-filter: blur(20px);
+  border-bottom: 1px solid var(--border-color);
+  box-shadow: var(--shadow-sm);
+}
+
+.dashboard-body {
+  grid-area: body;
+  display: grid;
+  grid-template-columns: 280px 1fr;
+  grid-template-areas: "sidebar main";
+  gap: 0;
+  min-height: 0; /* Important for CSS Grid */
+}
+
+.dashboard-aside {
+  grid-area: sidebar;
+  background: var(--light-color);
+  border-right: 1px solid var(--border-color);
+  overflow-y: auto;
+  position: sticky;
+  top: 80px; /* Height of header */
+  height: calc(100vh - 80px);
+  padding: var(--spacing-lg);
+}
+
+.dashboard-main {
+  grid-area: main;
+  padding: var(--spacing-xl);
+  background: var(--surface-color);
+  overflow-x: hidden;
+  min-width: 0; /* Prevent overflow in CSS Grid */
+}
+
+.dashboard-footer {
+  grid-area: footer;
+  background: var(--light-color);
+  border-top: 1px solid var(--border-color);
+  padding: var(--spacing-lg);
+}
+
+/* =============================================================================
+   RESPONSIVE LAYOUT BREAKPOINTS
+   ============================================================================= */
+
+/* Large Desktop: 1200px+ */
+@media (min-width: 1200px) {
+  .dashboard-body {
+    grid-template-columns: 320px 1fr;
+  }
+  
+  .dashboard-main {
+    padding: var(--spacing-xxl);
+  }
+}
+
+/* Desktop: 1024px - 1199px */
+@media (max-width: 1199px) {
+  .dashboard-body {
+    grid-template-columns: 280px 1fr;
+  }
+}
+
+/* Tablet: 768px - 1023px */
+@media (max-width: 1023px) {
+  .dashboard-layout {
+    grid-template-areas:
+      "header"
+      "body"
+      "footer";
+  }
+  
+  .dashboard-body {
+    grid-template-columns: 1fr;
+    grid-template-rows: auto 1fr;
+    grid-template-areas:
+      "sidebar"
+      "main";
+  }
+  
+  .dashboard-aside {
+    position: relative;
+    height: auto;
+    top: 0;
+    border-right: none;
+    border-bottom: 1px solid var(--border-color);
+    padding: var(--spacing-md);
+  }
+  
+  .dashboard-main {
+    padding: var(--spacing-lg);
+  }
+}
+
+/* Mobile: 480px - 767px */
+@media (max-width: 767px) {
+  .dashboard-main {
+    padding: var(--spacing-md);
+  }
+  
+  .dashboard-aside {
+    padding: var(--spacing-sm);
+  }
+}
+
+/* Small Mobile: <480px */
+@media (max-width: 479px) {
+  .dashboard-main {
+    padding: var(--spacing-sm);
+  }
+  
+  .dashboard-aside {
+    padding: var(--spacing-xs);
+  }
+}
+
+/* =============================================================================
+   LAYOUT VARIANTS
+   ============================================================================= */
+
+/* Full Width Layout (No Sidebar) */
+.dashboard-layout.full-width .dashboard-body {
+  grid-template-columns: 1fr;
+  grid-template-areas: "main";
+}
+
+.dashboard-layout.full-width .dashboard-aside {
+  display: none;
+}
+
+/* Sidebar Right Layout */
+.dashboard-layout.sidebar-right .dashboard-body {
+  grid-template-columns: 1fr 280px;
+  grid-template-areas: "main sidebar";
+}
+
+/* Compact Layout */
+.dashboard-layout.compact .dashboard-body {
+  grid-template-columns: 240px 1fr;
+}
+
+.dashboard-layout.compact .dashboard-aside {
+  width: 240px;
+}
+
+/* =============================================================================
+   CONTENT GRID SYSTEM (12-COLUMN)
+   ============================================================================= */
+
+.dashboard-grid {
+  display: grid;
+  grid-template-columns: repeat(12, 1fr);
+  gap: var(--spacing-lg);
+  margin-bottom: var(--spacing-xl);
+}
+
+.dashboard-grid.gap-sm { gap: var(--spacing-sm); }
+.dashboard-grid.gap-md { gap: var(--spacing-md); }
+.dashboard-grid.gap-lg { gap: var(--spacing-lg); }
+.dashboard-grid.gap-xl { gap: var(--spacing-xl); }
+
+/* Grid Column Classes */
+.col-1 { grid-column: span 1; }
+.col-2 { grid-column: span 2; }
+.col-3 { grid-column: span 3; }
+.col-4 { grid-column: span 4; }
+.col-5 { grid-column: span 5; }
+.col-6 { grid-column: span 6; }
+.col-7 { grid-column: span 7; }
+.col-8 { grid-column: span 8; }
+.col-9 { grid-column: span 9; }
+.col-10 { grid-column: span 10; }
+.col-11 { grid-column: span 11; }
+.col-12 { grid-column: span 12; }
+
+/* Responsive Grid Columns */
+@media (max-width: 1023px) {
+  .col-lg-1 { grid-column: span 1; }
+  .col-lg-2 { grid-column: span 2; }
+  .col-lg-3 { grid-column: span 3; }
+  .col-lg-4 { grid-column: span 4; }
+  .col-lg-6 { grid-column: span 6; }
+  .col-lg-8 { grid-column: span 8; }
+  .col-lg-12 { grid-column: span 12; }
+}
+
+@media (max-width: 767px) {
+  .col-md-6 { grid-column: span 6; }
+  .col-md-12 { grid-column: span 12; }
+  
+  /* Stack on mobile */
+  .dashboard-grid {
+    grid-template-columns: 1fr;
+    gap: var(--spacing-md);
+  }
+  
+  .dashboard-grid > * {
+    grid-column: span 1;
+  }
+}
+
+@media (max-width: 479px) {
+  .dashboard-grid {
+    gap: var(--spacing-sm);
+  }
+}
+
+/* =============================================================================
+   FLEXBOX UTILITIES FOR COMPONENTS
+   ============================================================================= */
+
+.flex {
+  display: flex;
+}
+
+.flex-col {
+  flex-direction: column;
+}
+
+.flex-wrap {
+  flex-wrap: wrap;
+}
+
+.items-center {
+  align-items: center;
+}
+
+.items-start {
+  align-items: flex-start;
+}
+
+.items-end {
+  align-items: flex-end;
+}
+
+.justify-center {
+  justify-content: center;
+}
+
+.justify-between {
+  justify-content: space-between;
+}
+
+.justify-around {
+  justify-content: space-around;
+}
+
+.justify-end {
+  justify-content: flex-end;
+}
+
+.gap-xs { gap: var(--spacing-xs); }
+.gap-sm { gap: var(--spacing-sm); }
+.gap-md { gap: var(--spacing-md); }
+.gap-lg { gap: var(--spacing-lg); }
+.gap-xl { gap: var(--spacing-xl); }
+
+/* =============================================================================
+   CHART CONTAINER LAYOUTS
+   ============================================================================= */
+
+.chart-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(400px, 1fr));
+  gap: var(--spacing-lg);
+  margin-bottom: var(--spacing-xl);
+}
+
+.chart-grid.single {
+  grid-template-columns: 1fr;
+}
+
+.chart-grid.dual {
+  grid-template-columns: repeat(2, 1fr);
+}
+
+.chart-grid.triple {
+  grid-template-columns: repeat(3, 1fr);
+}
+
+@media (max-width: 1023px) {
+  .chart-grid.dual,
+  .chart-grid.triple {
+    grid-template-columns: 1fr;
+  }
+}
+
+@media (max-width: 767px) {
+  .chart-grid {
+    grid-template-columns: 1fr;
+    gap: var(--spacing-md);
+  }
+}
+
+/* =============================================================================
+   ACCESSIBILITY ENHANCEMENTS
+   ============================================================================= */
+
+/* Focus Indicators */
+.dashboard-layout *:focus {
+  outline: 2px solid var(--primary-color);
+  outline-offset: 2px;
+}
+
+/* Skip Links */
+.skip-link {
+  position: absolute;
+  top: -40px;
+  left: 6px;
+  background: var(--primary-color);
+  color: var(--light-color);
+  padding: 8px;
+  z-index: 1000;
+  text-decoration: none;
+  border-radius: var(--border-radius-sm);
+}
+
+.skip-link:focus {
+  top: 6px;
+}
+
+/* Screen Reader Only Content */
+.sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
+}
+
+/* High Contrast Mode Support */
+@media (prefers-contrast: high) {
+  .dashboard-layout {
+    --border-color: #000000;
+    --shadow-sm: 0 1px 3px rgba(0, 0, 0, 0.3);
+  }
+}
+
+/* Reduced Motion Support */
+@media (prefers-reduced-motion: reduce) {
+  .dashboard-layout * {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+}
+
+/* =============================================================================
+   PRINT STYLES
+   ============================================================================= */
+
+@media print {
+  .dashboard-layout {
+    grid-template-areas:
+      "header"
+      "main";
+  }
+  
+  .dashboard-aside,
+  .dashboard-footer {
+    display: none;
+  }
+  
+  .dashboard-main {
+    padding: 0;
+  }
+  
+  .dashboard-header {
+    position: relative;
+    box-shadow: none;
+  }
+}

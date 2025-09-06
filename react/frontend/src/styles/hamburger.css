@@ -1,0 +1,89 @@
+.hamburger-btn {
+  position: absolute;
+  right: 12px;
+  top: 50%;
+  transform: translateY(-50%);
+  padding: 8px;
+  border: none;
+  background: var(--primary-color);
+  cursor: pointer;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+  transition: all 0.3s ease;
+  z-index: 1000;
+  border-radius: 4px;
+}
+
+.hamburger-btn:hover {
+  background: var(--primary-color-dark);
+}
+
+.hamburger-line {
+  display: block;
+  width: 18px;
+  height: 2px;
+  background: white;
+  transition: all 0.3s ease;
+  transform-origin: center;
+}
+
+.hamburger-btn.collapsed {
+  background: var(--primary-color);
+}
+
+.hamburger-btn.collapsed .hamburger-line {
+  background: white;
+}
+
+.hamburger-btn.collapsed .hamburger-line:nth-child(1) {
+  transform: translateY(6px) rotate(45deg);
+}
+
+.hamburger-btn.collapsed .hamburger-line:nth-child(2) {
+  opacity: 0;
+}
+
+.hamburger-btn.collapsed .hamburger-line:nth-child(3) {
+  transform: translateY(-6px) rotate(-45deg);
+}
+
+.icon-only-view {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 12px;
+  padding: 12px 0;
+  width: 100%;
+}
+
+.icon-btn {
+  background: #f0f0f0;
+  border: 1px solid #ddd;
+  cursor: pointer;
+  padding: 12px;
+  border-radius: 12px;
+  width: 48px;
+  height: 48px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: all 0.2s ease;
+  margin: 6px 0;
+}
+
+.icon-btn:hover {
+  background: var(--primary-color);
+  border-color: var(--primary-color);
+}
+
+.icon-btn i {
+  font-size: 22px;
+  color: #333;
+  transition: color 0.2s ease;
+}
+
+.icon-btn:hover i {
+  color: white;
+}

@@ -1,0 +1,225 @@
+/* MetricCard component – single source of truth for KPI card styles */
+
+.metricCard {
+  background: #ffffff;
+  border-radius: var(--metric-card-border-radius);
+  padding: var(--metric-card-padding);
+  box-shadow: var(--metric-card-shadow);
+  border: var(--metric-card-border);
+  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+  position: relative;
+  overflow: hidden;
+  will-change: transform, box-shadow;
+}
+
+.metricCard:hover {
+  box-shadow: var(--metric-card-shadow-hover);
+  transform: translateY(-2px) scale(1.01);
+}
+
+.metricCardHeader {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  /* Tighter spacing between title and value for compact KPIs */
+  margin-bottom: var(--spacing-component-xs);
+}
+
+.metricCardTitle {
+  font-size: var(--metric-card-title-size);
+  font-weight: var(--metric-card-title-weight);
+  color: var(--metric-card-title-color);
+  line-height: 1.2;
+  margin: 0;
+}
+
+.metricCardIcon {
+  font-size: var(--icon-size-medium);
+  opacity: 0.95;
+  display: grid;
+  place-items: center;
+  width: 36px;
+  height: 36px;
+  border-radius: 10px;
+  background: #ffffff;
+  border: 1px solid var(--border-primary);
+  color: var(--text-secondary);
+}
+
+.metricCardValue {
+  font-size: var(--metric-card-value-size);
+  font-weight: var(--metric-card-value-weight);
+  color: var(--metric-card-value-color);
+  line-height: 1.1;
+  margin-bottom: var(--spacing-component-xs);
+  display: flex;
+  align-items: baseline;
+  gap: var(--spacing-component-xs);
+}
+
+.metricCardUnit {
+  font-size: var(--metric-card-unit-size);
+  font-weight: var(--metric-card-unit-weight);
+  color: var(--metric-card-unit-color);
+}
+
+.metricCardTrend {
+  display: flex;
+  align-items: center;
+  gap: var(--spacing-component-xs);
+  margin-bottom: var(--spacing-component-sm);
+}
+
+.metricCardTrendIndicator { font-size: 0.75rem; }
+.positive { color: var(--status-excellent); }
+.negative { color: var(--status-poor); }
+.neutral { color: var(--text-tertiary); }
+
+.metricCardTrendText {
+  font-size: 0.75rem;
+  color: var(--text-tertiary);
+}
+
+.metricCardContext {
+  font-size: var(--metric-card-context-size);
+  color: var(--metric-card-context-color);
+  margin: 0;
+}
+
+/* Progress */
+.metricProgress { margin-top: 16px; }
+
+.progressBar {
+  width: 100%;
+  height: 6px;
+  background: rgba(0, 0, 0, 0.08);
+  border-radius: 3px;
+  overflow: hidden;
+  position: relative;
+}
+
+.progressFill {
+  height: 100%;
+  background: linear-gradient(90deg, #C7C9CC, #AEB2B8);
+  border-radius: 3px;
+  transition: width 0.8s cubic-bezier(0.4, 0, 0.2, 1);
+  position: relative;
+}
+
+.progressFill::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(90deg, transparent, rgba(255,255,255,0.3), transparent);
+  animation: progressShine 2s infinite;
+}
+
+@keyframes progressShine {
+  0% { transform: translateX(-100%); }
+  100% { transform: translateX(100%); }
+}
+
+.statusExcellent { background: linear-gradient(90deg, var(--status-excellent), #059669); }
+.statusGood { background: linear-gradient(90deg, var(--status-good), #16A34A); }
+.statusFair { background: linear-gradient(90deg, var(--status-fair), #D97706); }
+.statusPoor { background: linear-gradient(90deg, var(--status-poor), #DC2626); }
+
+.progressLabel {
+  font-size: 0.8125rem;
+  color: var(--metric-card-context-color);
+  margin-top: 8px;
+  text-align: center;
+}
+
+/* Loading shimmer (optional hook) */
+.metricCardLoading {
+  background: linear-gradient(90deg, rgba(255,255,255,0.8) 25%, rgba(255,255,255,0.95) 50%, rgba(255,255,255,0.8) 75%);
+  background-size: 200% 100%;
+  animation: shimmer 2s infinite;
+}
+
+@keyframes shimmer {
+  0% { background-position: 200% 0; }
+  100% { background-position: -200% 0; }
+}
+
+/* Entrance animation */
+.componentFadeIn {
+  animation: fadeInUp 0.6s cubic-bezier(0.4, 0, 0.2, 1) forwards;
+  opacity: 0;
+  transform: translateY(20px);
+}
+
+@keyframes fadeInUp {
+  to { opacity: 1; transform: translateY(0); }
+}
+
+/* Flip animation for optional back content */
+.flippable {
+  perspective: 1000px;
+}
+
+.flipInner {
+  position: relative;
+  transform-style: preserve-3d;
+  transition: transform 0.6s var(--ease-in-out);
+}
+
+.flippable:hover .flipInner,
+.flippable:focus-within .flipInner {
+  transform: rotateY(180deg);
+}
+
+.flipFace {
+  position: relative;
+  backface-visibility: hidden;
+}
+
+.flipBack {
+  position: absolute;
+  inset: 0;
+  transform: rotateY(180deg);
+}
+
+/* Flip content styling to match front */
+.flipContent {
+  padding: 12px 10px 8px 10px;
+  display: grid;
+  gap: 8px;
+}
+
+.flipTitle {
+  font-size: 0.9rem;
+  font-weight: 600;
+  color: var(--text-primary);
+  margin: 0 0 2px 0;
+}
+
+.flipList {
+  display: grid;
+  gap: 6px;
+}
+
+.flipRow {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  font-size: 0.92rem;
+  color: var(--text-primary);
+}
+
+.flipSite {
+  font-weight: 600;
+  color: #334155;
+}
+
+.flipValue {
+  color: #0f172a;
+  font-weight: 700;
+}
+
+.flipUnit {
+  margin-left: 4px;
+  font-size: 0.8rem;
+  color: var(--text-secondary);
+}

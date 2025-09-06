@@ -1,0 +1,338 @@
+/**
+ * Design System Tokens - Professional Water Quality Dashboard
+ * Consolidates all design tokens into a single source of truth
+ */
+
+:root {
+  /* =============================================================================
+     SEMANTIC COLOR TOKENS - CONSOLIDATED SINGLE SOURCE OF TRUTH
+     ============================================================================= */
+  
+  /* Primary Brand Colors */
+  --primary-color: #2563EB;       /* Professional blue - less garish */
+  --primary-hover: #1D4ED8;       /* Darker blue for hover states */
+  --secondary-color: #1E40AF;     /* Deep blue for supporting elements */
+  --success-color: #10B981;       /* Modern emerald green */
+  --danger-color: #EF4444;        /* Clean red for errors */
+  --warning-color: #F59E0B;       /* Amber for warnings */
+  --info-color: #06B6D4;          /* Cyan for info states */
+  --light-color: #FFFFFF;         /* Pure white */
+  --dark-color: #111827;          /* True dark for text */
+  
+  /* Status Colors - Water Quality Specific */
+  --status-excellent: #10B981;    /* Green - excellent water quality */
+  --status-good: #22C55E;         /* Light green - good quality */  
+  --status-fair: #F59E0B;         /* Amber - fair/warning quality */
+  --status-poor: #EF4444;         /* Red - poor/critical quality */
+  --status-unknown: #6B7280;      /* Gray - unknown/no data */
+  
+  /* Search Component Colors */
+  --search-border: #E2E8F0;       /* Light border */
+  --search-hover: #F1F5F9;        /* Subtle hover */
+  --search-selected: #EBF4FF;     /* Selection highlight */
+  --search-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06);
+  
+  /* Toast Notification Colors */
+  --toast-toolbar-bg: rgba(255, 255, 255, 0.95);
+  --toast-toolbar-border: #E2E8F0;
+  --toast-toolbar-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+  --border-color: #E2E8F0;        /* Subtle borders */
+  --border-hover: #CBD5E1;        /* Border hover states */
+  --surface-color: #F8FAFC;       /* Subtle surface background */
+  --card-bg: #FFFFFF;             /* Card backgrounds */
+  
+  /* Component State Colors */
+  --surface-primary: #FFFFFF;     /* Primary surface background */
+  --surface-secondary: #F8FAFC;   /* Secondary surface background */
+  --surface-tertiary: #F1F5F9;    /* Tertiary surface background */
+  --surface-interactive: #F8FAFC; /* Interactive element backgrounds */
+  
+  /* Text Hierarchy */
+  --text-primary: #111827;        /* Primary text */
+  --text-secondary: #6B7280;      /* Secondary text */
+  --text-tertiary: #9CA3AF;       /* Tertiary text */
+  --text-disabled: #D1D5DB;       /* Disabled text */
+  --text-inverse: #FFFFFF;        /* Text on dark backgrounds */
+  
+  /* Border Colors */
+  --border-primary: #E5E7EB;      /* Primary borders */
+  --border-secondary: #F3F4F6;    /* Secondary borders */
+  --border-interactive: #3B82F6;  /* Interactive element borders */
+  --border-focus: #2563EB;        /* Focus state borders */
+  
+  /* =============================================================================
+     COMPONENT SPECIFIC TOKENS
+     ============================================================================= */
+  
+  /* MetricCard Design Tokens - MODERN GLASS MORPHISM */
+  --metric-card-bg: rgba(255, 255, 255, 0.95);    /* Glass morphism background */
+  --metric-card-backdrop-blur: blur(16px);         /* Sophisticated blur effect */
+  --metric-card-border: 1px solid rgba(255, 255, 255, 0.18); /* Subtle glass border */
+  --metric-card-border-radius: 16px;               /* Modern rounded corners */
+  --metric-card-padding: 16px;                     /* Compact professional spacing */
+  --metric-card-shadow: 
+    0 8px 32px rgba(0, 0, 0, 0.08),               /* Primary depth shadow */
+    0 1px 2px rgba(0, 0, 0, 0.05),                /* Surface definition */
+    inset 0 1px 0 rgba(255, 255, 255, 0.15);      /* Inner highlight */
+  --metric-card-shadow-hover: 
+    0 12px 40px rgba(0, 0, 0, 0.15),              /* Elevated hover state */
+    0 4px 12px rgba(0, 0, 0, 0.1),                /* Enhanced depth */
+    inset 0 1px 0 rgba(255, 255, 255, 0.25);      /* Brightened highlight */
+  --metric-card-title-color: #1F2937;      /* High contrast title */
+  --metric-card-title-size: 0.8125rem;     /* Refined typography scale */
+  --metric-card-title-weight: 600;         /* Semi-bold hierarchy */
+  --metric-card-value-color: #111827;      /* Maximum contrast for values */
+  --metric-card-value-size: 1.75rem;        /* Compact data display */
+  --metric-card-value-weight: 700;         /* Bold emphasis */
+  --metric-card-unit-color: var(--text-primary);       /* Match primary text */
+  --metric-card-unit-size: 1rem;           /* Balanced unit size */
+  --metric-card-unit-weight: 500;          /* Medium weight */
+  --metric-card-context-color: var(--text-primary);    /* Match primary text */
+  --metric-card-context-size: 0.8125rem;   /* Refined context size */
+  
+  /* Modern Status Colors with Glass Integration */
+  --metric-card-border-excellent: rgba(16, 185, 129, 0.3);  /* Success with transparency */
+  --metric-card-border-good: rgba(34, 197, 94, 0.25);       /* Good with transparency */
+  --metric-card-border-fair: rgba(245, 158, 11, 0.3);       /* Warning with transparency */
+  --metric-card-border-poor: rgba(239, 68, 68, 0.3);        /* Error with transparency */
+  --metric-card-border-unknown: rgba(148, 163, 184, 0.2);   /* Neutral with transparency */
+  
+  /* Status Background Overlays for Enhanced Visual Feedback */
+  --metric-card-bg-excellent: rgba(236, 253, 245, 0.4);     /* Subtle green tint */
+  --metric-card-bg-good: rgba(240, 253, 244, 0.4);          /* Subtle success tint */
+  --metric-card-bg-fair: rgba(255, 251, 235, 0.4);          /* Subtle warning tint */
+  --metric-card-bg-poor: rgba(254, 242, 242, 0.4);          /* Subtle error tint */
+  --metric-card-bg-unknown: rgba(248, 250, 252, 0.4);       /* Neutral tint */
+  
+  /* EmptyState Design Tokens */
+  --empty-state-bg: var(--surface-primary);
+  --empty-state-border: var(--border-primary);
+  --empty-state-border-radius: 12px;
+  --empty-state-padding: 40px 24px;
+  --empty-state-title-color: var(--text-primary);
+  --empty-state-title-size: 1.125rem;
+  --empty-state-title-weight: 600;
+  --empty-state-description-color: var(--text-secondary);
+  --empty-state-description-size: 0.875rem;
+  --empty-state-icon-size: 4rem;
+  --empty-state-icon-color: var(--text-tertiary);
+  
+  /* Chart Container Design Tokens */
+  --chart-bg: var(--surface-primary);
+  --chart-border: var(--border-primary);
+  --chart-border-radius: 12px;
+  --chart-padding: 24px;
+  --chart-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+  --chart-header-border: var(--border-secondary);
+  --chart-title-color: var(--text-primary);
+  --chart-title-size: 1.125rem;
+  --chart-title-weight: 600;
+  
+  /* Filter Panel Design Tokens */
+  --filter-panel-bg: var(--surface-primary);
+  --filter-panel-border: var(--border-primary);
+  --filter-panel-header-bg: var(--surface-secondary);
+  --filter-panel-title-color: var(--text-secondary);
+  --filter-panel-title-size: 0.875rem;
+  --filter-panel-title-weight: 600;
+  --filter-panel-width: 280px;
+  --filter-panel-width-collapsed: 60px;
+  
+  /* Icon Design Tokens */
+  --icon-size-small: 1rem;
+  --icon-size-medium: 1.25rem;
+  --icon-size-large: 1.5rem;
+  --icon-size-xlarge: 2rem;
+  --icon-color-primary: var(--text-secondary);
+  --icon-color-status: currentColor;
+  
+  /* =============================================================================
+     LAYOUT AND SPACING TOKENS
+     ============================================================================= */
+  
+  /* Grid System - Single Source of Truth */
+  --grid-gap-small: 12px;
+  --grid-gap-medium: 16px;
+  --grid-gap-large: 24px;
+  --grid-gap-xlarge: 32px;
+  
+  /* Metrics Grid System */
+  --metrics-grid-columns: repeat(auto-fit, minmax(220px, 1fr));
+  --metrics-grid-gap: clamp(12px, 2vw, 24px);
+  --metrics-grid-gap-mobile: 16px;
+  --metrics-grid-columns-tablet: 1fr 1fr;
+  --metrics-grid-columns-mobile: 1fr;
+  
+  /* Header Positioning Tokens */
+  --header-position-dashboard: sticky;
+  --header-position-landing: static;
+  --header-top-dashboard: 0;
+  --header-zindex-dashboard: 100;
+  --header-zindex-landing: 1;
+  
+  /* Component Spacing */
+  --spacing-component-xs: 4px;
+  --spacing-component-sm: 8px;
+  --spacing-component-md: 16px;
+  --spacing-component-lg: 24px;
+  --spacing-component-xl: 32px;
+  --spacing-component-xxl: 48px;
+  
+  /* Section Spacing */
+  --spacing-section-sm: 24px;
+  --spacing-section-md: 32px;
+  --spacing-section-lg: 48px;
+  --spacing-section-xl: 64px;
+  
+  /* =============================================================================
+     TYPOGRAPHY TOKENS
+     ============================================================================= */
+  
+  /* Font Families */
+  --font-family-primary: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif;
+  --font-family-mono: 'JetBrains Mono', 'Fira Code', 'Monaco', 'Consolas', monospace;
+  
+  /* Component Typography */
+  --typography-heading-large: 600 1.5rem/1.3 var(--font-family-primary);
+  --typography-heading-medium: 600 1.25rem/1.3 var(--font-family-primary);
+  --typography-heading-small: 600 1.125rem/1.3 var(--font-family-primary);
+  --typography-body-large: 400 1rem/1.5 var(--font-family-primary);
+  --typography-body-medium: 400 0.875rem/1.4 var(--font-family-primary);
+  --typography-body-small: 400 0.75rem/1.3 var(--font-family-primary);
+  --typography-caption: 500 0.75rem/1.2 var(--font-family-primary);
+  --typography-label: 500 0.875rem/1.2 var(--font-family-primary);
+  
+  /* =============================================================================
+     ANIMATION AND TRANSITION TOKENS
+     ============================================================================= */
+  
+  /* Transition Durations */
+  --transition-fast: 0.15s;
+  --transition-normal: 0.25s;
+  --transition-slow: 0.35s;
+  
+  /* Transition Timing Functions */
+  --ease-in-out: cubic-bezier(0.4, 0, 0.2, 1);
+  --ease-out: cubic-bezier(0, 0, 0.2, 1);
+  --ease-in: cubic-bezier(0.4, 0, 1, 1);
+  
+  /* Component Transitions */
+  --transition-all: all var(--transition-normal) var(--ease-in-out);
+  --transition-transform: transform var(--transition-fast) var(--ease-out);
+  --transition-opacity: opacity var(--transition-normal) var(--ease-in-out);
+  --transition-color: color var(--transition-fast) var(--ease-in-out);
+  --transition-border: border-color var(--transition-fast) var(--ease-in-out);
+  --transition-shadow: box-shadow var(--transition-normal) var(--ease-out);
+  
+  /* =============================================================================
+     SHADOW TOKENS
+     ============================================================================= */
+  
+  /* Elevation System */
+  --shadow-none: none;
+  --shadow-xs: 0 1px 2px rgba(0, 0, 0, 0.05);
+  --shadow-sm: 0 1px 3px rgba(0, 0, 0, 0.1);
+  --shadow-md: 0 4px 6px rgba(0, 0, 0, 0.07), 0 2px 4px rgba(0, 0, 0, 0.06);
+  --shadow-lg: 0 10px 15px rgba(0, 0, 0, 0.1), 0 4px 6px rgba(0, 0, 0, 0.05);
+  --shadow-xl: 0 20px 25px rgba(0, 0, 0, 0.1), 0 10px 10px rgba(0, 0, 0, 0.04);
+  
+  /* Interactive Shadows */
+  --shadow-interactive: var(--shadow-sm);
+  --shadow-interactive-hover: var(--shadow-lg);
+  --shadow-interactive-active: var(--shadow-xs);
+  
+  /* Focus Shadows */
+  --shadow-focus-primary: 0 0 0 3px rgba(59, 130, 246, 0.2);
+  --shadow-focus-danger: 0 0 0 3px rgba(239, 68, 68, 0.2);
+  --shadow-focus-success: 0 0 0 3px rgba(34, 197, 94, 0.2);
+  
+  /* =============================================================================
+     BORDER RADIUS TOKENS
+     ============================================================================= */
+  
+  --radius-none: 0;
+  --radius-sm: 6px;
+  --radius-md: 8px;
+  --radius-lg: 12px;
+  --radius-xl: 16px;
+  --radius-full: 9999px;
+  
+  /* Component Specific Radius */
+  --radius-button: var(--radius-md);
+  --radius-card: var(--radius-lg);
+  --radius-input: var(--radius-md);
+  --radius-modal: var(--radius-xl);
+}
+
+/* =============================================================================
+   UTILITY CLASSES FOR DESIGN TOKENS
+   ============================================================================= */
+
+/* Status Colors */
+.status-excellent { color: var(--status-excellent); }
+.status-good { color: var(--status-good); }
+.status-fair { color: var(--status-fair); }
+.status-poor { color: var(--status-poor); }
+.status-unknown { color: var(--status-unknown); }
+
+.bg-status-excellent { background-color: var(--status-excellent); }
+.bg-status-good { background-color: var(--status-good); }
+.bg-status-fair { background-color: var(--status-fair); }
+.bg-status-poor { background-color: var(--status-poor); }
+.bg-status-unknown { background-color: var(--status-unknown); }
+
+/* Border Status Colors */
+.border-status-excellent { border-color: var(--status-excellent); }
+.border-status-good { border-color: var(--status-good); }
+.border-status-fair { border-color: var(--status-fair); }
+.border-status-poor { border-color: var(--status-poor); }
+.border-status-unknown { border-color: var(--status-unknown); }
+
+/* Text Hierarchy */
+.text-primary { color: var(--text-primary); }
+.text-secondary { color: var(--text-secondary); }
+.text-tertiary { color: var(--text-tertiary); }
+.text-disabled { color: var(--text-disabled); }
+.text-inverse { color: var(--text-inverse); }
+
+/* Surface Colors */
+.surface-primary { background-color: var(--surface-primary); }
+.surface-secondary { background-color: var(--surface-secondary); }
+.surface-tertiary { background-color: var(--surface-tertiary); }
+
+/* Typography Utilities */
+.typography-heading-large { font: var(--typography-heading-large); }
+.typography-heading-medium { font: var(--typography-heading-medium); }
+.typography-heading-small { font: var(--typography-heading-small); }
+.typography-body-large { font: var(--typography-body-large); }
+.typography-body-medium { font: var(--typography-body-medium); }
+.typography-body-small { font: var(--typography-body-small); }
+.typography-caption { font: var(--typography-caption); }
+.typography-label { font: var(--typography-label); }
+
+/* Spacing Utilities */
+.spacing-component-xs { padding: var(--spacing-component-xs); }
+.spacing-component-sm { padding: var(--spacing-component-sm); }
+.spacing-component-md { padding: var(--spacing-component-md); }
+.spacing-component-lg { padding: var(--spacing-component-lg); }
+.spacing-component-xl { padding: var(--spacing-component-xl); }
+
+/* Shadow Utilities */
+.shadow-none { box-shadow: var(--shadow-none); }
+.shadow-xs { box-shadow: var(--shadow-xs); }
+.shadow-sm { box-shadow: var(--shadow-sm); }
+.shadow-md { box-shadow: var(--shadow-md); }
+.shadow-lg { box-shadow: var(--shadow-lg); }
+.shadow-xl { box-shadow: var(--shadow-xl); }
+
+/* Interactive States */
+.shadow-interactive { box-shadow: var(--shadow-interactive); }
+.shadow-interactive:hover { box-shadow: var(--shadow-interactive-hover); }
+.shadow-interactive:active { box-shadow: var(--shadow-interactive-active); }
+
+/* Transition Utilities */
+.transition-all { transition: var(--transition-all); }
+.transition-transform { transition: var(--transition-transform); }
+.transition-opacity { transition: var(--transition-opacity); }
+.transition-color { transition: var(--transition-color); }
+.transition-shadow { transition: var(--transition-shadow); }

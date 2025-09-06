@@ -1,0 +1,137 @@
+import { useEffect, useRef, useState } from 'react';
+
+// Compute metrics inline for small datasets; fall back to inline for large if worker not desired
+export function computeMetricsInline(data, selectedSites = []) {
+  if (!Array.isArray(data) || data.length === 0) {
+    return { 
+      totalMeasurements: 0, 
+      redoxRange: 'No Data', 
+      avgRedox: 0, 
+      zonesDetected: 0, 
+      validMeasurements: 0, 
+      dataCompleteness: 0,
+      sitesCount: 0,
+      breakdown: { redoxRange: [], avgRedox: [] }
+    };
+  }
+
+  // Overall metrics
+  let count = data.length, valid = 0, min = Infinity, max = -Infinity, sum = 0;
+  
+  // Per-site breakdown
+  const bySite = new Map();
+  
+  for (let i = 0; i < data.length; i++) {
+    const d = data[i];
+    const vRaw = d?.processed_eh != null ? d.processed_eh : d?.redox_value_mv;
+    const v = vRaw == null ? NaN : Number(vRaw);
+    const siteCode = d?.site_code || d?.site_id;
+    
+    // Initialize site data if not exists
+    if (siteCode && !bySite.has(siteCode)) {
+      bySite.set(siteCode, { values: [], count: 0 });
+    }
+    
+    // Add to site data
+    if (siteCode) {
+      bySite.get(siteCode).count++;
+      if (Number.isFinite(v)) {
+        bySite.get(siteCode).values.push(v);
+      }
+    }
+    
+    // Overall calculations
+    if (Number.isFinite(v)) {
+      valid++;
+      if (v < min) min = v;
+      if (v > max) max = v;
+      sum += v;
+    }
+  }
+
+  // Calculate per-site metrics
+  const siteBreakdown = { redoxRange: [], avgRedox: [] };
+  for (const [site, siteData] of bySite.entries()) {
+    if (siteData.values.length > 0) {
+      const siteMin = Math.min(...siteData.values);
+      const siteMax = Math.max(...siteData.values);
+      const siteAvg = siteData.values.reduce((a, b) => a + b, 0) / siteData.values.length;
+      
+      siteBreakdown.redoxRange.push({
+        site,
+        range: `${siteMin.toFixed(0)} to ${siteMax.toFixed(0)} mV`,
+        min: siteMin,
+        max: siteMax
+      });
+      
+      siteBreakdown.avgRedox.push({
+        site,
+        avg: siteAvg,
+        count: siteData.values.length
+      });
+    } else {
+      // Site has no valid redox data
+      siteBreakdown.redoxRange.push({
+        site,
+        range: 'No Valid Data',
+        min: null,
+        max: null
+      });
+      
+      siteBreakdown.avgRedox.push({
+        site,
+        avg: null,
+        count: 0
+      });
+    }
+  }
+
+  return {
+    totalMeasurements: count,
+    redoxRange: Number.isFinite(min) && Number.isFinite(max) ? `${min.toFixed(0)} to ${max.toFixed(0)} mV` : 'No Valid Data',
+    avgRedox: valid > 0 ? sum / valid : 0,
+    zonesDetected: 0,
+    validMeasurements: valid,
+    dataCompleteness: count > 0 ? Math.round((valid / count) * 100) : 0,
+    sitesCount: bySite.size,
+    breakdown: siteBreakdown
+  };
+}
+
+export function useRedoxMetrics(data, selectedSites = []) {
+  const [metrics, setMetrics] = useState(computeMetricsInline(data, selectedSites));
+  const workerRef = useRef(null);
+
+  useEffect(() => {
+    if (!Array.isArray(data) || data.length === 0) {
+      setMetrics(computeMetricsInline([], selectedSites));
+      return;
+    }
+    const LARGE_THRESHOLD = 20000;
+    if (data.length < LARGE_THRESHOLD) {
+      setMetrics(computeMetricsInline(data, selectedSites));
+      return;
+    }
+    // Optional: use worker for large datasets
+    if (!workerRef.current) {
+      workerRef.current = new Worker(new URL('../workers/metricsWorker.js', import.meta.url), { type: 'module' });
+    }
+    let cancelled = false;
+    const worker = workerRef.current;
+    worker.onmessage = (e) => {
+      if (cancelled) return;
+      const { ok, result } = e.data || {};
+      if (ok && result) setMetrics(result);
+    };
+    try {
+      worker.postMessage({ cmd: 'computeMetrics', payload: { data, selectedSites } });
+    } catch (e) {
+      // Fallback inline if worker post fails
+      setMetrics(computeMetricsInline(data, selectedSites));
+    }
+    return () => { cancelled = true; };
+  }, [Array.isArray(data) ? data.length : 0, selectedSites?.join?.(',')]);
+
+  return metrics;
+}
+

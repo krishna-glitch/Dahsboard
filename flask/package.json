@@ -1,0 +1,5 @@
+{
+  "dependencies": {
+    "@apache-arrow/esnext-esm": "^21.0.0"
+  }
+}

@@ -1,0 +1,346 @@
+/* Data Grid Component Styles - Optimized for Charts & Data */
+
+/* =============================================================================
+   DATA GRID CONTAINER
+   ============================================================================= */
+
+.data-grid {
+  display: grid;
+  width: 100%;
+  margin-bottom: var(--spacing-xl);
+}
+
+.data-grid.gap-xs { gap: var(--spacing-xs); }
+.data-grid.gap-sm { gap: var(--spacing-sm); }
+.data-grid.gap-md { gap: var(--spacing-md); }
+.data-grid.gap-lg { gap: var(--spacing-lg); }
+.data-grid.gap-xl { gap: var(--spacing-xl); }
+
+.data-grid.equal-height {
+  align-items: stretch;
+}
+
+.data-grid.equal-height > * {
+  height: 100%;
+}
+
+/* =============================================================================
+   DATA GRID ITEM
+   ============================================================================= */
+
+.data-grid-item {
+  min-width: 0; /* Prevent overflow in CSS Grid */
+  min-height: 0;
+}
+
+/* =============================================================================
+   CHART CONTAINER
+   ============================================================================= */
+
+.chart-container {
+  background: var(--light-color);
+  border: 1px solid var(--border-color);
+  border-radius: 0; /* squared corners */
+  box-shadow: var(--shadow-sm);
+  transition: all var(--transition-normal);
+  position: relative;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+  min-height: 400px;
+}
+
+.chart-container::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 4px;
+  background: var(--gradient-primary);
+  pointer-events: none;
+  z-index: 1;
+  /* Keep squared corners */
+  border-top-left-radius: 0;
+  border-top-right-radius: 0;
+}
+
+.chart-container:hover {
+  box-shadow: var(--shadow-lg);
+  transform: translateY(-2px);
+  border-color: var(--primary-color);
+}
+
+/* Chart Header */
+.chart-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: var(--spacing-lg);
+  padding: var(--spacing-lg) var(--spacing-lg) 0;
+  background: var(--gradient-surface);
+  border-bottom: 1px solid var(--border-color);
+  position: relative;
+  z-index: 2;
+}
+
+.chart-title-area {
+  flex: 1;
+}
+
+.chart-title {
+  font-size: var(--font-size-lg);
+  font-weight: 600;
+  color: var(--text-primary);
+  margin: 0 0 var(--spacing-xs) 0;
+  letter-spacing: -0.025em;
+}
+
+.chart-subtitle {
+  font-size: var(--font-size-sm);
+  color: var(--text-secondary);
+  margin: 0;
+  line-height: 1.4;
+}
+
+.chart-actions {
+  display: flex;
+  align-items: center;
+  gap: var(--spacing-sm);
+  flex-shrink: 0;
+}
+
+/* Chart Body */
+.chart-body {
+  flex: 1;
+  padding: var(--spacing-lg);
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  min-height: 300px;
+}
+
+/* Loading State */
+.chart-loading {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  height: 100%;
+  color: var(--text-secondary);
+  gap: var(--spacing-md);
+  min-height: 200px;
+}
+
+.chart-loading .spinner-border {
+  width: 3rem;
+  height: 3rem;
+  color: var(--primary-color);
+}
+
+/* Error State */
+.chart-error {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  height: 100%;
+  padding: var(--spacing-lg);
+  min-height: 200px;
+}
+
+.chart-error .alert {
+  text-align: center;
+  border: none;
+  background: linear-gradient(135deg, rgba(255, 71, 87, 0.08) 0%, rgba(255, 71, 87, 0.04) 100%);
+  border-left: 4px solid var(--danger-color);
+  color: var(--danger-color);
+  max-width: 400px;
+}
+
+/* =============================================================================
+   PLOTLY CHART OPTIMIZATIONS
+   ============================================================================= */
+
+/* Plotly.js specific styling */
+.chart-container .js-plotly-plot {
+  width: 100% !important;
+  height: 100% !important;
+}
+
+.chart-container .plotly {
+  width: 100%;
+  height: 100%;
+}
+
+/* Ensure Plotly charts are responsive */
+.chart-container .main-svg {
+  width: 100% !important;
+  height: 100% !important;
+}
+
+/* =============================================================================
+   RESPONSIVE CHART LAYOUTS
+   ============================================================================= */
+
+/* Large screens: 3+ columns */
+@media (min-width: 1200px) {
+  .data-grid[style*="auto-fit"] {
+    grid-template-columns: repeat(auto-fit, minmax(450px, 1fr));
+  }
+}
+
+/* Medium screens: 2 columns */
+@media (max-width: 1199px) and (min-width: 768px) {
+  .data-grid[style*="auto-fit"] {
+    grid-template-columns: repeat(auto-fit, minmax(400px, 1fr));
+  }
+}
+
+/* Tablet: single column for most charts */
+@media (max-width: 767px) {
+  .data-grid {
+    grid-template-columns: 1fr !important;
+    gap: var(--spacing-md);
+  }
+  
+  .chart-container {
+    min-height: 300px;
+  }
+  
+  .chart-header {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: var(--spacing-md);
+    padding: var(--spacing-md);
+  }
+  
+  .chart-actions {
+    width: 100%;
+    justify-content: flex-start;
+  }
+  
+  .chart-body {
+    padding: var(--spacing-md);
+    min-height: 250px;
+  }
+  
+  .chart-title {
+    font-size: var(--font-size-base);
+  }
+  
+  .chart-subtitle {
+    font-size: var(--font-size-xs);
+  }
+}
+
+/* Mobile: compact layout */
+@media (max-width: 479px) {
+  .chart-container {
+    min-height: 250px;
+    border-radius: var(--border-radius-lg);
+  }
+  
+  .chart-header,
+  .chart-body {
+    padding: var(--spacing-sm);
+  }
+  
+  .chart-body {
+    min-height: 200px;
+  }
+  
+  .chart-loading,
+  .chart-error {
+    min-height: 150px;
+  }
+  
+  .chart-loading .spinner-border {
+    width: 2rem;
+    height: 2rem;
+  }
+}
+
+/* =============================================================================
+   PRESET GRID LAYOUTS
+   ============================================================================= */
+
+/* Dashboard Overview Grid */
+.data-grid.dashboard-overview {
+  grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+  gap: var(--spacing-lg);
+}
+
+/* Analytics Grid */
+.data-grid.analytics-grid {
+  grid-template-columns: repeat(auto-fit, minmax(500px, 1fr));
+  gap: var(--spacing-xl);
+}
+
+/* Metrics Grid */
+.data-grid.metrics-grid {
+  grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+  gap: var(--spacing-lg);
+}
+
+/* Full Width Chart */
+.data-grid.full-width {
+  grid-template-columns: 1fr;
+}
+
+/* Two Column Fixed */
+.data-grid.two-column {
+  grid-template-columns: repeat(2, 1fr);
+}
+
+/* Three Column Fixed */
+.data-grid.three-column {
+  grid-template-columns: repeat(3, 1fr);
+}
+
+/* Responsive overrides for preset layouts */
+@media (max-width: 1023px) {
+  .data-grid.three-column {
+    grid-template-columns: repeat(2, 1fr);
+  }
+}
+
+@media (max-width: 767px) {
+  .data-grid.two-column,
+  .data-grid.three-column,
+  .data-grid.dashboard-overview,
+  .data-grid.analytics-grid {
+    grid-template-columns: 1fr;
+  }
+}
+
+/* =============================================================================
+   ACCESSIBILITY
+   ============================================================================= */
+
+.chart-container:focus-within {
+  outline: 2px solid var(--primary-color);
+  outline-offset: 2px;
+}
+
+/* High contrast mode */
+@media (prefers-contrast: high) {
+  .chart-container {
+    border: 2px solid var(--text-primary);
+  }
+  
+  .chart-container::before {
+    display: none;
+  }
+}
+
+/* Reduced motion */
+@media (prefers-reduced-motion: reduce) {
+  .chart-container {
+    transition: none;
+  }
+  
+  .chart-container:hover {
+    transform: none;
+  }
+}

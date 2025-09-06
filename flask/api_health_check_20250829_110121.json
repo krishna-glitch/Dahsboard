@@ -1,0 +1,241 @@
+{
+  "timestamp": "2025-08-29T11:01:21.992599",
+  "health_percentage": 96.55172413793103,
+  "total_endpoints": 29,
+  "healthy_endpoints": 28,
+  "average_response_time_ms": 355.60689655172416,
+  "results": [
+    {
+      "endpoint": "/api/v1/water_quality/data",
+      "method": "GET",
+      "status_code": 200,
+      "response_time_ms": 1736.05,
+      "healthy": true,
+      "status": "\u2705 HEALTHY"
+    },
+    {
+      "endpoint": "/api/v1/redox_analysis/data",
+      "method": "GET",
+      "status_code": 200,
+      "response_time_ms": 1437.62,
+      "healthy": true,
+      "status": "\u2705 HEALTHY"
+    },
+    {
+      "endpoint": "/api/v1/site_comparison/data",
+      "method": "GET",
+      "status_code": 200,
+      "response_time_ms": 2935.1,
+      "healthy": true,
+      "status": "\u2705 HEALTHY"
+    },
+    {
+      "endpoint": "/api/v1/alerts/data",
+      "method": "GET",
+      "status_code": 401,
+      "response_time_ms": 2.74,
+      "healthy": true,
+      "status": "\u2705 HEALTHY"
+    },
+    {
+      "endpoint": "/api/v1/home/data",
+      "method": "GET",
+      "status_code": 200,
+      "response_time_ms": 4131.51,
+      "healthy": true,
+      "status": "\u2705 HEALTHY"
+    },
+    {
+      "endpoint": "/api/v1/admin/users",
+      "method": "GET",
+      "status_code": 401,
+      "response_time_ms": 3.79,
+      "healthy": true,
+      "status": "\u2705 HEALTHY"
+    },
+    {
+      "endpoint": "/api/v1/admin/summary",
+      "method": "GET",
+      "status_code": 401,
+      "response_time_ms": 4.82,
+      "healthy": true,
+      "status": "\u2705 HEALTHY"
+    },
+    {
+      "endpoint": "/api/v1/reports/history",
+      "method": "GET",
+      "status_code": 401,
+      "response_time_ms": 3.57,
+      "healthy": true,
+      "status": "\u2705 HEALTHY"
+    },
+    {
+      "endpoint": "/api/v1/reports/templates",
+      "method": "GET",
+      "status_code": 401,
+      "response_time_ms": 2.58,
+      "healthy": true,
+      "status": "\u2705 HEALTHY"
+    },
+    {
+      "endpoint": "/api/v1/reports/scheduled",
+      "method": "GET",
+      "status_code": 401,
+      "response_time_ms": 2.13,
+      "healthy": true,
+      "status": "\u2705 HEALTHY"
+    },
+    {
+      "endpoint": "/api/v1/reports/generate",
+      "method": "POST",
+      "status_code": 401,
+      "response_time_ms": 1.62,
+      "healthy": true,
+      "status": "\u2705 HEALTHY"
+    },
+    {
+      "endpoint": "/api/v1/performance/summary",
+      "method": "GET",
+      "status_code": 401,
+      "response_time_ms": 1.54,
+      "healthy": true,
+      "status": "\u2705 HEALTHY"
+    },
+    {
+      "endpoint": "/api/v1/performance_status/comprehensive-status",
+      "method": "GET",
+      "status_code": 401,
+      "response_time_ms": 2.53,
+      "healthy": true,
+      "status": "\u2705 HEALTHY"
+    },
+    {
+      "endpoint": "/api/v1/performance_status/feature-test",
+      "method": "POST",
+      "status_code": 401,
+      "response_time_ms": 3.28,
+      "healthy": true,
+      "status": "\u2705 HEALTHY"
+    },
+    {
+      "endpoint": "/api/v1/performance_status/optimization-recommendations",
+      "method": "GET",
+      "status_code": 401,
+      "response_time_ms": 1.66,
+      "healthy": true,
+      "status": "\u2705 HEALTHY"
+    },
+    {
+      "endpoint": "/api/v1/system_health/summary",
+      "method": "GET",
+      "status_code": 401,
+      "response_time_ms": 1.53,
+      "healthy": true,
+      "status": "\u2705 HEALTHY"
+    },
+    {
+      "endpoint": "/api/v1/system_health/services",
+      "method": "GET",
+      "status_code": 401,
+      "response_time_ms": 1.36,
+      "healthy": true,
+      "status": "\u2705 HEALTHY"
+    },
+    {
+      "endpoint": "/api/v1/system_health/imports",
+      "method": "GET",
+      "status_code": 401,
+      "response_time_ms": 2.58,
+      "healthy": true,
+      "status": "\u2705 HEALTHY"
+    },
+    {
+      "endpoint": "/api/v1/system_health/recommendations",
+      "method": "GET",
+      "status_code": 401,
+      "response_time_ms": 2.15,
+      "healthy": true,
+      "status": "\u2705 HEALTHY"
+    },
+    {
+      "endpoint": "/api/v1/data_diagnostics/run",
+      "method": "GET",
+      "status_code": 401,
+      "response_time_ms": 2.0,
+      "healthy": true,
+      "status": "\u2705 HEALTHY"
+    },
+    {
+      "endpoint": "/api/v1/data_diagnostics/summary",
+      "method": "GET",
+      "status_code": 401,
+      "response_time_ms": 1.44,
+      "healthy": true,
+      "status": "\u2705 HEALTHY"
+    },
+    {
+      "endpoint": "/api/v1/correlation/matrix",
+      "method": "POST",
+      "status_code": 401,
+      "response_time_ms": 1.76,
+      "healthy": true,
+      "status": "\u2705 HEALTHY"
+    },
+    {
+      "endpoint": "/api/v1/correlation/significant",
+      "method": "POST",
+      "status_code": 401,
+      "response_time_ms": 2.48,
+      "healthy": true,
+      "status": "\u2705 HEALTHY"
+    },
+    {
+      "endpoint": "/api/v1/correlation/patterns",
+      "method": "POST",
+      "status_code": 401,
+      "response_time_ms": 1.63,
+      "healthy": true,
+      "status": "\u2705 HEALTHY"
+    },
+    {
+      "endpoint": "/api/v1/config",
+      "method": "GET",
+      "status_code": 200,
+      "response_time_ms": 15.78,
+      "healthy": true,
+      "status": "\u2705 HEALTHY"
+    },
+    {
+      "endpoint": "/api/v1/auth/status",
+      "method": "GET",
+      "status_code": 200,
+      "response_time_ms": 2.3,
+      "healthy": true,
+      "status": "\u2705 HEALTHY"
+    },
+    {
+      "endpoint": "/api/v1/auth/login",
+      "method": "POST",
+      "status_code": 400,
+      "response_time_ms": 2.03,
+      "healthy": false,
+      "status": "\u274c UNHEALTHY"
+    },
+    {
+      "endpoint": "/api/v1/upload/history",
+      "method": "GET",
+      "status_code": 401,
+      "response_time_ms": 2.46,
+      "healthy": true,
+      "status": "\u2705 HEALTHY"
+    },
+    {
+      "endpoint": "/api/v1/upload/file",
+      "method": "POST",
+      "status_code": 401,
+      "response_time_ms": 2.56,
+      "healthy": true,
+      "status": "\u2705 HEALTHY"
+    }
+  ]
+}
