@@ -1,0 +1,17 @@
+# Python
+venv/
+.flaskenv
+.env
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+
+# Node
+node_modules/
+flask/node_modules/
+react/frontend/node_modules/
+
+# Misc
+.DS_Store
+*.log
