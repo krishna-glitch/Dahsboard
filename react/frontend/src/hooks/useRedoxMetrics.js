@@ -18,7 +18,7 @@ export function computeMetricsInline(data, selectedSites = []) {
   // Overall metrics
   let count = data.length, valid = 0, min = Infinity, max = -Infinity, sum = 0;
   
-  // Per-site breakdown
+  // Per-site breakdown - use efficient streaming computation instead of storing all values
   const bySite = new Map();
   
   for (let i = 0; i < data.length; i++) {
@@ -29,14 +29,24 @@ export function computeMetricsInline(data, selectedSites = []) {
     
     // Initialize site data if not exists
     if (siteCode && !bySite.has(siteCode)) {
-      bySite.set(siteCode, { values: [], count: 0 });
+      bySite.set(siteCode, { 
+        count: 0, 
+        validCount: 0, 
+        sum: 0, 
+        min: Infinity, 
+        max: -Infinity 
+      });
     }
     
-    // Add to site data
+    // Add to site data using streaming computation
     if (siteCode) {
-      bySite.get(siteCode).count++;
+      const siteData = bySite.get(siteCode);
+      siteData.count++;
       if (Number.isFinite(v)) {
-        bySite.get(siteCode).values.push(v);
+        siteData.validCount++;
+        siteData.sum += v;
+        if (v < siteData.min) siteData.min = v;
+        if (v > siteData.max) siteData.max = v;
       }
     }
     
@@ -49,13 +59,13 @@ export function computeMetricsInline(data, selectedSites = []) {
     }
   }
 
-  // Calculate per-site metrics
+  // Calculate per-site metrics using precomputed streaming values
   const siteBreakdown = { redoxRange: [], avgRedox: [] };
   for (const [site, siteData] of bySite.entries()) {
-    if (siteData.values.length > 0) {
-      const siteMin = Math.min(...siteData.values);
-      const siteMax = Math.max(...siteData.values);
-      const siteAvg = siteData.values.reduce((a, b) => a + b, 0) / siteData.values.length;
+    if (siteData.validCount > 0) {
+      const siteMin = siteData.min;
+      const siteMax = siteData.max;
+      const siteAvg = siteData.sum / siteData.validCount;
       
       siteBreakdown.redoxRange.push({
         site,
@@ -67,7 +77,7 @@ export function computeMetricsInline(data, selectedSites = []) {
       siteBreakdown.avgRedox.push({
         site,
         avg: siteAvg,
-        count: siteData.values.length
+        count: siteData.validCount
       });
     } else {
       // Site has no valid redox data
@@ -107,10 +117,26 @@ export function useRedoxMetrics(data, selectedSites = []) {
       setMetrics(computeMetricsInline([], selectedSites));
       return;
     }
-    const LARGE_THRESHOLD = 20000;
+    const LARGE_THRESHOLD = 50000; // Increased since we optimized the inline computation
     if (data.length < LARGE_THRESHOLD) {
-      setMetrics(computeMetricsInline(data, selectedSites));
-      return;
+      try {
+        setMetrics(computeMetricsInline(data, selectedSites));
+        return;
+      } catch (error) {
+        console.error('Error computing metrics inline, falling back to simplified metrics:', error);
+        // Fallback to very basic metrics if inline computation fails
+        setMetrics({
+          totalMeasurements: data.length,
+          redoxRange: 'Computing...',
+          avgRedox: 0,
+          zonesDetected: 0,
+          validMeasurements: data.length,
+          dataCompleteness: 100,
+          sitesCount: selectedSites.length,
+          breakdown: { redoxRange: [], avgRedox: [] }
+        });
+        return;
+      }
     }
     // Optional: use worker for large datasets
     if (!workerRef.current) {

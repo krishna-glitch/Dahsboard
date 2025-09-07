@@ -1,6 +1,7 @@
 import React, { useMemo } from 'react';
 import Plot from 'react-plotly.js';
 
+
 // Add keyframes for 3D animations
 const chartAnimationStyles = `
   @keyframes chartSlideIn {
@@ -24,6 +25,8 @@ if (typeof document !== 'undefined' && !document.getElementById('chart-3d-animat
 }
 
 const TimeSeriesSmallMultiples = React.memo(function TimeSeriesSmallMultiples({ data, chartData, chartType = 'line', invertSeriesY = false, maxDepthsToShow = 6 }) {
+  console.log(`TimeSeriesSmallMultiples: Rendering ${data?.length || 0} data points, WebGL: ${(data?.length || 0) > 10000}`);
+  const useGL = (data?.length || 0) > 10000;
   // Site color palette - consistent colors for each site
   const siteColors = {
     'S1': '#1f77b4',  // Blue
@@ -174,7 +177,6 @@ const TimeSeriesSmallMultiples = React.memo(function TimeSeriesSmallMultiples({ 
               // Small multiples should always process raw data by depth
               // Skip pre-processed chartData.timeseries (which has mixed depth/redox traces)
               // and process raw data to show only Eh vs Time for this specific depth
-              const useGL = false; // small multiples: avoid WebGL context churn
               const bySite = new Map();
               const dataStats = new Map(); // For debugging identical values
               
@@ -189,10 +191,15 @@ const TimeSeriesSmallMultiples = React.memo(function TimeSeriesSmallMultiples({ 
                     y: [], 
                     name: site, 
                     type: useGL ? 'scattergl' : 'scatter', 
-                    mode: chartType === 'line' ? 'lines' : 'markers',
-                    line: { width: 2, color: siteColor, dash: siteDashes[site] || 'solid' },
-                    marker: { color: siteColor, size: 5, symbol: siteMarkers[site] || 'circle' },
-                    hovertemplate: '<b>Site %{fullData.name}</b><br>%{x|%Y-%m-%d %H:%M}<br>Eh: %{y:.2f} mV<extra></extra>',
+                    mode: chartType === 'line' ? (useGL ? 'markers' : 'lines') : 'markers', // WebGL doesn't support lines well
+                    line: useGL ? undefined : { width: 1, color: siteColor, dash: siteDashes[site] || 'solid' },
+                    marker: { 
+                      color: siteColor, 
+                      size: useGL ? 2 : 4, // Smaller markers for WebGL performance
+                      symbol: siteMarkers[site] || 'circle',
+                      opacity: useGL ? 0.6 : 1 // Lower opacity for dense data
+                    },
+                    hovertemplate: useGL ? undefined : '<b>Site %{fullData.name}</b><br>%{x|%Y-%m-%d %H:%M}<br>Eh: %{y:.2f} mV<extra></extra>', // Disable hover for WebGL performance
                     showlegend: depthIndex === 0
                   });
                   dataStats.set(site, { count: 0, timestamps: new Set(), ehValues: new Set() });
@@ -217,8 +224,22 @@ const TimeSeriesSmallMultiples = React.memo(function TimeSeriesSmallMultiples({ 
               return Array.from(bySite.values());
             })()}
             layout={createLayout(depthIndex, invertSeriesY)}
-            config={{ displayModeBar: true, responsive: true, displaylogo: false }}
-            useResizeHandler={true}
+            config={{ 
+              displayModeBar: !useGL, // Disable mode bar for WebGL performance
+              responsive: true, 
+              displaylogo: false,
+              scrollZoom: true,
+              // Performance optimizations for large datasets
+              plotGlPixelRatio: 1,
+              toImageButtonOptions: useGL ? undefined : {
+                format: 'png',
+                filename: `redox_${depth}cm_depth`,
+                height: 280,
+                width: 800,
+                scale: 1
+              }
+            }}
+            useResizeHandler={!useGL} // Disable resize handler for WebGL performance
             style={{ width: '100%', height: '280px' }}
           />
         </div>

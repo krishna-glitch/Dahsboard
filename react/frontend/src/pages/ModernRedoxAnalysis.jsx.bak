@@ -184,7 +184,7 @@ const ModernRedoxAnalysis = () => {
   const [activeWindowStart, setActiveWindowStart] = useState('');
   const [activeWindowEnd, setActiveWindowEnd] = useState('');
   const [primaryYAxis, setPrimaryYAxis] = useState('depth');
-  const [preferArrow, setPreferArrow] = useState(true);
+  const [preferArrow, setPreferArrow] = useState(false);
   const [chartViewMode, setChartViewMode] = useState('by-depth'); // 'by-depth' or 'by-site'
   const [snapshotMode, setSnapshotMode] = useState('profile'); // 'profile' or 'scatter'
   const [vizConfig, setVizConfig] = useState({
@@ -1083,7 +1083,7 @@ const ModernRedoxAnalysis = () => {
 
       const largeDatasetRanges = vizConfig.chunkRanges || [];
       const shouldChunk = largeDatasetRanges.includes(timeRange);
-      const chunkSize = shouldChunk ? 100000 : null;
+      const chunkSize = shouldChunk ? (maxFidelity ? 50000 : 25000) : null;
 
       dispatch({
         type: 'SET_PROGRESS',
@@ -1092,13 +1092,13 @@ const ModernRedoxAnalysis = () => {
 
       if (selectedView === 'timeseries' || selectedView === 'rolling' || selectedView === 'details') {
         log.debug('Creating promises for time series/rolling/details view');
-        const useMaxFidelity = maxFidelity; // Raw = High cadence (96/day)
-        // Enforce explicit cadence: 12/day when OFF, 96/day when ON. Always fixed 6 depths.
+        const useMaxFidelity = selectedView === 'details' ? true : maxFidelity;
+        // Enforce explicit cadence when NOT max fidelity: 2H and fixed 6 depths
         const suggestedResolution = useMaxFidelity ? null : '2H';
-        const maxDepths = 6;
-        const allowedDepths = [10, 30, 50, 100, 150, 200];
+        const maxDepths = useMaxFidelity ? 9999 : 6;
+        const allowedDepths = useMaxFidelity ? undefined : [10, 30, 50, 100, 150, 200];
         const targetPoints = undefined;
-        const sourceMode = 'processed';
+        const sourceMode = useMaxFidelity ? 'raw' : 'processed';
         log.debug('[FETCH SUMMARY]', {
           preferArrow,
           source: sourceMode,
@@ -1126,7 +1126,6 @@ const ModernRedoxAnalysis = () => {
                         siteId: s,
                         startTs: startTsIso,
                         endTs: endTsIso,
-                        chunkSize: chunkSize,
                         resolution: suggestedResolution,
                         maxDepths,
                         allowedDepths,
@@ -1146,7 +1145,6 @@ const ModernRedoxAnalysis = () => {
                         siteId: s,
                         startTs: startTsIso,
                         endTs: endTsIso,
-                        chunkSize: chunkSize,
                         resolution: suggestedResolution,
                         maxDepths,
                         allowedDepths,
@@ -1165,7 +1163,6 @@ const ModernRedoxAnalysis = () => {
                         siteId: s,
                         startTs: startTsIso,
                         endTs: endTsIso,
-                        chunkSize: chunkSize,
                         resolution: suggestedResolution,
                         maxDepths,
                         allowedDepths,

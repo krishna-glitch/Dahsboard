@@ -231,59 +231,8 @@ export const uploadFile = async (formData) => {
   }
 };
 
-// Compatibility wrapper: fetch redox data via processed time_series for each site
 export const getRedoxAnalysisData = async (params, signal = null) => {
-  const sitesCsv = params?.sites || '';
-  const sites = sitesCsv ? String(sitesCsv).split(',').map(s => s.trim()).filter(Boolean) : [];
-  const start = params?.start_date || params?.start_ts;
-  const end = params?.end_date || params?.end_ts;
-  if (!sites.length || !start || !end) {
-    // Preserve old shape with empty results
-    return { redox_data: [], metadata: { has_data: false, error: 'Missing required params' } };
-  }
-  const maxFidelity = params?.max_fidelity === true || params?.max_fidelity === '1' || params?.performance_mode === 'maximum';
-  const cadence = maxFidelity ? '96/day' : '12/day';
-  const allowedDepths = [10, 30, 50, 100, 150, 200];
-  const chunkSize = 100000;
-  const allRows = [];
-  for (const site of sites) {
-    const res = await fetchData('redox_analysis/processed/time_series', 'GET', null, {
-      site_id: site,
-      start_ts: start,
-      end_ts: end,
-      format: 'columnar',
-      max_fidelity: maxFidelity ? '1' : '0',
-      allowed_depths: allowedDepths.join(','),
-      chunk_size: chunkSize,
-      offset: 0
-    }, signal, true);
-    // Flatten columnar into rows if present
-    if (res?.data_columnar) {
-      const cols = res.data_columnar;
-      const n = (cols.measurement_timestamp || []).length;
-      for (let i = 0; i < n; i++) {
-        allRows.push({
-          measurement_timestamp: cols.measurement_timestamp ? cols.measurement_timestamp[i] : undefined,
-          processed_eh: cols.processed_eh ? cols.processed_eh[i] : undefined,
-          depth_cm: cols.depth_cm ? cols.depth_cm[i] : undefined,
-          site_code: cols.site_code ? cols.site_code[i] : site
-        });
-      }
-    } else if (Array.isArray(res?.data)) {
-      allRows.push(...res.data);
-    } else if (Array.isArray(res?.redox_data)) {
-      allRows.push(...res.redox_data);
-    }
-  }
-  return {
-    redox_data: allRows,
-    metadata: {
-      has_data: allRows.length > 0,
-      cadence,
-      depths: allowedDepths,
-      sites
-    }
-  };
+  return fetchData('redox_analysis/data', 'GET', null, params, signal);
 };
 
 export const getRedoxDateRange = async (sites = []) => {

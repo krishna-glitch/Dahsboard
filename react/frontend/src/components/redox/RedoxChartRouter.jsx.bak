@@ -5,7 +5,6 @@ import RollingSmallMultiples from './RollingSmallMultiples';
 import SnapshotChart from './SnapshotChart';
 import ZonesChart from './ZonesChart';
 import HeatmapChart from './HeatmapChart';
-import DeckRedoxScatter from './DeckRedoxScatter';
 
 const RedoxChartRouter = React.memo(function RedoxChartRouter({
   selectedView,
@@ -25,36 +24,6 @@ const RedoxChartRouter = React.memo(function RedoxChartRouter({
 }) {
   switch (selectedView) {
     case 'timeseries':
-      // For very large datasets (100k+), use deck.gl for maximum performance
-      if (Array.isArray(data) && data.length > 100000) {
-        console.log('RedoxChartRouter: Using high-performance deck.gl for', data.length, 'data points');
-        const fallback = (chartViewMode === 'by-site') ? (
-          <TimeSeriesBySite
-            data={data}
-            chartData={chartData}
-            chartType={chartType}
-            invertSeriesY={invertSeriesY}
-            selectedSites={selectedSites}
-            siteColors={siteColors}
-          />
-        ) : (
-          <TimeSeriesSmallMultiples
-            data={data}
-            chartData={chartData}
-            chartType={chartType}
-            invertSeriesY={invertSeriesY}
-          />
-        );
-        return (
-          <DeckRedoxScatter
-            data={data}
-            siteColors={siteColors}
-            fallback={fallback}
-          />
-        );
-      } else {
-        console.log('RedoxChartRouter: Using WebGL-accelerated Plotly charts for', data.length, 'data points');
-      }
       if (chartViewMode === 'by-site') {
         return (
           <TimeSeriesBySite
@@ -122,3 +91,4 @@ const RedoxChartRouter = React.memo(function RedoxChartRouter({
 });
 
 export default RedoxChartRouter;
+

@@ -1,6 +1,7 @@
 import React, { useMemo } from 'react';
 import Plot from 'react-plotly.js';
 
+
 const TimeSeriesBySite = React.memo(function TimeSeriesBySite({ 
   data, 
   chartType = 'line', 
@@ -8,6 +9,7 @@ const TimeSeriesBySite = React.memo(function TimeSeriesBySite({
   selectedSites = [], 
   siteColors = {}
 }) {
+  console.log(`TimeSeriesBySite: Rendering ${data?.length || 0} data points, WebGL: ${(data?.length || 0) > 10000}`);
   // Depth color palette - different colors for each depth
   const depthColors = {
     '10': '#1f77b4',   // Blue
@@ -105,6 +107,8 @@ const TimeSeriesBySite = React.memo(function TimeSeriesBySite({
         const siteData = siteDepthData.get(site);
         if (!siteData || siteData.size === 0) return null;
 
+        const useGL = data.length > 10000; // Define useGL at component level for this site
+
         return (
           <div 
             key={`site-${site}`} 
@@ -189,7 +193,6 @@ const TimeSeriesBySite = React.memo(function TimeSeriesBySite({
             <Plot
               data={(() => {
                 const traces = [];
-                const useGL = false; // Avoid WebGL context issues
                 
                 // Sort depths for consistent ordering
                 const depths = Array.from(siteData.keys()).sort((a, b) => a - b);
@@ -207,14 +210,15 @@ const TimeSeriesBySite = React.memo(function TimeSeriesBySite({
                     y: depthData.y,
                     name: `${depth}cm`,
                     type: useGL ? 'scattergl' : 'scatter',
-                    mode: chartType === 'line' ? 'lines' : 'markers',
-                    line: { 
-                      width: 2, 
+                    mode: chartType === 'line' ? (useGL ? 'markers' : 'lines') : 'markers', // WebGL doesn't support lines well
+                    line: useGL ? undefined : { 
+                      width: 1, 
                       color: depthColor
                     },
                     marker: { 
                       color: depthColor, 
-                      size: chartType === 'scatter' ? 6 : 4,
+                      size: useGL ? 2 : (chartType === 'scatter' ? 6 : 4),
+                      opacity: useGL ? 0.6 : 1,
                       symbol: 'circle'
                     },
                     hovertemplate: `<b>${site} - %{fullData.name}</b><br>%{x|%Y-%m-%d %H:%M}<br>Eh: %{y:.2f} mV<extra></extra>`,
@@ -226,12 +230,22 @@ const TimeSeriesBySite = React.memo(function TimeSeriesBySite({
               })()}
               layout={createLayout(siteIndex, invertSeriesY)}
               config={{ 
-                displayModeBar: true, 
+                displayModeBar: !useGL, // Disable mode bar for WebGL performance
                 responsive: true, 
                 displaylogo: false,
-                modeBarButtonsToRemove: ['pan2d', 'lasso2d', 'select2d']
+                scrollZoom: true,
+                // Performance optimizations for large datasets
+                plotGlPixelRatio: 1,
+                modeBarButtonsToRemove: useGL ? undefined : ['pan2d', 'lasso2d', 'select2d'],
+                toImageButtonOptions: useGL ? undefined : {
+                  format: 'png',
+                  filename: `redox_site_${site}`,
+                  height: 320,
+                  width: 800,
+                  scale: 1
+                }
               }}
-              useResizeHandler={true}
+              useResizeHandler={!useGL} // Disable resize handler for WebGL performance
               style={{ width: '100%', height: '320px' }}
             />
           </div>

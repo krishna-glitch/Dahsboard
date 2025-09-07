@@ -15,6 +15,8 @@
     "test:coverage": "vitest --coverage"
   },
   "dependencies": {
+    "@deck.gl/core": "^8.9.36",
+    "@deck.gl/layers": "^8.9.36",
     "@apache-arrow/esnext-esm": "^21.0.0",
     "@tanstack/react-query": "^5.87.1",
     "axios": "^1.11.0",

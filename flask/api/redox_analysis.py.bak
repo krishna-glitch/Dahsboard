@@ -370,7 +370,8 @@ def processed_time_series():
         # Support for chunked loading for large datasets (default 100k)
         chunk_size = request.args.get('chunk_size', type=int) or 100000
         offset = request.args.get('offset', 0, type=int)
-        logger.info(f"🚀 [TIME SERIES] Loading data for site={site_param} start={start_ts} end={end_ts} chunk_size={chunk_size} offset={offset}")
+        
+        logger.info(f"🚀 [TIME SERIES] Loading data for site={site_param} start={start_ts} end={end_ts} chunk_size={chunk_size} offset={offset} resolution={resolution} max_depths={max_depths} target_points={target_points}")
         logger.info(f"🧭 [TIME SERIES PARAMS] wire_format={wire_format} source={request.args.get('source')} max_fidelity={request.args.get('max_fidelity')}")
 
         # Derive cadence from max_fidelity flag: ON -> 96/day, OFF -> 12/day
@@ -538,7 +539,11 @@ def processed_time_series():
             }
         }
         logger.info(f"📄 [TIME SERIES META] source={source} wire_format={wire_format} total={total_records} returned={response_payload['metadata']['returned_records']} chunked={bool(chunk_size)}")
-        # No thinning metadata; server does not thin beyond cadence selection
+        if target_points:
+            response_payload['metadata']['thinning'] = {
+                'enabled': True,
+                'target_points': target_points,
+            }
         return jsonify(response_payload), 200
     except Exception as e:
         logger.error(f"[REDOX MV] Error in processed_time_series: {e}")
