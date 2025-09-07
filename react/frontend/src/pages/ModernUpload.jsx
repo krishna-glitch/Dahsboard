@@ -16,14 +16,24 @@ const ModernUpload = () => {
   const [uploadStatus, setUploadStatus] = useState('');
   const [uploadError, setUploadError] = useState(null);
   const [dragActive, setDragActive] = useState(false);
+  // S3 demo state
+  const [s3Items, setS3Items] = useState([]);
+  const [s3Loading, setS3Loading] = useState(false);
+  const [s3Error, setS3Error] = useState(null);
+  const [s3Prefix, setS3Prefix] = useState('');
+  const [s3NextToken, setS3NextToken] = useState(null);
+  const [s3Configured, setS3Configured] = useState(false);
 
   useEffect(() => {
     const fetchUploadHistory = async () => {
       try {
         const data = await getUploadHistory();
-        setUploadHistory(data);
+        // API returns an object with uploads array and metadata
+        const list = Array.isArray(data) ? data : (Array.isArray(data?.uploads) ? data.uploads : []);
+        setUploadHistory(list);
       } catch (err) {
-        setHistoryError(err.message);
+        setHistoryError(err.message || String(err));
+        setUploadHistory([]);
       } finally {
         setLoadingHistory(false);
       }
@@ -31,6 +41,22 @@ const ModernUpload = () => {
 
     fetchUploadHistory();
   }, []);
+
+  const fetchS3 = async (opts = {}) => {
+    try {
+      setS3Loading(true);
+      setS3Error(null);
+      const resp = await listS3Objects({ prefix: opts.prefix ?? s3Prefix, token: opts.token ?? null, pageSize: 25 });
+      setS3Items(Array.isArray(resp?.items) ? resp.items : []);
+      setS3NextToken(resp?.nextToken || null);
+      setS3Configured(!!resp?.configured);
+    } catch (e) {
+      setS3Error(e?.message || String(e));
+      setS3Items([]);
+    } finally {
+      setS3Loading(false);
+    }
+  };
 
   const handleFileChange = (event) => {
     const file = event.target.files[0];
@@ -69,14 +95,18 @@ const ModernUpload = () => {
     setUploadError(null);
 
     try {
-      await uploadFile(selectedFile, dataType);
+      const formData = new FormData();
+      formData.append('file', selectedFile);
+      formData.append('data_type', dataType);
+      await uploadFile(formData);
       setUploadStatus('success');
       setSelectedFile(null);
       setDataType('');
       
       // Refresh upload history
       const data = await getUploadHistory();
-      setUploadHistory(data);
+      const list = Array.isArray(data) ? data : (Array.isArray(data?.uploads) ? data.uploads : []);
+      setUploadHistory(list);
     } catch (err) {
       setUploadError(err.message);
       setUploadStatus('error');
@@ -84,7 +114,7 @@ const ModernUpload = () => {
   };
 
   const getUploadStats = () => {
-    if (!uploadHistory) {
+    if (!Array.isArray(uploadHistory)) {
       return {
         totalUploads: 0,
         successfulUploads: 0,
@@ -94,9 +124,11 @@ const ModernUpload = () => {
     }
 
     const total = uploadHistory.length;
-    const successful = uploadHistory.filter(u => u.status === 'success').length;
+    const successful = uploadHistory.filter(u => String(u.status || '').startsWith('success')).length;
     const recent = uploadHistory.filter(u => {
-      const uploadDate = new Date(u.timestamp);
+      const ts = u.uploaded_at || u.timestamp || u.created_at;
+      const uploadDate = ts ? new Date(ts) : null;
+      if (!uploadDate || isNaN(uploadDate.getTime())) return false;
       const weekAgo = new Date();
       weekAgo.setDate(weekAgo.getDate() - 7);
       return uploadDate > weekAgo;
@@ -342,6 +374,84 @@ const ModernUpload = () => {
               ))}
             </div>
           )}
+        </div>
+
+        {/* S3 Browser (Demo-Safe) */}
+        <div className="upload-container" style={{ marginTop: 24 }}>
+          <div className="upload-header" style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+            <h2 className="section-title">
+              <i className="bi bi-folder2-open" style={{ marginRight: '12px' }}></i>
+              S3 Browser {s3Configured ? '' : '(Demo)'}
+            </h2>
+            <div style={{ display: 'flex', gap: 8 }}>
+              <input
+                type="text"
+                className="form-input"
+                placeholder="Prefix (e.g., uploads/)"
+                value={s3Prefix}
+                onChange={(e)=> setS3Prefix(e.target.value)}
+                style={{ minWidth: 240 }}
+              />
+              <button className="btn btn-outline-secondary btn-sm" onClick={()=> fetchS3({ prefix: s3Prefix, token: null })} disabled={s3Loading} title="Refresh S3 list">
+                <i className={`bi ${s3Loading ? 'bi-arrow-repeat' : 'bi-arrow-clockwise'} me-1`}></i>
+                Refresh
+              </button>
+              {s3NextToken && (
+                <button className="btn btn-outline-primary btn-sm" onClick={()=> fetchS3({ prefix: s3Prefix, token: s3NextToken })} disabled={s3Loading} title="Load next page">
+                  Next Page
+                </button>
+              )}
+            </div>
+          </div>
+          {s3Error && (
+            <div className="alert-message alert-error" style={{ marginBottom: 8 }}>
+              <div className="alert-content">
+                <i className="bi bi-exclamation-triangle"></i>
+                <span>{s3Error}</span>
+              </div>
+            </div>
+          )}
+          <div className="table-responsive" style={{ overflowX: 'auto' }}>
+            <table className="modern-table">
+              <thead>
+                <tr>
+                  <th style={{ width: '60%' }}>Key</th>
+                  <th>Size</th>
+                  <th>Last Modified</th>
+                  <th>Actions</th>
+                </tr>
+              </thead>
+              <tbody>
+                {s3Loading ? (
+                  <tr><td colSpan={4} style={{ textAlign: 'center', color: '#6c757d' }}>Loading…</td></tr>
+                ) : s3Items.length === 0 ? (
+                  <tr><td colSpan={4} style={{ textAlign: 'center', color: '#6c757d' }}>No objects found</td></tr>
+                ) : (
+                  s3Items.map((it, idx) => (
+                    <tr key={`${it.key}|${idx}`}>
+                      <td style={{ fontFamily: 'monospace' }}>{it.key}</td>
+                      <td>{(Number(it.size || 0)/1024).toFixed(1)} KB</td>
+                      <td>{it.lastModified ? String(it.lastModified).replace('T',' ').replace('Z','') : '-'}</td>
+                      <td>
+                        <button
+                          className="btn btn-outline-secondary btn-sm"
+                          onClick={async ()=> {
+                            try {
+                              const res = await getS3PresignedGetUrl(it.key);
+                              const url = res?.url;
+                              if (url) window.open(url, '_blank');
+                            } catch (e) { /* ignore */ }
+                          }}
+                        >
+                          View
+                        </button>
+                      </td>
+                    </tr>
+                  ))
+                )}
+              </tbody>
+            </table>
+          </div>
         </div>
       </div>
     </div>

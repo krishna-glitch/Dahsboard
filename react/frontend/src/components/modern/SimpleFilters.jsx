@@ -76,6 +76,15 @@ const SimpleFilters = ({
     })();
   }, []);
 
+  // Keep local state in sync when parent props change (prevents filter/UI drift)
+  useEffect(() => {
+    setLocalSites(selectedSites);
+  }, [JSON.stringify(selectedSites)]);
+
+  useEffect(() => {
+    setLocalTimeRange(timeRange);
+  }, [timeRange]);
+
   const handleSiteToggle = (siteValue) => {
     const newSites = localSites.includes(siteValue)
       ? localSites.filter(s => s !== siteValue)

@@ -112,15 +112,39 @@ export function useWaterQualityData({
       const params = buildParams();
       log.debug('[WQ Hook] API params:', params);
       
-      const res = await getWaterQualityData(params, controller.signal);
-      log.debug('[WQ Hook] API response:', { 
-        hasData: !!res?.water_quality_data || !!res?.data,
-        dataLength: (res?.water_quality_data || res?.data || []).length,
-        response: res 
+      // Chunked loading up to 200k to avoid truncation
+      const CHUNK_SIZE = 100000;
+      // Show progressive loading toast for chunked fetch
+      const loadingToastId = toast.showLoading('Loading water quality records…', {
+        title: 'Loading Water Quality',
+        dedupeKey: 'wq-chunk-loading'
       });
-      
-      const rows = res?.water_quality_data || res?.data || [];
-      const metadata = res?.metadata || null;
+      let rows = [];
+      let offset = 0;
+      while (true) {
+        const res = await getWaterQualityData({ ...params, chunk_size: CHUNK_SIZE, offset }, controller.signal);
+        log.debug('[WQ Hook] API response chunk:', { 
+          hasData: !!res?.water_quality_data || !!res?.data,
+          dataLength: (res?.water_quality_data || res?.data || []).length,
+          meta: res?.metadata
+        });
+        const chunk = res?.water_quality_data || res?.data || [];
+        rows = rows.concat(chunk);
+        // Update progress
+        try {
+          toast.updateToast(loadingToastId, {
+            type: 'loading',
+            title: 'Loading Water Quality',
+            message: `Loaded ${rows.length.toLocaleString()} records…`,
+            duration: 10000
+          });
+        } catch {}
+        const info = res?.metadata?.chunk_info || {};
+        if (!info.has_more || chunk.length === 0) break;
+        offset = (info.offset || 0) + (info.chunk_size || CHUNK_SIZE);
+        if (offset >= 200000) break; // guard against excess
+      }
+      const metadata = null; // keep minimal for now; per-chunk meta varies
 
       // Populate cache by site
       try {
@@ -151,10 +175,12 @@ export function useWaterQualityData({
         const recordsFormatted = rows.length.toLocaleString();
         
         // Create date range info for toast
-        const wStart = (metadata?.date_range?.start || startDate || '').slice(0, 10);
-        const wEnd = (metadata?.date_range?.end || endDate || '').slice(0, 10);
+        const wStart = (startDate || '').slice(0, 10);
+        const wEnd = (endDate || '').slice(0, 10);
         const windowSuffix = (wStart && wEnd) ? ` • Window: ${wStart} → ${wEnd}` : '';
 
+        // Remove loading toast before final result
+        try { toast.removeToast(loadingToastId); } catch {}
         if (rows.length === 0) {
           toast.showWarning(
             `No water quality records found for sites ${sitesText}${windowSuffix}`,

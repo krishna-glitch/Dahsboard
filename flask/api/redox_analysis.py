@@ -1,25 +1,10 @@
 from flask import Blueprint, jsonify, request
 from flask_login import login_required
 import logging
-import time
-from datetime import datetime, timedelta
-import numpy as np
 import pandas as pd
 
-# Import Polars for high-performance redox data processing
-try:
-    import polars as pl
-    POLARS_AVAILABLE = True
-except ImportError:
-    POLARS_AVAILABLE = False
-    pl = None
-
 from services.core_data_service import core_data_service, DataQuery
-from services.config_service import config_service
-from services.adaptive_data_resolution import adaptive_resolution
 from utils.optimized_serializer import serialize_dataframe_optimized
-from utils.data_processing import normalize_timezone
-from services.consolidated_cache_service import cached # New import for caching
 from utils.api_cache_utils import cached_api_response
 
 # Import comprehensive performance optimization
@@ -119,7 +104,7 @@ def _intelligent_downsample_redox(df: pd.DataFrame, target_size: int = 5000) -> 
 @redox_analysis_bp.route('/data', methods=['GET'])
 # @login_required  # Temporarily disabled for testing
 @enterprise_performance(data_type='redox_analysis')
-@cached_api_response(ttl=900)  # Site-aware caching that preserves filtering
+@cached_api_response(ttl=1800)  # Site-aware caching that preserves filtering - 30 minutes
 def get_redox_analysis_data():
     start_time = time.time()
     logger.info(f"[REDOX DEBUG] API data loading triggered.")
@@ -435,16 +420,30 @@ def processed_time_series():
             df = df[df['depth_cm'].isin(allowed_depths)]
             logger.info(f"🎯 [TIME SERIES] Enforced fixed depths {allowed_depths}: {before} -> {len(df)} rows")
 
-        # Enforce cadence selection: 96/day (no filter) vs 12/day (2H points only)
+        # Enforce cadence selection: 96/day (no filter) vs 12/day via nearest 2-hour slot selection
         if not df.empty and cadence_per_day == 12:
             try:
-                df['measurement_timestamp'] = pd.to_datetime(df['measurement_timestamp'])
+                df['measurement_timestamp'] = pd.to_datetime(df['measurement_timestamp'], errors='coerce')
                 before = len(df)
-                mask = (df['measurement_timestamp'].dt.minute == 0) & ((df['measurement_timestamp'].dt.hour % 2) == 0)
-                df = df[mask]
-                logger.info(f"⏱️ [TIME SERIES] Applied 2H cadence filter: {before} -> {len(df)} rows")
+                ts = df['measurement_timestamp']
+                hour = ts.dt.hour
+                minute = ts.dt.minute
+                total_min = hour * 60 + minute
+                # Round to nearest 2-hour (120-minute) slot within the day; handle wrap to next day
+                slot_m = (total_min / 120.0).round().astype(int) * 120
+                day_inc = (slot_m // 1440).astype(int)
+                slot_m_mod = (slot_m % 1440).astype(int)
+                slot_hour = (slot_m_mod // 60).astype(int)
+                slot_ts = ts.dt.normalize() + pd.to_timedelta(slot_hour, unit='h') + pd.to_timedelta(day_inc, unit='D')
+                df = df.assign(__slot_ts=slot_ts)
+                # Select the single closest sample to each slot per site and depth
+                diff_min = (ts - slot_ts).abs().dt.total_seconds() / 60.0
+                df = df.assign(__diff_min=diff_min)
+                idx = df.groupby(['site_id', 'depth_cm', '__slot_ts'])['__diff_min'].idxmin()
+                df = df.loc[idx].sort_values(['measurement_timestamp', 'depth_cm']).drop(columns=['__slot_ts', '__diff_min'])
+                logger.info(f"⏱️ [TIME SERIES] Applied 2H slot selection: {before} -> {len(df)} rows")
             except Exception as e:
-                logger.warning(f"Cadence filtering failed: {e}")
+                logger.warning(f"Cadence slot selection failed: {e}")
 
         # If we didn't compute total_records earlier, fallback to len(df)
         if 'total_records' not in locals() or total_records is None:

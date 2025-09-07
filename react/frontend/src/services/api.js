@@ -209,6 +209,21 @@ export const getUploadHistory = async () => {
   return fetchData('upload/history');
 };
 
+// S3 integration (demo-safe)
+export const listS3Objects = async ({ prefix = '', token = null, pageSize = 50 } = {}) => {
+  const params = { prefix, page_size: pageSize };
+  if (token) params.token = token;
+  return fetchData('upload/s3/list', 'GET', null, params, null, true);
+};
+
+export const getS3PresignedGetUrl = async (key) => {
+  return fetchData('upload/s3/sign-get', 'POST', { key }, null, null, true);
+};
+
+export const getS3PresignedPutUrl = async (key, contentType = 'application/octet-stream') => {
+  return fetchData('upload/s3/sign-put', 'POST', { key, contentType }, null, null, true);
+};
+
 export const uploadFile = async (formData) => {
   // For file uploads, do NOT set Content-Type header manually.
   // The browser will set it correctly for FormData, including boundary.
@@ -247,32 +262,42 @@ export const getRedoxAnalysisData = async (params, signal = null) => {
   const chunkSize = 100000;
   const allRows = [];
   for (const site of sites) {
-    const res = await fetchData('redox_analysis/processed/time_series', 'GET', null, {
-      site_id: site,
-      start_ts: start,
-      end_ts: end,
-      format: 'columnar',
-      max_fidelity: maxFidelity ? '1' : '0',
-      allowed_depths: allowedDepths.join(','),
-      chunk_size: chunkSize,
-      offset: 0
-    }, signal, true);
-    // Flatten columnar into rows if present
-    if (res?.data_columnar) {
-      const cols = res.data_columnar;
-      const n = (cols.measurement_timestamp || []).length;
-      for (let i = 0; i < n; i++) {
-        allRows.push({
-          measurement_timestamp: cols.measurement_timestamp ? cols.measurement_timestamp[i] : undefined,
-          processed_eh: cols.processed_eh ? cols.processed_eh[i] : undefined,
-          depth_cm: cols.depth_cm ? cols.depth_cm[i] : undefined,
-          site_code: cols.site_code ? cols.site_code[i] : site
-        });
+    let offset = 0;
+    let hasMore = true;
+    while (hasMore) {
+      const res = await fetchData('redox_analysis/processed/time_series', 'GET', null, {
+        site_id: site,
+        start_ts: start,
+        end_ts: end,
+        format: 'columnar',
+        max_fidelity: maxFidelity ? '1' : '0',
+        allowed_depths: allowedDepths.join(','),
+        chunk_size: chunkSize,
+        offset,
+      }, signal, true);
+      // Flatten columnar into rows if present
+      if (res?.data_columnar) {
+        const cols = res.data_columnar;
+        const n = (cols.measurement_timestamp || []).length;
+        for (let i = 0; i < n; i++) {
+          allRows.push({
+            measurement_timestamp: cols.measurement_timestamp ? cols.measurement_timestamp[i] : undefined,
+            processed_eh: cols.processed_eh ? cols.processed_eh[i] : undefined,
+            depth_cm: cols.depth_cm ? cols.depth_cm[i] : undefined,
+            site_code: cols.site_code ? cols.site_code[i] : site
+          });
+        }
+      } else if (Array.isArray(res?.data)) {
+        allRows.push(...res.data);
+      } else if (Array.isArray(res?.redox_data)) {
+        allRows.push(...res.redox_data);
       }
-    } else if (Array.isArray(res?.data)) {
-      allRows.push(...res.data);
-    } else if (Array.isArray(res?.redox_data)) {
-      allRows.push(...res.redox_data);
+      const meta = res?.metadata || {};
+      const info = meta.chunk_info || {};
+      hasMore = !!info.has_more;
+      if (hasMore) {
+        offset = (info.offset || 0) + (info.chunk_size || chunkSize);
+      }
     }
   }
   return {

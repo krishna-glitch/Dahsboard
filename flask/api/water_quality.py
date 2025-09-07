@@ -90,12 +90,12 @@ def _intelligent_downsample_water_quality(df: pd.DataFrame, target_size: int = 5
 
 @water_quality_bp.route('/data', methods=['GET'])
 # @login_required  # Temporarily disabled for testing
-@cached_api_response(ttl=900)  # Site-aware caching that preserves filtering
+@cached_api_response(ttl=1800)  # Site-aware caching that preserves filtering - 30 minutes
 def get_water_quality_data():
     """
     Enhanced water quality data endpoint with smart loading strategy:
     - Intelligent data limits based on performance mode and time range
-    - Aggressive caching (15 min TTL) to avoid repeated DB queries
+    - Aggressive caching (30 min TTL) to avoid repeated DB queries
     - Progressive loading instead of full streaming
     - Database query optimization with targeted limits
     - Smart downsampling only when necessary
@@ -113,6 +113,9 @@ def get_water_quality_data():
     end_date = filter_config.end_date
     performance_mode = request.args.get('performance_mode', 'balanced')
     no_downsample = str(request.args.get('no_downsample', 'false')).lower() == 'true'
+    # Optional chunked pagination for large responses
+    chunk_size = request.args.get('chunk_size', type=int)
+    offset = request.args.get('offset', 0, type=int)
 
     logger.info(f"   Selected sites: {selected_sites}")
     logger.info(f"   Time range: {time_range}")
@@ -171,7 +174,13 @@ def get_water_quality_data():
             }
             initial_limit = performance_limits.get(performance_mode, 15000)
         
-        logger.info(f"[SMART LOADING] Using initial limit: {initial_limit} for {performance_mode} mode")
+        # If client requested chunking, ensure we fetch at least enough rows to cover the desired window
+        if chunk_size and chunk_size > 0:
+            try:
+                initial_limit = max(initial_limit or 0, (offset or 0) + chunk_size)
+            except Exception:
+                pass
+        logger.info(f"[SMART LOADING] Using initial limit: {initial_limit} for {performance_mode} mode (chunk_size={chunk_size} offset={offset})")
         
         df = core_data_service.load_water_quality_data(
             sites=selected_sites,
@@ -208,6 +217,14 @@ def get_water_quality_data():
                     logger.info(f"[MAXIMUM DETAIL] Showing all {len(df)} loaded data points")
                 else:
                     logger.info(f"[OPTIMAL LOADING] Dataset size {len(df)} is optimal for {performance_mode} mode - no downsampling needed")
+
+            # Apply in-memory chunk slicing if requested
+            full_len = len(df)
+            if chunk_size and chunk_size > 0:
+                start_idx = max(0, int(offset or 0))
+                end_idx = max(start_idx, start_idx + int(chunk_size))
+                df = df.iloc[start_idx:end_idx]
+                logger.info(f"📦 [WQ CHUNK] Returning chunk rows={len(df)} (from {full_len}) offset={start_idx} size={chunk_size}")
 
             # Apply adaptive resolution if needed (but not for maximum detail mode)
             if (performance_mode != 'maximum' and not no_downsample and 
@@ -264,6 +281,12 @@ def get_water_quality_data():
                     'loading_time_ms': round(loading_time_ms, 2),
                     'optimization_tier': 'enterprise'
                 },
+                'chunked': bool(chunk_size),
+                'chunk_info': ({
+                    'offset': int(offset or 0),
+                    'chunk_size': int(chunk_size or 0),
+                    'has_more': bool(chunk_size and (int(offset or 0) + int(chunk_size or 0) < int(full_len)))
+                } if chunk_size else None),
                 'advanced_filters': filter_stats if 'filter_stats' in locals() else None,
                 'has_data': not df.empty,
                 'no_downsample': no_downsample

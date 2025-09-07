@@ -542,31 +542,59 @@ const ModernSiteComparison = () => {
 
   // Process comparison data for statistics
   const comparisonStats = useMemo(() => {
-    if (!comparisonData?.sites) {
-      return {
-        totalSites: availableSites.length,
-        activeSites: availableSites.filter(s => s.status === 'active').length,
-        comparedSites: 0,
-        averageValue: 0,
-        highestValue: 0,
-        lowestValue: 0,
-        variabilityIndex: 0
-      };
+    // Helpers
+    const qtile = (arr, q) => {
+      if (!arr || arr.length === 0) return null;
+      const a = arr.slice().sort((x, y) => x - y);
+      const p = (a.length - 1) * q;
+      const lo = Math.floor(p), hi = Math.ceil(p);
+      if (lo === hi) return a[lo];
+      const h = p - lo;
+      return a[lo] * (1 - h) + a[hi] * h;
+    };
+
+    const sites = comparisonData?.sites || [];
+    const comparedSites = sites.length;
+    const values = sites
+      .map(site => Number(site.currentValue))
+      .filter(v => Number.isFinite(v));
+
+    const unit = selectedMetricInfo?.unit || '';
+    const median = values.length ? qtile(values, 0.5) : null;
+    const q1 = values.length ? qtile(values, 0.25) : null;
+    const q3 = values.length ? qtile(values, 0.75) : null;
+    const iqr = (q1 != null && q3 != null) ? (q3 - q1) : null;
+    const maxVal = values.length ? Math.max(...values) : null;
+    const minVal = values.length ? Math.min(...values) : null;
+    const maxSite = (maxVal != null) ? (sites.find(s => Number(s.currentValue) === maxVal)?.site_id || '') : '';
+    const minSite = (minVal != null) ? (sites.find(s => Number(s.currentValue) === minVal)?.site_id || '') : '';
+
+    // Coverage / concurrency
+    const md = comparisonData?.metadata || {};
+    let coverageLabel = 'N/A';
+    let coverageTooltip = '';
+    if (md.analysis_mode === 'concurrent') {
+      const cnt = Number(md.concurrent_measurements) || 0;
+      const winH = Number(md.time_window_hours) || 24;
+      coverageLabel = `${cnt.toLocaleString()} windows`;
+      coverageTooltip = `Number of concurrent measurement windows found across sites within ±${winH/2} hours of each other.`;
+    } else if (md.start && md.end) {
+      // Basic presence: sites with currentValue
+      const present = sites.filter(s => Number.isFinite(Number(s.currentValue))).length;
+      coverageLabel = `${present}/${comparedSites} sites reporting`;
+      coverageTooltip = 'Sites that have a current value available in the selected window.';
     }
 
-    const sites = comparisonData.sites;
-    const values = sites.map(site => site.currentValue || 0).filter(v => v > 0);
-    
     return {
-      totalSites: availableSites.length,
-      activeSites: availableSites.filter(s => s.status === 'active').length,
-      comparedSites: sites.length,
-      averageValue: values.length > 0 ? (values.reduce((a, b) => a + b, 0) / values.length).toFixed(2) : 0,
-      highestValue: values.length > 0 ? Math.max(...values).toFixed(2) : 0,
-      lowestValue: values.length > 0 ? Math.min(...values).toFixed(2) : 0,
-      variabilityIndex: values.length > 0 ? ((Math.max(...values) - Math.min(...values)) / Math.max(...values) * 100).toFixed(1) : 0
+      comparedSites,
+      unit,
+      median,
+      iqr,
+      maxVal, maxSite,
+      minVal, minSite,
+      coverageLabel, coverageTooltip
     };
-  }, [comparisonData, availableSites]);
+  }, [comparisonData, selectedMetricInfo]);
 
   const handleSiteToggle = (siteId) => {
     if (siteId === 'all') {
@@ -879,54 +907,56 @@ const ModernSiteComparison = () => {
 
         <div className="metrics-grid">
           <MetricCard
-            title="Total Sites"
-            value={comparisonStats.totalSites}
-            icon="geo-alt"
-            status="normal"
-            context="Monitoring locations"
-            tooltip="Total number of monitoring sites available in the system. This includes all configured sites regardless of their current operational status."
-          />
-          <MetricCard
-            title="Active Sites"
-            value={comparisonStats.activeSites}
-            icon="broadcast"
-            status="excellent"
-            context="Currently operational"
-            tooltip="Number of sites currently online and actively collecting data. These sites have recent measurements and are functioning properly."
-          />
-          <MetricCard
-            title="Compared Sites"
+            title="Sites Compared"
             value={comparisonStats.comparedSites}
             icon="bar-chart"
             status="good"
-            context="In current analysis"
-            tooltip={`Number of sites included in the current comparison analysis. ${analysisMode === 'concurrent' ? `Using concurrent mode with ${concurrentWindowHours}h windows to find measurements taken at similar times.` : 'Using full period mode to compare averages across all available data.'}`}
+            context="Included in this analysis"
+            tooltip={`Number of sites included in the current comparison. ${analysisMode === 'concurrent' ? `Concurrent mode (${concurrentWindowHours}h windows).` : 'Full period mode.'}`}
           />
           <MetricCard
-            title="Average Value"
-            value={comparisonStats.averageValue}
-            unit={selectedMetricInfo?.unit || ''}
+            title="Median Value"
+            value={comparisonStats.median != null ? comparisonStats.median.toFixed(2) : 'N/A'}
+            unit={comparisonStats.unit}
             icon="calculator"
             status="normal"
-            context="Across all sites"
-            tooltip={`Average ${selectedMetric} value across all compared sites. ${analysisMode === 'concurrent' ? 'Based on concurrent measurements within the specified time windows.' : 'Calculated from the full period averages of each site.'} This gives you the overall system-wide measurement level.`}
+            context="Robust center across sites"
+            tooltip={`Median ${selectedMetric} across compared sites (less sensitive to outliers than mean).`}
           />
           <MetricCard
-            title="Highest Value"
-            value={comparisonStats.highestValue}
-            unit={selectedMetricInfo?.unit || ''}
+            title="Spread (IQR)"
+            value={comparisonStats.iqr != null ? comparisonStats.iqr.toFixed(2) : 'N/A'}
+            unit={comparisonStats.unit}
+            icon="arrows-expand"
+            status={comparisonStats.iqr != null && comparisonStats.iqr > 0 ? 'warning' : 'good'}
+            context="Interquartile range (Q3–Q1)"
+            tooltip={`IQR (Q3 – Q1) shows how spread out site values are. Higher values indicate more variation across sites.`}
+          />
+          <MetricCard
+            title="Max Value"
+            value={comparisonStats.maxVal != null ? comparisonStats.maxVal.toFixed(2) : 'N/A'}
+            unit={comparisonStats.unit}
             icon="arrow-up-circle"
             status="warning"
-            context="Peak measurement"
-            tooltip={`Highest ${selectedMetric} value recorded among all compared sites. This represents the peak measurement and may indicate a site that needs attention or has different environmental conditions.`}
+            context={comparisonStats.maxSite ? `Site ${comparisonStats.maxSite}` : 'Peak measurement'}
+            tooltip={`Highest ${selectedMetric} among compared sites${comparisonStats.maxSite ? ` (Site ${comparisonStats.maxSite})` : ''}.`}
           />
           <MetricCard
-            title="Variability"
-            value={`${comparisonStats.variabilityIndex}%`}
-            icon="activity"
-            status={parseFloat(comparisonStats.variabilityIndex) > 20 ? 'warning' : 'good'}
-            context="Measurement spread"
-            tooltip={`Coefficient of variation showing how much ${selectedMetric} values differ between sites. Low variability (<20%) suggests consistent conditions across sites, while high variability (>20%) indicates significant differences that may require investigation.`}
+            title="Min Value"
+            value={comparisonStats.minVal != null ? comparisonStats.minVal.toFixed(2) : 'N/A'}
+            unit={comparisonStats.unit}
+            icon="arrow-down-circle"
+            status="good"
+            context={comparisonStats.minSite ? `Site ${comparisonStats.minSite}` : 'Lowest measurement'}
+            tooltip={`Lowest ${selectedMetric} among compared sites${comparisonStats.minSite ? ` (Site ${comparisonStats.minSite})` : ''}.`}
+          />
+          <MetricCard
+            title={analysisMode === 'concurrent' ? 'Concurrent Windows' : 'Data Coverage'}
+            value={comparisonStats.coverageLabel}
+            icon={analysisMode === 'concurrent' ? 'clock-history' : 'activity'}
+            status="normal"
+            context={analysisMode === 'concurrent' ? 'Measurement overlap' : 'Sites reporting'}
+            tooltip={comparisonStats.coverageTooltip || (analysisMode === 'concurrent' ? 'Number of time windows where measurements overlapped across sites.' : 'How many selected sites have a current value in this window.')}
           />
         </div>
 

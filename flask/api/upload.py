@@ -9,6 +9,7 @@ from utils.secure_file_handler import secure_file_handler
 from services.core_data_service import core_data_service
 from services.upload_history_service import upload_history_service
 from utils.errors import APIError
+from services.s3_service import list_objects as s3_list_objects, generate_presigned_get_url as s3_sign_get, generate_presigned_put_url as s3_sign_put, is_configured as s3_is_configured
 
 # Import comprehensive performance optimization
 from utils.advanced_performance_integration_simple import enterprise_performance
@@ -275,3 +276,53 @@ def get_upload_service_health():
             },
             'timestamp': datetime.now().isoformat()
         }), 500
+
+
+# S3 Integration (Demo-safe)
+@upload_bp.route('/s3/list', methods=['GET'])
+@login_required
+@enterprise_performance(data_type='s3_list')
+def s3_list():
+    try:
+        prefix = request.args.get('prefix', '') or ''
+        token = request.args.get('token')
+        page_size = request.args.get('page_size', 50, type=int)
+        result = s3_list_objects(prefix=prefix, token=token, page_size=page_size)
+        return jsonify(result), 200
+    except Exception as e:
+        logger.error(f"S3 list error: {e}")
+        return jsonify({ 'items': [], 'nextToken': None, 'configured': False, 'error': str(e) }), 500
+
+
+@upload_bp.route('/s3/sign-get', methods=['POST'])
+@login_required
+@enterprise_performance(data_type='s3_sign_get')
+def s3_sign_get_route():
+    try:
+        data = request.get_json(silent=True) or {}
+        key = data.get('key')
+        if not key:
+            return jsonify({ 'error': 'Missing key' }), 400
+        url = s3_sign_get(key)
+        return jsonify({ 'url': url, 'configured': s3_is_configured() }), 200
+    except Exception as e:
+        logger.error(f"S3 sign-get error: {e}")
+        return jsonify({ 'error': str(e) }), 500
+
+
+@upload_bp.route('/s3/sign-put', methods=['POST'])
+@login_required
+@enterprise_performance(data_type='s3_sign_put')
+def s3_sign_put_route():
+    try:
+        data = request.get_json(silent=True) or {}
+        key = data.get('key')
+        content_type = data.get('contentType')
+        if not key:
+            return jsonify({ 'error': 'Missing key' }), 400
+        desc = s3_sign_put(key, content_type)
+        desc['configured'] = s3_is_configured()
+        return jsonify(desc), 200
+    except Exception as e:
+        logger.error(f"S3 sign-put error: {e}")
+        return jsonify({ 'error': str(e) }), 500

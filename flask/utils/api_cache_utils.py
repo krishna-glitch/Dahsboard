@@ -8,6 +8,7 @@ import json
 from functools import wraps
 from flask import request
 from services.consolidated_cache_service import cache_service
+from utils.data_compressor import compressor
 import logging
 
 logger = logging.getLogger(__name__)
@@ -33,6 +34,10 @@ def generate_api_cache_key(endpoint_name: str, **kwargs) -> str:
     end_date = request.args.get('end_date', '')
     performance_mode = request.args.get('performance_mode', 'balanced')
     
+    # Get fidelity parameter for smart caching
+    max_fidelity = request.args.get('max_fidelity', '').lower() in ('1', 'true', 'yes', 'on', 't')
+    fidelity_level = 'max' if max_fidelity else 'std'
+    
     # Include additional parameters for redox endpoints
     start_ts = request.args.get('start_ts', '')
     end_ts = request.args.get('end_ts', '')
@@ -55,6 +60,7 @@ def generate_api_cache_key(endpoint_name: str, **kwargs) -> str:
         'start_date': start_date,
         'end_date': end_date,
         'performance_mode': performance_mode,
+        'fidelity': fidelity_level,
         'start_ts': start_ts,
         'end_ts': end_ts,
         'resolution': resolution,
@@ -80,6 +86,35 @@ def generate_api_cache_key(endpoint_name: str, **kwargs) -> str:
     
     return cache_key
 
+def get_compatible_cached_data(base_cache_key: str, requested_fidelity: str):
+    """
+    Check for compatible cached data using fidelity hierarchy.
+    For standard fidelity requests, check if max fidelity data exists.
+    """
+    if requested_fidelity == 'std':
+        # Try to find max fidelity version of the same data
+        max_fidelity_key = base_cache_key.replace(':std:', ':max:')
+        if max_fidelity_key != base_cache_key:
+            compressed_data = cache_service.get(max_fidelity_key)
+            if compressed_data:
+                try:
+                    cached_data = compressor.decompress_json(compressed_data)
+                    logger.info(f"🚀 [FIDELITY CACHE] Found max fidelity data for std request: {max_fidelity_key}")
+                    return cached_data, 'max_for_std'
+                except Exception as e:
+                    logger.warning(f"Failed to decompress cache data for {max_fidelity_key}: {e}")
+    
+    # Check for exact match
+    compressed_data = cache_service.get(base_cache_key)
+    if compressed_data:
+        try:
+            cached_data = compressor.decompress_json(compressed_data)
+            return cached_data, 'exact'
+        except Exception as e:
+            logger.warning(f"Failed to decompress cache data for {base_cache_key}: {e}")
+    
+    return None, None
+
 def cached_api_response(ttl: int = 900):
     """
     Decorator for caching API responses with proper site-aware keys
@@ -91,19 +126,41 @@ def cached_api_response(ttl: int = 900):
             endpoint_name = func.__name__
             cache_key = generate_api_cache_key(endpoint_name)
             
-            # Try to get from cache
-            cached_result = cache_service.get(cache_key)
+            # Get current fidelity level for hierarchical checking
+            max_fidelity = request.args.get('max_fidelity', '').lower() in ('1', 'true', 'yes', 'on', 't')
+            requested_fidelity = 'max' if max_fidelity else 'std'
+            
+            # Try hierarchical cache lookup
+            cached_result, cache_type = get_compatible_cached_data(cache_key, requested_fidelity)
             if cached_result is not None:
-                logger.info(f"🚀 [CACHE HIT] Serving {endpoint_name} from cache")
-                return cached_result
+                if cache_type == 'max_for_std':
+                    logger.info(f"🚀 [FIDELITY CACHE HIT] Serving {endpoint_name} from max fidelity cache for std request")
+                    # TODO: Apply server-side filtering here if needed for data size optimization
+                    return cached_result
+                else:
+                    logger.info(f"🚀 [CACHE HIT] Serving {endpoint_name} from cache")
+                    return cached_result
             
             # Execute function
             logger.info(f"🔄 [CACHE MISS] Executing {endpoint_name}")
             result = func(*args, **kwargs)
             
-            # Cache the result
-            cache_service.set(cache_key, result, ttl)
-            logger.info(f"💾 [CACHED] Stored {endpoint_name} result for {ttl}s")
+            # Cache the result with compression to save memory (especially important for 30min TTL)
+            try:
+                compressed_result = compressor.compress_json(result)
+                cache_service.set(cache_key, compressed_result, ttl)
+                
+                # Calculate compression statistics
+                original_size = len(json.dumps(result).encode()) if isinstance(result, dict) else len(str(result).encode())
+                compressed_size = len(compressed_result)
+                compression_ratio = original_size / compressed_size if compressed_size > 0 else 1
+                
+                logger.info(f"💾 [CACHED] Stored {endpoint_name} result for {ttl}s (fidelity: {requested_fidelity}) - {compression_ratio:.1f}x compression")
+            except Exception as e:
+                # Fallback to uncompressed storage if compression fails
+                logger.warning(f"Compression failed for {endpoint_name}, storing uncompressed: {e}")
+                cache_service.set(cache_key, result, ttl)
+                logger.info(f"💾 [CACHED] Stored {endpoint_name} result for {ttl}s (fidelity: {requested_fidelity}) - uncompressed")
             
             return result
         

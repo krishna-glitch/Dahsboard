@@ -344,6 +344,14 @@ const ModernRedoxAnalysis = () => {
     };
   }, []);
 
+  // Debug logging for render state
+  log.info(`[RENDER DEBUG] Component rendering with fetchState.data.length: ${fetchState.data?.length || 0}, loading: ${fetchState.loading}, error: ${!!fetchState.error}`);
+  
+  // Additional debugging for the empty state condition
+  if (fetchState.data.length === 0 && !fetchState.loading && !fetchState.error) {
+    log.info(`[RENDER DEBUG] Will show EmptyState - fetchState:`, fetchState);
+  }
+  
   const metrics = useRedoxMetrics(fetchState.data, selectedSites);
 
   // Zone thresholds and colors (memoized to prevent re-renders)
@@ -832,7 +840,10 @@ const ModernRedoxAnalysis = () => {
             controller.signal
           );
           checkAbort(controller.signal);
+          log.debug(`[ARROW DEBUG] Parsing buffer for site ${site}, buffer size: ${resArrow?.buffer?.byteLength || 0}`);
           let rows = await parseArrowBufferToRows(resArrow?.buffer, site);
+          log.debug(`[ARROW DEBUG] Parsed ${rows?.length || 0} rows for site ${site}`);
+          
           if (!rows || rows.length === 0) {
             log.info('[FALLBACK JSON-CHUNK]', { site, source: sourceMode, startTsIso, endTsIso, chunkSize, offset });
             resp = await getProcessedEhTimeSeries(
@@ -910,15 +921,111 @@ const ModernRedoxAnalysis = () => {
         updateProgressToast();
 
         const hasMore = !!metadata?.chunk_info?.has_more;
+        log.info(`[CHUNK DEBUG] Site: ${site}, Loaded: ${siteMerged.length}, HasMore: ${hasMore}, ChunkSize: ${arr.length}, Offset: ${offset}`);
+        
         if (!hasMore) {
+          log.info(`[CHUNK COMPLETE] Site: ${site} finished with ${siteMerged.length} total records`);
           return { site, data: siteMerged, allowed: allowedLocal, metadata };
         }
+        
         const nextOffset = metadata?.chunk_info?.offset + (metadata?.chunk_info?.chunk_size || chunkSize || 0);
-        offset = Number.isFinite(nextOffset) ? nextOffset : offset + (chunkSize || 0);
+        const newOffset = Number.isFinite(nextOffset) ? nextOffset : offset + (chunkSize || 0);
+        
+        // Safety check to prevent infinite loops
+        if (newOffset === offset) {
+          log.error(`[CHUNK ERROR] Offset not advancing for site ${site}, breaking loop. Current: ${offset}, Next: ${newOffset}`);
+          return { site, data: siteMerged, allowed: allowedLocal, metadata };
+        }
+        
+        // Safety check for empty chunks
+        if (arr.length === 0 && hasMore) {
+          log.error(`[CHUNK ERROR] Empty chunk returned but hasMore=true for site ${site}, breaking loop`);
+          return { site, data: siteMerged, allowed: allowedLocal, metadata };
+        }
+        
+        offset = newOffset;
+        log.debug(`[CHUNK CONTINUE] Site: ${site} continuing with offset: ${offset}`);
       }
     },
     [preferArrow, maxFidelity, parseArrowBufferToRows]
   );
+
+  // Smart data compatibility checking for fidelity reuse
+  const checkDataCompatibility = useCallback((newFetchKey, existingData) => {
+    if (!existingData || !newFetchKey || !lastFetchKeyRef.current) {
+      return { compatible: false, reason: 'no-existing-data' };
+    }
+
+    const parseKey = (key) => {
+      const parts = key.split('|');
+      return {
+        sites: parts[0],           // S1,S2,S3,S4
+        rangeType: parts[1],       // "range" 
+        range: parts[2],           // "Last 1 Year"
+        fidelity: parts[3],        // "max" or "std"
+        view: parts[4]             // "timeseries"
+      };
+    };
+
+    const newParams = parseKey(newFetchKey);
+    const existingParams = parseKey(lastFetchKeyRef.current);
+
+    console.log('[SMART CACHE DEBUG] Key comparison:', {
+      newFetchKey,
+      existingFetchKey: lastFetchKeyRef.current,
+      newParams,
+      existingParams
+    });
+
+    // Must have same sites, range, and view
+    if (newParams.sites !== existingParams.sites || 
+        newParams.rangeType !== existingParams.rangeType ||
+        newParams.range !== existingParams.range ||
+        newParams.view !== existingParams.view) {
+      return { compatible: false, reason: 'different-params' };
+    }
+
+    // Check fidelity compatibility
+    if (newParams.fidelity === existingParams.fidelity) {
+      return { compatible: true, reason: 'exact-match' };
+    }
+
+    // If switching from HIGH to LOW fidelity, can always reuse (subset)
+    if (existingParams.fidelity === 'max' && newParams.fidelity === 'std') {
+      return { compatible: true, reason: 'downsample-reuse' };
+    }
+
+    // If switching from LOW to HIGH fidelity, cannot reuse (need more data)
+    if (existingParams.fidelity === 'std' && newParams.fidelity === 'max') {
+      return { compatible: false, reason: 'need-higher-fidelity' };
+    }
+
+    return { compatible: false, reason: 'unknown' };
+  }, []);
+
+  // Apply fidelity filtering to existing data (for downsample reuse)
+  const applyFidelityFilter = useCallback((data, targetFidelity) => {
+    log.info(`[SMART CACHE] applyFidelityFilter called with data length: ${data?.length || 0}, targetFidelity: ${targetFidelity}`);
+    
+    if (!data || !Array.isArray(data) || targetFidelity === 'max') {
+      log.info(`[SMART CACHE] No filtering needed - data: ${!!data}, isArray: ${Array.isArray(data)}, targetFidelity: ${targetFidelity}`);
+      return data; // No filtering needed for max fidelity
+    }
+
+    // For standard fidelity (12 records/day), filter to 2-hour intervals
+    log.info(`[SMART CACHE] Applying standard fidelity filter to ${data.length} records`);
+    
+    const filtered = data.filter(record => {
+      const ts = new Date(record.measurement_timestamp);
+      // Keep only records at 2-hour intervals (00:00, 02:00, 04:00, etc.)
+      return ts.getMinutes() === 0 && (ts.getHours() % 2 === 0);
+    });
+
+    log.info(`[SMART CACHE] Filtered from ${data.length} to ${filtered.length} records for standard fidelity`);
+    log.info(`[SMART CACHE] Sample filtered record:`, filtered[0]);
+    log.info(`[SMART CACHE] Returning filtered array with length:`, filtered.length);
+    return filtered;
+  }, []);
 
   const processResults = useCallback(
     (results, selectedSites, t0, startTsIso, endTsIso, fetchId, toast) => {
@@ -992,6 +1099,33 @@ const ModernRedoxAnalysis = () => {
                 const timeRangeDesc = timeRange === 'Custom Range' ? `${startDate?.slice(0, 10)} to ${endDate?.slice(0, 10)}` : timeRange;
 
                 let details = `Dataset Details:\n• Time Range: ${timeRangeDesc}\n• Loaded Records: ${recordsFormatted}\n• Sites: ${selectedSites.length} (${sitesText})\n• Avg per Site: ${avgRecordsPerSite.toLocaleString()}\n• View: ${selectedView}\n• Load Time: ${loadingTime}s\n• Rate: ${rateStr}`;
+
+                // Coverage summary: estimate days present and depth completeness per site
+                try {
+                  const cadencePerDay = maxFidelity ? 96 : 12;
+                  const perSite = new Map();
+                  const depthSetPerSite = new Map();
+                  for (const r of merged) {
+                    const s = r.site_code || r.site || r.site_id;
+                    if (!s) continue;
+                    perSite.set(s, (perSite.get(s) || 0) + 1);
+                    if (r.depth_cm != null) {
+                      const k = depthSetPerSite.get(s) || new Set();
+                      k.add(Number(r.depth_cm));
+                      depthSetPerSite.set(s, k);
+                    }
+                  }
+                  if (perSite.size > 0) {
+                    details += `\n\nCoverage (estimated):`;
+                    for (const s of selectedSites) {
+                      const n = perSite.get(s) || 0;
+                      const estDays = Math.round(n / (6 * cadencePerDay));
+                      const k = depthSetPerSite.get(s) || new Set();
+                      const depthCount = Math.min(6, Array.from(k.values()).filter(v => Number.isFinite(v)).length);
+                      details += `\n• ${s}: ${n.toLocaleString()} records • ~${estDays.toLocaleString()} days • depths present: ${depthCount}/6`;
+                    }
+                  }
+                } catch {}
 
                 if (chunkingInfo) {
                   details += `\n\n📦 Chunking Info:\n• Total Available: ${chunkingInfo.totalRecords?.toLocaleString() || 'unknown'}\n• Chunk Size: ${chunkingInfo.chunkSize?.toLocaleString() || 'N/A'}\n• More Available: ${chunkingInfo.hasMore ? 'Yes' : 'No'}`;
@@ -1067,11 +1201,46 @@ const ModernRedoxAnalysis = () => {
       const fetchKey = [selectedSites.join(','), rangeKey, fidelitySig, selectedView].join('|');
       log.debug('Generated fetchKey:', fetchKey);
 
+      // Smart data reuse: check if existing data is compatible
+      const compatibility = checkDataCompatibility(fetchKey, fetchState.data);
+      
       if (lastFetchKeyRef.current === fetchKey) {
         log.debug('Same fetch key as before, skipping');
         dispatch({ type: 'RESET' });
         return;
       }
+      
+      if (compatibility.compatible) {
+        log.info(`🚀 [SMART CACHE] Reusing existing data for fidelity switch: ${compatibility.reason}`);
+        
+        // Apply fidelity filtering if downsampling from max to std
+        let reusedData = fetchState.data;
+        if (compatibility.reason === 'downsample-reuse') {
+          log.info(`[SMART CACHE] About to apply fidelity filter. Original data length: ${fetchState.data?.length || 0}`);
+          reusedData = applyFidelityFilter(fetchState.data, fidelitySig);
+          log.info(`[SMART CACHE] After fidelity filter. New data length: ${reusedData?.length || 0}`);
+          
+          // Update the data with the filtered version
+          if (reusedData !== fetchState.data) {
+            log.info(`[SMART CACHE] Applied client-side fidelity filter - dispatching SET_DATA with ${reusedData?.length || 0} records`);
+            dispatch({ type: 'SET_DATA', payload: reusedData });
+            log.info(`[SMART CACHE] SET_DATA dispatched successfully`);
+          } else {
+            log.info(`[SMART CACHE] No data change after filtering - not dispatching SET_DATA`);
+          }
+        }
+        
+        // Update the fetchKey to reflect current state without refetching
+        lastFetchKeyRef.current = fetchKey;
+        log.debug('Data reused successfully, marking fetchKey:', fetchKey);
+        
+        // Data is already in state from SET_DATA dispatch - no need to reset
+        log.info('🚀 [SMART CACHE] Smart cache reuse complete - data ready for rendering');
+        return;
+      }
+      
+      log.debug(`[SMART CACHE] Cannot reuse data: ${compatibility.reason}, proceeding with fetch`);
+      
 
       dispatch({ type: 'START_FETCH' });
 
@@ -1312,7 +1481,7 @@ const ModernRedoxAnalysis = () => {
         toast.removeToast(loadingToastId);
       }
     }
-  }, [selectedSites, timeRange, startDate, endDate, maxFidelity, selectedView, vizConfig, preferArrow, toast, determineDateWindow, loadAllChunksForSite, processResults, parseArrowBufferToRows]);
+  }, [selectedSites, timeRange, startDate, endDate, maxFidelity, selectedView, vizConfig, preferArrow, toast, determineDateWindow, loadAllChunksForSite, processResults, parseArrowBufferToRows, fetchState.data, checkDataCompatibility, applyFidelityFilter]);
 
   
   // Stable reference to trigger fetchData
