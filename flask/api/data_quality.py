@@ -6,6 +6,9 @@ import numpy as np
 from config.advanced_logging_config import get_advanced_logger
 from services.core_data_service import core_data_service, DataQuery
 from utils.request_parsing import parse_sites_parameter
+from utils.api_cache_utils import generate_api_cache_key
+from services.consolidated_cache_service import cache_service
+from utils.data_compressor import compressor
 
 logger = get_advanced_logger(__name__)
 
@@ -107,6 +110,20 @@ def data_quality_summary():
         metric = request.args.get('metric','temperature')
         start_str = request.args.get('start_date')
         end_str = request.args.get('end_date')
+        
+        # Check cache first
+        cache_key = generate_api_cache_key('data_quality_summary', 
+                                         data_type=data_type, 
+                                         time_range=time_range, 
+                                         cadence=cadence, 
+                                         metric=metric,
+                                         start_date=start_str,
+                                         end_date=end_str)
+        
+        cached_result = cache_service.get_cached_data(cache_key)
+        if cached_result:
+            logger.info(f"🚀 [DATA_QUALITY] Cache hit for sites: {sites}")
+            return jsonify(cached_result), 200
 
         alias = {'1d':1,'7d':7,'30d':30,'90d':90,'180d':180,'365d':365}
         if end_str:
@@ -221,7 +238,7 @@ def data_quality_summary():
                 'days': sorted(days_list, key=lambda d: d['date'])
             })
 
-        return jsonify({
+        result = {
             'metadata': {
                 'sites': sites,
                 'data_type': data_type,
@@ -232,7 +249,16 @@ def data_quality_summary():
                 'metric': metric
             },
             'sites': per_site
-        }), 200
+        }
+        
+        # Cache the result
+        try:
+            cache_service.cache_data(cache_key, result, ttl_hours=6)
+            logger.info(f"🔥 [DATA_QUALITY] Cached result for sites: {sites}")
+        except Exception as cache_error:
+            logger.warning(f"[DATA_QUALITY] Cache write failed: {cache_error}")
+        
+        return jsonify(result), 200
     except Exception as e:
         logger.error(f"[DATA_QUALITY] summary failed: {e}")
         return jsonify({'error': str(e)}), 500

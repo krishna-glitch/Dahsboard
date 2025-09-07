@@ -4,6 +4,8 @@ import EmptyState from '../components/modern/EmptyState';
 import MetricCard from '../components/modern/MetricCard';
 import { useToast } from '../components/modern/toastUtils';
 
+const DEBOUNCE_MS = 300;
+
 const DataQuality = () => {
   const [sites, setSites] = useState([]);
   const [availableSites, setAvailableSites] = useState([]);
@@ -56,9 +58,14 @@ const DataQuality = () => {
     })();
   }, []);
 
-  // Trigger fetch when filters change (avoid including toast to prevent infinite loop)
+  // Trigger fetch when filters change with debouncing
   useEffect(() => {
-    if (sites.length > 0) fetchSummary();
+    if (sites.length > 0) {
+      const debounceTimeout = setTimeout(() => {
+        fetchSummary();
+      }, DEBOUNCE_MS);
+      return () => clearTimeout(debounceTimeout);
+    }
   }, [sites, dataType, timeRange, cadence, fetchSummary]);
 
   const kpis = useMemo(() => {
