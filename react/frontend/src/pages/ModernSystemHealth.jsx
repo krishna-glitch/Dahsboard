@@ -1,4 +1,5 @@
 import React, { useEffect, useState } from 'react';
+import RoleGate from '../components/auth/RoleGate';
 import Plot from 'react-plotly.js';
 import MetricCard from '../components/modern/MetricCard';
 import EmptyState from '../components/modern/EmptyState';
@@ -203,7 +204,7 @@ const ModernSystemHealth = () => {
     }
   ];
 
-  return (
+  const content = (
     <div className="modern-dashboard">
       {/* Header */}
       <div className="dashboard-header">
@@ -601,6 +602,11 @@ const ModernSystemHealth = () => {
         </div>
       </div>
     </div>
+  );
+  return (
+    <RoleGate allowed={['admin','analyst']}>
+      {content}
+    </RoleGate>
   );
 };
 

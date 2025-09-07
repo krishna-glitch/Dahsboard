@@ -1,4 +1,5 @@
 import React, { useEffect, useState, useCallback, useMemo } from 'react';
+import RoleGate from '../components/auth/RoleGate';
 import MetricCard from '../components/modern/MetricCard';
 import EmptyState from '../components/modern/EmptyState';
 import Modal from '../components/modern/Modal';
@@ -168,7 +169,7 @@ const ModernReports = () => {
     );
   }
 
-  return (
+  const content = (
     <div className="modern-dashboard">
       {/* Header */}
       <div className="dashboard-header">
@@ -444,6 +445,11 @@ const ModernReports = () => {
         </Modal>
       </div>
     </div>
+  );
+  return (
+    <RoleGate allowed={['admin','analyst']}>
+      {content}
+    </RoleGate>
   );
 };
 

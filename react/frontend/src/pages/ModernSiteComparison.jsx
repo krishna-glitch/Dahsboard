@@ -7,7 +7,7 @@ import ExportButton from '../components/ExportButton';
 import { useToast } from '../components/modern/toastUtils';
 import PerSiteCharts from '../components/comparison/PerSiteCharts';
 import { getSiteComparisonData, getAvailableSites, getWaterQualityData, getRedoxAnalysisData } from '../services/api';
-import { EXPORT_FORMATS, performExport } from '../utils/exporters';
+// Unify export through ExportButton only
 import { SITE_COLORS, METRIC_THRESHOLDS } from '../constants/appConstants';
 import '../styles/modern-layout.css';
 
@@ -39,7 +39,7 @@ const ModernSiteComparison = () => {
   const [seriesTraces, setSeriesTraces] = useState([]);
   const [seriesLoading, setSeriesLoading] = useState(false);
   const [seriesError, setSeriesError] = useState(null);
-  const [exportFormat, setExportFormat] = useState(EXPORT_FORMATS.PNG);
+  // Removed separate export format state; using ExportButton only
   const [chartViewMode, setChartViewMode] = useState('overlay'); // 'overlay' or 'per-site'
   
   // NEW: Analysis mode state
@@ -354,11 +354,14 @@ const ModernSiteComparison = () => {
               }
             }
           }
-          if (!siteKey) throw new Error('Missing site identifier in response');
-          // Group rows by site
+          // If site identifier is missing, fall back to a single combined series
+          if (!siteKey) {
+            console.warn('Missing site identifier in response; falling back to combined series');
+          }
+          // Group rows by site (or combined)
           const bySite = new Map();
           for (const r of rows) {
-            const sid = r[siteKey];
+            const sid = siteKey ? r[siteKey] : 'Combined';
             const ts = r.measurement_timestamp || r.timestamp || r.ts;
             const y = r[valKey];
             if (sid == null || ts == null || y == null) continue;
@@ -400,12 +403,14 @@ const ModernSiteComparison = () => {
             }
           }
           
-          if (!siteKey) throw new Error('Missing site identifier in redox response');
+          if (!siteKey) {
+            console.warn('Missing site identifier in redox response; falling back to combined series');
+          }
           const target = Number(selectedDepth);
           const tol = 5; // cm tolerance
           const bySite = new Map();
           for (const r of rows) {
-            const sid = r[siteKey];
+            const sid = siteKey ? r[siteKey] : 'Combined';
             const ts = r.measurement_timestamp || r.timestamp || r.ts;
             const depth = r.depth_cm != null ? Number(r.depth_cm) : null;
             const y = (r.processed_eh != null ? Number(r.processed_eh) : (r.redox_value_mv != null ? Number(r.redox_value_mv) : null));
@@ -475,21 +480,7 @@ const ModernSiteComparison = () => {
     setSeriesMode('redox');
   }, []);
 
-  const handleChartExport = useCallback(async () => {
-    try {
-      const fname = seriesMode === 'water_quality'
-        ? `timeseries_WQ_${selectedMetric}_${timeRange}`
-        : `timeseries_Redox_${selectedDepth}cm_${timeRange}`;
-      await performExport({
-        type: 'chart',
-        format: exportFormat,
-        filename: fname,
-        elementId: 'timeseries-comparison-chart'
-      });
-    } catch (e) { 
-      console.error('Chart export failed:', e); 
-    }
-  }, [seriesMode, selectedMetric, timeRange, selectedDepth, exportFormat]);
+  // Chart export handled by ExportButton (png/pdf/csv/json)
 
   const handleChartViewModeChange = useCallback((e) => {
     setChartViewMode(e.target.value);
@@ -1080,28 +1071,15 @@ const ModernSiteComparison = () => {
                       </select>
                     </div>
                   )}
-                  <div className="control-group" style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                    <label className="control-label" style={{ marginRight: 4 }}>Export</label>
-                    <select
-                      className="control-select"
-                      value={exportFormat}
-                      onChange={(e)=> setExportFormat(e.target.value)}
-                      title="Select export format"
-                      style={{ minWidth: 90 }}
-                    >
-                      <option value={EXPORT_FORMATS.PNG}>PNG</option>
-                      <option value={EXPORT_FORMATS.JPG}>JPG</option>
-                      <option value={EXPORT_FORMATS.PDF}>PDF</option>
-                    </select>
-                    <button
-                      type="button"
-                      className="btn btn-outline-secondary btn-sm"
-                      title="Download chart"
-                      onClick={handleChartExport}
-                    >
-                      <i className="bi bi-download me-1"></i> Download
-                    </button>
-                  </div>
+                  <ExportButton
+                    data={seriesTraces}
+                    filename={`site_comparison_${seriesMode==='water_quality'?selectedMetric:'redox'}_${timeRange}`}
+                    chartElementId="timeseries-comparison-chart"
+                    availableFormats={['png','pdf','csv','json']}
+                    variant="outline-success"
+                    size="sm"
+                    disabled={seriesTraces.length === 0}
+                  />
                 </div>
               </div>
               {seriesError && (
@@ -1128,20 +1106,20 @@ const ModernSiteComparison = () => {
                 <Plot
                   data={seriesTraces}
                   layout={{
-                    margin: { l: 48, r: 24, t: 24, b: 40 },
-                    showlegend: true,
-                    legend: { orientation: 'h', y: -0.2 },
-                    xaxis: { title: 'Time', type: 'date', zeroline: false, gridcolor: '#f1f3f5' },
-                    yaxis: { 
-                      title: seriesMode === 'water_quality' 
-                        ? (selectedMetric === 'redox' ? 'mV' : (selectedMetricInfo?.unit || 'Value'))
-                        : 'mV', 
-                      zeroline: false, 
-                      gridcolor: '#f1f3f5' 
-                    },
-                    paper_bgcolor: 'transparent',
-                    plot_bgcolor: 'transparent',
-                    shapes: seriesMode === 'water_quality' ? thresholdShapes : []
+                        margin: { l: 48, r: 24, t: 24, b: 40 },
+                        showlegend: true,
+                        legend: { orientation: 'h', y: -0.2 },
+                        xaxis: { title: 'Time', type: 'date', zeroline: false, gridcolor: '#f1f3f5' },
+                        yaxis: {
+                          title: (seriesMode === 'water_quality')
+                            ? `${selectedMetricInfo?.name || 'Value'}${selectedMetricInfo?.unit ? ` (${selectedMetricInfo.unit})` : ''}`
+                            : 'Redox (Eh) (mV)',
+                          zeroline: false,
+                          gridcolor: '#f1f3f5'
+                        },
+                        paper_bgcolor: 'transparent',
+                        plot_bgcolor: 'transparent',
+                        shapes: seriesMode === 'water_quality' ? thresholdShapes : []
                   }}
                   useResizeHandler
                   style={{ width: '100%', height: '360px' }}
@@ -1182,7 +1160,7 @@ const ModernSiteComparison = () => {
                       <React.Fragment key={`grp-${group || 'all'}-${gi}`}>
                         {group && (
                           <tr className="table-row" style={{ background: '#f8f9fa' }}>
-                            <td className="table-cell" colSpan={comparePrev ? 6 : 5}>
+                            <td className="table-cell" colSpan={comparePrev ? 7 : 6}>
                               <strong>Group: {group}</strong> <span className="text-muted">({rows.length} sites)</span>
                             </td>
                           </tr>

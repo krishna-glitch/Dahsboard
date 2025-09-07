@@ -1,4 +1,5 @@
 import React, { useEffect, useState } from 'react';
+import RoleGate from '../components/auth/RoleGate';
 import MetricCard from '../components/modern/MetricCard';
 import EmptyState from '../components/modern/EmptyState';
 import { runDataDiagnostics } from '../services/api';
@@ -114,7 +115,7 @@ const ModernDataDiagnostics = () => {
     return value?.toString() || 'N/A';
   };
 
-  return (
+  const content = (
     <div className="modern-dashboard">
       {/* Header */}
       <div className="dashboard-header">
@@ -341,6 +342,11 @@ const ModernDataDiagnostics = () => {
         </div>
       </div>
     </div>
+  );
+  return (
+    <RoleGate allowed={['admin','analyst']}>
+      {content}
+    </RoleGate>
   );
 };
 

@@ -1,4 +1,5 @@
 import React, { useEffect, useState } from 'react';
+import RoleGate from '../components/auth/RoleGate';
 import MetricCard from '../components/modern/MetricCard';
 import EmptyState from '../components/modern/EmptyState';
 import { getPerformanceSummary } from '../services/api';
@@ -200,7 +201,7 @@ const ModernPerformanceDashboard = () => {
     }
   };
 
-  return (
+  const content = (
     <div className="modern-dashboard">
       {/* Header */}
       <div className="dashboard-header">
@@ -371,6 +372,12 @@ const ModernPerformanceDashboard = () => {
         </div>
       </div>
     </div>
+  );
+  // If you don't have an 'ops' role, restrict to admin only
+  return (
+    <RoleGate allowed={['admin','ops']}>
+      {content}
+    </RoleGate>
   );
 };
 

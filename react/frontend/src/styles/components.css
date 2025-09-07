@@ -1787,40 +1787,41 @@
   border: 1px solid var(--border-secondary);
 }
 
-.table-header {
+/* Scoped table layout styles for benchmark tables only */
+.benchmark-table .table-header {
   display: grid;
   grid-template-columns: 120px 120px 150px 120px 1fr;
   background: var(--surface-tertiary);
   border-bottom: 1px solid var(--border-secondary);
 }
 
-.table-row {
+.benchmark-table .table-row {
   display: grid;
   grid-template-columns: 120px 120px 150px 120px 1fr;
   border-bottom: 1px solid var(--border-tertiary);
 }
 
-.table-row:last-child {
+.benchmark-table .table-row:last-child {
   border-bottom: none;
 }
 
-.table-row:hover {
+.benchmark-table .table-row:hover {
   background: var(--surface-hover);
 }
 
-.table-cell {
+.benchmark-table .table-cell {
   padding: var(--spacing-component-sm) var(--spacing-component-md);
   font-size: 0.875rem;
   display: flex;
   align-items: center;
 }
 
-.table-header .table-cell {
+.benchmark-table .table-header .table-cell {
   font-weight: 600;
   color: var(--text-primary);
 }
 
-.table-row .table-cell {
+.benchmark-table .table-row .table-cell {
   color: var(--text-secondary);
 }
 
@@ -4123,14 +4124,14 @@
   font-size: 0.9em;
 }
 
-.table-header {
+.modern-table .table-header {
   background: var(--surface-secondary);
   position: sticky;
   top: 0;
   z-index: 1;
 }
 
-.table-header th {
+.modern-table .table-header th {
   padding: var(--spacing-component-md);
   text-align: left;
   font-weight: 600;
@@ -4141,15 +4142,15 @@
   letter-spacing: 0.5px;
 }
 
-.table-body .table-row {
+.modern-table .table-body .table-row {
   transition: var(--transition-all);
 }
 
-.table-body .table-row:hover {
+.modern-table .table-body .table-row:hover {
   background: var(--surface-hover);
 }
 
-.table-cell {
+.modern-table .table-cell {
   padding: var(--spacing-component-md);
   border-bottom: 1px solid var(--border-secondary);
   vertical-align: middle;

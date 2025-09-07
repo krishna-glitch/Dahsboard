@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import RoleGate from '../components/auth/RoleGate';
 import { Link } from 'react-router-dom';
 import MetricCard from '../components/modern/MetricCard';
 import EmptyState from '../components/modern/EmptyState';
@@ -394,7 +395,7 @@ const ModernAdmin = () => {
   const [showCreateUserModal, setShowCreateUserModal] = useState(false);
   const [showEditUserModal, setShowEditUserModal] = useState(false);
 
-  return (
+  const content = (
     <div className="modern-dashboard">
       {/* Header */}
       <div className="dashboard-header">
@@ -452,6 +453,11 @@ const ModernAdmin = () => {
         <p>User edit form will be implemented here.</p>
       </UserModal>
     </div>
+  );
+  return (
+    <RoleGate allowed={['admin']}>
+      {content}
+    </RoleGate>
   );
 };
 

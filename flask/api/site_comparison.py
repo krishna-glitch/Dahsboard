@@ -276,6 +276,16 @@ def get_site_comparison_data():
         end_date_str = request.args.get('end_date')
         data_type = request.args.get('data_type', 'both')
         metric = request.args.get('metric', 'temperature')
+        # Define metric mapping and value column immediately to avoid unbound references in later branches
+        metric_map = {
+            'temperature': 'temperature_c',
+            'conductivity': 'conductivity_us_cm',
+            'water_level': 'water_level_m',
+            'turbidity': 'turbidity_ntu',
+            'nitrates': 'nitrates_mg_l',
+            'dissolved_oxygen': 'dissolved_oxygen_mg_l',
+        }
+        value_col = metric_map.get(metric or 'temperature', 'temperature_c')
         
         # NEW: Concurrent analysis parameters
         analysis_mode = request.args.get('analysis_mode', 'concurrent')  # 'concurrent' or 'full_period'
@@ -367,27 +377,19 @@ def get_site_comparison_data():
 
         logger.info(f"Comparison data loaded successfully: WQ={len(df_wq)} records, Redox={len(df_rx)} records")
 
+        # value_col already computed above
+
         # NEW: Apply concurrent time-window analysis if requested
         concurrent_data_info = {'mode': analysis_mode, 'concurrent_measurements': 0, 'time_window_hours': concurrent_window_hours}
         
         if analysis_mode == 'concurrent' and not df_wq.empty:
-            logger.info(f"🔍 Applying concurrent time-window analysis (window: {concurrent_window_hours} hours)")
+            logger.info(f"🔍 Applying concurrent time-window analysis (window: {concurrent_window_hours} hours) with column '{value_col}'")
             df_wq = _apply_concurrent_time_window_analysis(df_wq, concurrent_window_hours, sites_list, value_col, logger)
             concurrent_data_info['concurrent_measurements'] = len(df_wq)
             logger.info(f"✅ Concurrent analysis complete: {len(df_wq)} concurrent measurements found")
 
         # Build per-site summary expected by frontend: comparisonData.sites
         sites_summary = []
-        # Map frontend metric -> column name
-        metric_map = {
-            'temperature': 'temperature_c',
-            'conductivity': 'conductivity_us_cm',
-            'water_level': 'water_level_m',
-            'turbidity': 'turbidity_ntu',
-            'nitrates': 'nitrates_mg_l',
-            'dissolved_oxygen': 'dissolved_oxygen_mg_l',
-        }
-        value_col = metric_map.get(metric, 'temperature_c')
 
         if not df_wq.empty and 'site_code' in df_wq.columns and 'measurement_timestamp' in df_wq.columns:
             dfw = df_wq.copy()
