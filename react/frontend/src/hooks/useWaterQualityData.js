@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { getWaterQualityData } from '../services/api';
 import { loadCache, persistCache } from '../utils/cache';
+import { featureFlags } from '../config/featureFlags';
 import { useToast } from '../components/modern/toastUtils';
 import { log } from '../utils/log';
 
@@ -26,7 +27,8 @@ export function useWaterQualityData({
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
   const [meta, setMeta] = useState(null);
-  const cacheRef = useRef(loadCache(CACHE_STORAGE_KEY, CACHE_TTL_MS));
+  // Initialize cache map conditionally based on feature flag
+  const cacheRef = useRef(featureFlags.wqCacheEnabled ? loadCache(CACHE_STORAGE_KEY, CACHE_TTL_MS) : new Map());
   const lastFetchKeyRef = useRef(null);
   const abortRef = useRef(null);
   const mountedRef = useRef(true);
@@ -98,12 +100,19 @@ export function useWaterQualityData({
 
       // Cache read
       let cachedAggregate = [];
+      let cacheHit = false;
       const missing = [];
-      for (const s of selectedSites) {
-        const k = `${s}|${cacheRangeKey}`;
-        const c = cacheRef.current.get(k);
-        if (c && Array.isArray(c.data) && (Date.now() - (c.ts || 0) < CACHE_TTL_MS)) cachedAggregate = cachedAggregate.concat(c.data);
-        else missing.push(s);
+      if (featureFlags.wqCacheEnabled && cacheRef.current) {
+        for (const s of selectedSites) {
+          const k = `${s}|${cacheRangeKey}`;
+          const c = cacheRef.current.get(k);
+          if (c && Array.isArray(c.data) && (Date.now() - (c.ts || 0) < CACHE_TTL_MS)) {
+            cachedAggregate = cachedAggregate.concat(c.data);
+          } else {
+            missing.push(s);
+          }
+        }
+        cacheHit = cachedAggregate.length > 0 && missing.length === 0;
       }
       if (cachedAggregate.length > 0 && mountedRef.current) setData(cachedAggregate);
       if (missing.length > 0 && cachedAggregate.length === 0 && mountedRef.current) setLoading(true);
@@ -120,6 +129,7 @@ export function useWaterQualityData({
         dedupeKey: 'wq-chunk-loading'
       });
       let rows = [];
+      let dateRange = null;
       let offset = 0;
       while (true) {
         const res = await getWaterQualityData({ ...params, chunk_size: CHUNK_SIZE, offset }, controller.signal);
@@ -139,33 +149,49 @@ export function useWaterQualityData({
             duration: 10000
           });
         } catch {}
+        // Capture date_range from the first successful response
+        if (!dateRange && res?.metadata?.date_range && (res?.metadata?.date_range.start || res?.metadata?.date_range.end)) {
+          dateRange = {
+            start: res.metadata.date_range.start,
+            end: res.metadata.date_range.end,
+          };
+        }
         const info = res?.metadata?.chunk_info || {};
         if (!info.has_more || chunk.length === 0) break;
         offset = (info.offset || 0) + (info.chunk_size || CHUNK_SIZE);
         if (offset >= 200000) break; // guard against excess
       }
-      const metadata = null; // keep minimal for now; per-chunk meta varies
+      const metadata = dateRange ? { date_range: dateRange } : null;
 
-      // Populate cache by site
-      try {
-        const bySite = new Map();
-        for (const r of rows) {
-          const sc = r?.site_code; if (!sc) continue;
-          if (!bySite.has(sc)) bySite.set(sc, []);
-          bySite.get(sc).push(r);
-        }
-        const now = Date.now();
-        for (const [sc, list] of bySite.entries()) {
-          cacheRef.current.set(`${sc}|${cacheRangeKey}`, { ts: now, data: list });
-        }
-        persistCache(CACHE_STORAGE_KEY, cacheRef.current, CACHE_MAX_CHARS, CACHE_TTL_MS);
-      } catch {}
+      // Populate cache by site (only when enabled)
+      if (featureFlags.wqCacheEnabled) {
+        try {
+          const bySite = new Map();
+          for (const r of rows) {
+            const sc = r?.site_code; if (!sc) continue;
+            if (!bySite.has(sc)) bySite.set(sc, []);
+            bySite.get(sc).push(r);
+          }
+          const now = Date.now();
+          for (const [sc, list] of bySite.entries()) {
+            cacheRef.current.set(`${sc}|${cacheRangeKey}`, { ts: now, data: list });
+          }
+          persistCache(CACHE_STORAGE_KEY, cacheRef.current, CACHE_MAX_CHARS, CACHE_TTL_MS);
+        } catch {}
+      }
 
       if (mountedRef.current) {
         setData(rows);
         setLoading(false);
         setError(null);
-        setMeta(metadata);
+        setMeta({
+          ...(metadata || {}),
+          cache: {
+            enabled: featureFlags.wqCacheEnabled,
+            hit: cacheHit,
+            ttlMs: CACHE_TTL_MS,
+          }
+        });
         lastFetchKeyRef.current = fetchKey;
 
         // Add success/warning notifications

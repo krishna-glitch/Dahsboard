@@ -30,11 +30,10 @@ const ModernSiteComparison = () => {
   const [customEndDate, setCustomEndDate] = useState('');
   const [sortKey, setSortKey] = useState('currentValue'); // or 'change24h'
   const [sortDir, setSortDir] = useState('desc'); // 'asc' or 'desc'
-  const [groupBy, setGroupBy] = useState('none'); // 'none' | 'status'
-  const [comparePrev, setComparePrev] = useState(false);
-  const [prevComparisonData, setPrevComparisonData] = useState(null);
+  // Removed Group By: always show exactly the selected sites
+  // Removed previous-period comparison for now
   const [searchParams, setSearchParams] = useSearchParams();
-  const [seriesMode, setSeriesMode] = useState('water_quality'); // 'water_quality' | 'redox'
+  // Derive data type from selectedMetric; no separate mode state
   const [selectedDepth, setSelectedDepth] = useState(100); // cm for redox
   const [seriesTraces, setSeriesTraces] = useState([]);
   const [seriesLoading, setSeriesLoading] = useState(false);
@@ -111,7 +110,7 @@ const ModernSiteComparison = () => {
         sites: selectedSites,
         metric: selectedMetric,
         time_range: timeRange === 'custom' ? 'custom' : timeRange,
-        data_type: 'water_quality',
+        data_type: selectedMetric === 'redox' ? 'redox' : 'water_quality',
         include_spark: 'true',
         // NEW: Analysis mode parameters
         analysis_mode: analysisMode,
@@ -127,29 +126,7 @@ const ModernSiteComparison = () => {
       const data = await getSiteComparisonData(params);
       setComparisonData(data);
 
-      // Load previous period if enabled and we have current window bounds
-      if (comparePrev && data?.metadata?.start && data?.metadata?.end) {
-        const start = new Date(data.metadata.start);
-        const end = new Date(data.metadata.end);
-        const durationMs = Math.max(1, end.getTime() - start.getTime());
-        const prevEnd = new Date(start.getTime() - 1);
-        const prevStart = new Date(prevEnd.getTime() - durationMs);
-        const prevParams = {
-          ...params,
-          time_range: 'custom',
-          start_date: prevStart.toISOString(),
-          end_date: prevEnd.toISOString()
-        };
-        try {
-          const prev = await getSiteComparisonData(prevParams);
-          setPrevComparisonData(prev);
-        } catch (e) {
-          console.warn('Previous period fetch failed:', e);
-          setPrevComparisonData(null);
-        }
-      } else {
-        setPrevComparisonData(null);
-      }
+      // Previous-period comparison removed
       
       // Avoid success/warning toasts; rely on in-page states and empty state
 
@@ -161,7 +138,7 @@ const ModernSiteComparison = () => {
     } finally {
       setLoading(false);
     }
-  }, [selectedSites, selectedMetric, timeRange, customStartDate, customEndDate, comparePrev, analysisMode, concurrentWindowHours]);
+  }, [selectedSites, selectedMetric, timeRange, customStartDate, customEndDate, analysisMode, concurrentWindowHours]);
 
   // Consolidated data loading with proper state management
   const dataLoadingRef = useRef(false);
@@ -256,16 +233,7 @@ const ModernSiteComparison = () => {
   }, [comparisonData, sortKey, sortDir]);
 
   // Grouping support (currently by status)
-  const groupedRows = useMemo(() => {
-    if (groupBy !== 'status') return [{ group: null, rows: sortedSites }];
-    const groups = new Map();
-    sortedSites.forEach(r => {
-      const status = (sitesLookup.get(r.site_id)?.status) || 'unknown';
-      if (!groups.has(status)) groups.set(status, []);
-      groups.get(status).push(r);
-    });
-    return Array.from(groups.entries()).map(([group, rows]) => ({ group, rows }));
-  }, [groupBy, sortedSites, sitesLookup]);
+  const rowsForTable = sortedSites;
 
   const selectedMetricInfo = useMemo(() => 
     availableMetrics.find(m => m.id === selectedMetric) || {},
@@ -293,7 +261,7 @@ const ModernSiteComparison = () => {
         const endIso = metaEnd;
         const colors = SITE_COLORS || {};
 
-        if (seriesMode === 'water_quality') {
+        if (selectedMetric !== 'redox') {
           let res, rows, valKey, siteKey;
           
           if (selectedMetric === 'redox') {
@@ -439,26 +407,9 @@ const ModernSiteComparison = () => {
     };
     build();
     return () => { aborted = true; };
-  }, [metaStart, metaEnd, selectedSites, selectedMetric, seriesMode, selectedDepth, availableSites, sitesLookup]);
+  }, [metaStart, metaEnd, selectedSites, selectedMetric, selectedDepth, availableSites, sitesLookup]);
 
-  // Previous period delta utilities
-  const computePrevDelta = useCallback((siteId) => {
-    if (!prevComparisonData?.sites || !comparisonData?.sites) return null;
-    const prev = prevComparisonData.sites.find(s => s.site_id === siteId);
-    const curr = comparisonData.sites.find(s => s.site_id === siteId);
-    if (!prev || prev.avgValue == null || !curr || curr.avgValue == null) return null;
-    if (prev.avgValue === 0) return null;
-    const delta = ((curr.avgValue - prev.avgValue) / Math.abs(prev.avgValue)) * 100;
-    return Number.isFinite(delta) ? Number(delta.toFixed(1)) : null;
-  }, [prevComparisonData, comparisonData]);
-
-  const classifyDelta = (deltaPct) => {
-    if (deltaPct == null) return { label: '—', cls: 'status-unknown' };
-    const absd = Math.abs(deltaPct);
-    if (absd >= 20) return { label: `${deltaPct > 0 ? '+' : ''}${deltaPct}%`, cls: deltaPct > 0 ? 'status-warning' : 'status-success' };
-    if (absd >= 5) return { label: `${deltaPct > 0 ? '+' : ''}${deltaPct}%`, cls: 'status-normal' };
-    return { label: `${deltaPct > 0 ? '+' : ''}${deltaPct}%`, cls: 'status-good' };
-  };
+  // Previous-period comparison removed
 
   // Stable callbacks for UI interactions
   const handleClearError = useCallback(() => setError(null), []);
@@ -472,13 +423,7 @@ const ModernSiteComparison = () => {
     setSelectedMetric(value);
   }, []);
 
-  const handleWaterQualityMode = useCallback(() => {
-    setSeriesMode('water_quality');
-  }, []);
-
-  const handleRedoxMode = useCallback(() => {
-    setSeriesMode('redox');
-  }, []);
+  // Removed separate mode toggles; data type derived from selectedMetric
 
   // Chart export handled by ExportButton (png/pdf/csv/json)
 
@@ -746,6 +691,14 @@ const ModernSiteComparison = () => {
                 Thresholds: Good {METRIC_THRESHOLDS[selectedMetric].good?.join(' – ')} {METRIC_THRESHOLDS[selectedMetric].unit}
               </div>
             )}
+            {selectedMetric === 'redox' && (
+              <div style={{ marginTop: 8 }}>
+                <label className="control-label" style={{ marginRight: 8 }}>Depth (cm)</label>
+                <select className="control-select" value={selectedDepth} onChange={(e)=> setSelectedDepth(Number(e.target.value))}>
+                  {[10,30,50,100,150,200].map(d => <option key={d} value={d}>{d} cm</option>)}
+                </select>
+              </div>
+            )}
           </div>
           
           <div className="control-group">
@@ -859,34 +812,12 @@ const ModernSiteComparison = () => {
               </button>
             </div>
           </div>
-          <div className="control-group">
-            <label className="control-label">Group By</label>
-            <select className="control-select" value={groupBy} onChange={(e)=>setGroupBy(e.target.value)}>
-              <option value="none">None</option>
-              <option value="status">Status</option>
-            </select>
-          </div>
+          {/* Removed Group By control to avoid confusion; table shows selected sites only */}
 
-          <div className="control-group">
-            <label className="control-label">Compare</label>
-            <div className="form-check" title="Compare against the previous period of equal length">
-              <input className="form-check-input" type="checkbox" id="comparePrev" checked={comparePrev} onChange={(e)=> setComparePrev(e.target.checked)} />
-              <label className="form-check-label" htmlFor="comparePrev">vs previous period</label>
-            </div>
-          </div>
+          {/* Removed previous-period comparison */}
         </div>
 
-        {/* Multi-metric quick tabs */}
-        <div style={{ display: 'flex', gap: 8, marginBottom: 8 }}>
-          {availableMetrics.map(m => (
-            <button
-              key={m.id}
-              className={`btn btn-sm ${selectedMetric === m.id ? 'btn-primary' : 'btn-outline-primary'}`}
-              onClick={() => handleMetricSelect(m.id)}
-              title={`Switch to ${m.name}`}
-            >{m.name}</button>
-          ))}
-        </div>
+        {/* Removed duplicate metric quick tabs to avoid redundant controls */}
 
         {/* Comparison Statistics */}
         <div className="section-header">
@@ -1026,24 +957,7 @@ const ModernSiteComparison = () => {
               </h2>
             </div>
             <div className="card" style={{ padding: '12px' }}>
-              {/* Tabs: WQ vs Redox */}
               <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12, marginBottom: 8 }}>
-                <div style={{ display: 'flex', gap: 8 }} role="tablist" aria-label="Comparison Data Type">
-                  <button
-                    type="button"
-                    role="tab"
-                    aria-selected={seriesMode === 'water_quality'}
-                    className={`btn btn-sm ${seriesMode === 'water_quality' ? 'btn-primary' : 'btn-outline-primary'}`}
-                    onClick={handleWaterQualityMode}
-                  >Water Quality</button>
-                  <button
-                    type="button"
-                    role="tab"
-                    aria-selected={seriesMode === 'redox'}
-                    className={`btn btn-sm ${seriesMode === 'redox' ? 'btn-primary' : 'btn-outline-primary'}`}
-                    onClick={handleRedoxMode}
-                  >Redox</button>
-                </div>
                 <div style={{ display: 'flex', gap: 12, alignItems: 'center' }}>
                   <div>
                     <label className="control-label" style={{ marginRight: 8 }}>View</label>
@@ -1052,35 +966,16 @@ const ModernSiteComparison = () => {
                       <option value="per-site">Charts per Site</option>
                     </select>
                   </div>
-                  {seriesMode === 'water_quality' && (
-                    <div>
-                      <label className="control-label" style={{ marginRight: 8 }}>Metric</label>
-                      <select className="control-select" value={selectedMetric} onChange={handleMetricSelect}>
-                        {availableMetrics.filter(m => m.id !== 'redox').map(metric => (
-                          <option key={metric.id} value={metric.id}>{metric.name} ({metric.unit})</option>
-                        ))}
-                        <option value="redox">Redox (Eh) (mV)</option>
-                      </select>
-                    </div>
-                  )}
-                  {seriesMode === 'redox' && (
-                    <div>
-                      <label className="control-label" style={{ marginRight: 8 }}>Depth (cm)</label>
-                      <select className="control-select" value={selectedDepth} onChange={(e)=> setSelectedDepth(Number(e.target.value))}>
-                        {[10,30,50,100,150,200].map(d => <option key={d} value={d}>{d} cm</option>)}
-                      </select>
-                    </div>
-                  )}
-                  <ExportButton
-                    data={seriesTraces}
-                    filename={`site_comparison_${seriesMode==='water_quality'?selectedMetric:'redox'}_${timeRange}`}
-                    chartElementId="timeseries-comparison-chart"
-                    availableFormats={['png','pdf','csv','json']}
-                    variant="outline-success"
-                    size="sm"
-                    disabled={seriesTraces.length === 0}
-                  />
                 </div>
+                <ExportButton
+                  data={seriesTraces}
+                  filename={`site_comparison_${selectedMetric==='redox'?'redox':selectedMetric}_${timeRange}`}
+                  chartElementId="timeseries-comparison-chart"
+                  availableFormats={['png','pdf','csv','json']}
+                  variant="outline-success"
+                  size="sm"
+                  disabled={seriesTraces.length === 0}
+                />
               </div>
               {seriesError && (
                 <div className="alert-message alert-error" style={{ marginBottom: 8 }}>
@@ -1091,13 +986,13 @@ const ModernSiteComparison = () => {
                 </div>
               )}
               {chartViewMode === 'per-site' ? (
-                <PerSiteCharts
-                  perSiteData={perSiteChartData}
-                  selectedMetricInfo={selectedMetricInfo}
-                  thresholdShapes={seriesMode === 'water_quality' ? thresholdShapes : []}
-                  loading={seriesLoading}
-                  error={seriesError}
-                />
+                  <PerSiteCharts
+                    perSiteData={perSiteChartData}
+                    selectedMetricInfo={selectedMetricInfo}
+                    thresholdShapes={selectedMetric !== 'redox' ? thresholdShapes : []}
+                    loading={seriesLoading}
+                    error={seriesError}
+                  />
               ) : seriesLoading ? (
                 <div style={{ height: 360, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
                   <span className="text-muted">Loading time series…</span>
@@ -1111,15 +1006,15 @@ const ModernSiteComparison = () => {
                         legend: { orientation: 'h', y: -0.2 },
                         xaxis: { title: 'Time', type: 'date', zeroline: false, gridcolor: '#f1f3f5' },
                         yaxis: {
-                          title: (seriesMode === 'water_quality')
-                            ? `${selectedMetricInfo?.name || 'Value'}${selectedMetricInfo?.unit ? ` (${selectedMetricInfo.unit})` : ''}`
-                            : 'Redox (Eh) (mV)',
+                          title: selectedMetric === 'redox'
+                            ? 'Redox (Eh) (mV)'
+                            : `${selectedMetricInfo?.name || 'Value'}${selectedMetricInfo?.unit ? ` (${selectedMetricInfo.unit})` : ''}`,
                           zeroline: false,
                           gridcolor: '#f1f3f5'
                         },
                         paper_bgcolor: 'transparent',
                         plot_bgcolor: 'transparent',
-                        shapes: seriesMode === 'water_quality' ? thresholdShapes : []
+                        shapes: selectedMetric !== 'redox' ? thresholdShapes : []
                   }}
                   useResizeHandler
                   style={{ width: '100%', height: '360px' }}
@@ -1151,24 +1046,12 @@ const ModernSiteComparison = () => {
                       <th>Current Value</th>
                       <th>Trend</th>
                       <th>24h Change</th>
-                      {comparePrev && <th>vs Prev Period</th>}
                       <th>Status</th>
                     </tr>
                   </thead>
                   <tbody className="table-body">
-                    {groupedRows.map(({ group, rows }, gi) => (
-                      <React.Fragment key={`grp-${group || 'all'}-${gi}`}>
-                        {group && (
-                          <tr className="table-row" style={{ background: '#f8f9fa' }}>
-                            <td className="table-cell" colSpan={comparePrev ? 7 : 6}>
-                              <strong>Group: {group}</strong> <span className="text-muted">({rows.length} sites)</span>
-                            </td>
-                          </tr>
-                        )}
-                        {rows.map((site, index) => {
+                    {rowsForTable.map((site, index) => {
                           const siteInfo = sitesLookup.get(site.site_id);
-                          const deltaPct = computePrevDelta(site.site_id);
-                          const deltaInfo = classifyDelta(deltaPct);
                           return (
                             <tr key={`${site.site_id}-${index}`} className="table-row">
                               <td className="table-cell">
@@ -1221,13 +1104,6 @@ const ModernSiteComparison = () => {
                                   {site.change24h ? `${site.change24h > 0 ? '+' : ''}${site.change24h}` : 'N/A'}
                                 </div>
                               </td>
-                              {comparePrev && (
-                                <td className="table-cell">
-                                  <span className={`status-badge ${deltaInfo.cls}`} title="Change in average value vs previous period">
-                                    {deltaInfo.label}
-                                  </span>
-                                </td>
-                              )}
                               <td className="table-cell">
                                 <span className={`status-badge ${getMetricStatus(site.currentValue, selectedMetric)}`}>
                                   {getMetricStatus(site.currentValue, selectedMetric)}
@@ -1235,9 +1111,7 @@ const ModernSiteComparison = () => {
                               </td>
                             </tr>
                           );
-                        })}
-                      </React.Fragment>
-                    ))}
+                    })}
                   </tbody>
                </table>
              </div>

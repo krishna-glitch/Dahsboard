@@ -157,7 +157,6 @@ const TimeSeriesBySite = React.memo(function TimeSeriesBySite({
               fontWeight: '600',
               color: '#1a1a1a',
               marginBottom: '16px',
-              borderBottom: `3px solid ${siteColors[site] || '#e74c3c'}`,
               paddingBottom: '12px',
               display: 'flex',
               alignItems: 'center',

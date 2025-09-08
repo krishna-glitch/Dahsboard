@@ -8,7 +8,7 @@ import './DashboardHeader.css';
  * Semantic HTML5 header with navigation and user controls
  */
 export const DashboardHeader = ({ 
-  title = "Water Quality Monitoring", 
+  title = "Environmental Monitoring", 
   description,
   actions 
 }) => {
@@ -36,7 +36,7 @@ export const DashboardHeader = ({
                 </defs>
               </svg>
             </span>
-            {title || 'Water Quality Dashboard'}
+            {title || 'Environmental Monitoring Dashboard'}
           </h1>
           {description && (
             <p className="brand-description">{description}</p>

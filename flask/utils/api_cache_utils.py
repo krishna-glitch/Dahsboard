@@ -9,6 +9,7 @@ from functools import wraps
 from flask import request
 from services.consolidated_cache_service import cache_service
 from utils.data_compressor import compressor
+from flask import Response as FlaskResponse
 import logging
 
 logger = logging.getLogger(__name__)
@@ -144,24 +145,48 @@ def cached_api_response(ttl: int = 900):
             # Execute function
             logger.info(f"🔄 [CACHE MISS] Executing {endpoint_name}")
             result = func(*args, **kwargs)
-            
-            # Cache the result with compression to save memory (especially important for 30min TTL)
+
+            # Determine if result is cacheable JSON (dict) and extract payload if wrapped
+            def extract_json_payload(resp_like):
+                # Unwrap (response, status) tuples
+                obj = resp_like[0] if (isinstance(resp_like, tuple) and len(resp_like) >= 1) else resp_like
+                # If already a dict, return directly
+                if isinstance(obj, dict):
+                    return obj
+                # If Flask Response with JSON body, parse
+                if isinstance(obj, FlaskResponse):
+                    try:
+                        data = obj.get_json(silent=True)
+                        if isinstance(data, dict):
+                            return data
+                    except Exception:
+                        pass
+                return None
+
+            json_payload = extract_json_payload(result)
+
+            if json_payload is None:
+                # Non-JSON or streaming responses (e.g., Arrow) should not be cached to avoid serialization issues
+                logger.info(f"🧷 [CACHE BYPASS] Non-JSON response for {endpoint_name}; skipping cache")
+                return result
+
+            # Cache the JSON payload with compression
             try:
-                compressed_result = compressor.compress_json(result)
+                compressed_result = compressor.compress_json(json_payload)
                 cache_service.set(cache_key, compressed_result, ttl)
-                
+
                 # Calculate compression statistics
-                original_size = len(json.dumps(result).encode()) if isinstance(result, dict) else len(str(result).encode())
+                original_size = len(json.dumps(json_payload).encode())
                 compressed_size = len(compressed_result)
                 compression_ratio = original_size / compressed_size if compressed_size > 0 else 1
-                
+
                 logger.info(f"💾 [CACHED] Stored {endpoint_name} result for {ttl}s (fidelity: {requested_fidelity}) - {compression_ratio:.1f}x compression")
             except Exception as e:
-                # Fallback to uncompressed storage if compression fails
+                # Fallback to uncompressed storage of JSON payload
                 logger.warning(f"Compression failed for {endpoint_name}, storing uncompressed: {e}")
-                cache_service.set(cache_key, result, ttl)
+                cache_service.set(cache_key, json_payload, ttl)
                 logger.info(f"💾 [CACHED] Stored {endpoint_name} result for {ttl}s (fidelity: {requested_fidelity}) - uncompressed")
-            
+
             return result
         
         return wrapper

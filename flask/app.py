@@ -172,6 +172,7 @@ def create_app():
             "font-src 'self' https://cdn.jsdelivr.net https://fonts.gstatic.com; "
             "img-src 'self' data: https:; "
             "connect-src 'self' https:; "
+            "frame-src 'self' https://www.youtube.com https://www.youtube-nocookie.com; "
             "frame-ancestors 'none'; "
             "base-uri 'self'; "
             "form-action 'self';"

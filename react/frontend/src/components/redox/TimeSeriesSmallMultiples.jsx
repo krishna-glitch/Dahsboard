@@ -139,7 +139,6 @@ const TimeSeriesSmallMultiples = React.memo(function TimeSeriesSmallMultiples({ 
             fontWeight: '600',
             color: '#1a1a1a',
             marginBottom: '16px',
-            borderBottom: '3px solid #3498db',
             paddingBottom: '12px',
             display: 'flex',
             alignItems: 'center',

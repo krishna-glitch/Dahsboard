@@ -23,14 +23,12 @@ const Login = React.lazy(() => import('./pages/Login'));
 const Support = React.lazy(() => import('./pages/Support'));
 
 
-import { useTutorial } from './contexts/TutorialContext.jsx';
 
 // Navigation component using the auth context
 const Navigation = () => {
   const { isAuthenticated, user, logout } = useAuth();
   const [showPagesDropdown, setShowPagesDropdown] = useState(false);
   const [showUserMenu, setShowUserMenu] = useState(false);
-  const { enabled: tutorialEnabled, toggle: toggleTutorial } = useTutorial();
   // Normalize profile display and avoid duplicate name/role appearance
   const usernameText = String(user?.username || 'User');
   const roleText = String(user?.role || '');
@@ -48,9 +46,9 @@ const Navigation = () => {
       case '/redox-analysis-enhanced':
         return 'Redox Analysis Dashboard';
       case '/about':
-        return 'About - Water Quality Dashboard';
+        return 'About - Environmental Monitoring Dashboard';
       default:
-        return 'Water Quality Dashboard';
+        return 'Environmental Monitoring Dashboard';
     }
   }, [location.pathname]); // Dependency for useCallback
 
@@ -167,19 +165,6 @@ const Navigation = () => {
                     </div>
                     <div className="dropdown-divider"></div>
                     <div className="dropdown-section">
-                      <button
-                        className="modern-dropdown-item"
-                        onClick={() => { toggleTutorial(); setShowUserMenu(false); }}
-                        role="menuitem"
-                      >
-                        <div className="item-icon">
-                          <i className={`bi ${tutorialEnabled ? 'bi-mortarboard-fill' : 'bi-mortarboard'}`}></i>
-                        </div>
-                        <div className="item-content">
-                          <div className="item-title">{tutorialEnabled ? 'Disable Tutorials' : 'Enable Tutorials'}</div>
-                          <div className="item-desc">{tutorialEnabled ? 'Turn off guidance hints' : 'Show helpful guidance'}</div>
-                        </div>
-                      </button>
                       <button
                         className="modern-dropdown-item"
                         onClick={() => { setShowUserMenu(false); }}

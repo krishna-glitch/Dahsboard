@@ -336,6 +336,8 @@ def processed_time_series():
     """
     # Ensure these are always defined to avoid UnboundLocalError in logging/response paths
     wire_format = (request.args.get('format') or '').lower()
+    # Normalize optional source parameter; default to 'processed' for this endpoint
+    source = (request.args.get('source') or 'processed').lower()
     records = None
     cols = {}
     try:
@@ -356,7 +358,7 @@ def processed_time_series():
         chunk_size = request.args.get('chunk_size', type=int) or 100000
         offset = request.args.get('offset', 0, type=int)
         logger.info(f"🚀 [TIME SERIES] Loading data for site={site_param} start={start_ts} end={end_ts} chunk_size={chunk_size} offset={offset}")
-        logger.info(f"🧭 [TIME SERIES PARAMS] wire_format={wire_format} source={request.args.get('source')} max_fidelity={request.args.get('max_fidelity')}")
+        logger.info(f"🧭 [TIME SERIES PARAMS] wire_format={wire_format} source={source} max_fidelity={request.args.get('max_fidelity')}")
 
         # Derive cadence from max_fidelity flag: ON -> 96/day, OFF -> 12/day
         max_fidelity_val = (request.args.get('max_fidelity', '') or '').lower() in ('1', 'true', 'yes', 'on', 't')

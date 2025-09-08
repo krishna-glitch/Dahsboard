@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useCallback, useRef, useMemo } from 'react';
-import { loginUser, logoutUser, getAuthStatus, sendClientDebug, getAuthHealth } from '../services/api';
+import { loginUser, logoutUser, getAuthStatus, sendClientDebug, getAuthHealth, getHomeData } from '../services/api';
 import { AuthContext } from './AuthContextDefinition';
 import { safeStorage } from '../utils/safeStorage';
 import { clearLegacyAuthData } from '../utils/authCleanup';
@@ -97,6 +97,44 @@ export const AuthProvider = ({ children }) => {
         try { safeStorage.setRaw('auth:lastOK', String(Date.now())); } catch (_) {}
         // reset backoff on success
         backoffRef.attempts = 0;
+
+        // Prefetch Home KPI data and code-split chunk in the background for instant landing
+        try {
+          // Fire-and-forget: preload Home page module
+          import('../pages/ModernHome').catch(() => {});
+        } catch (_) {}
+        try {
+          // Background prefetch of home KPI data with cache seed (skip if fresh)
+          (async () => {
+            try {
+              const cached = safeStorage.getJSON('home:data:v1');
+              const freshMs = 2 * 60 * 1000; // consider fresh for 2 minutes
+              if (cached?.savedAt && (Date.now() - cached.savedAt) < freshMs) {
+                return; // skip prefetch if recent cache exists
+              }
+            } catch (_) {}
+            const res = await getHomeData();
+            const s = res?.dashboard_data?.dashboard_stats || {};
+            const latest = Array.isArray(res?.dashboard_data?.latest_per_site) ? res.dashboard_data.latest_per_site : [];
+            const newMeta = { last_updated: res?.metadata?.last_updated || null };
+            try {
+              safeStorage.setJSON('home:data:v1', {
+                savedAt: Date.now(),
+                stats: {
+                  active_sites: Number.isFinite(s.active_sites) ? s.active_sites : 0,
+                  total_sites: Number.isFinite(s.total_sites) ? s.total_sites : 0,
+                  recent_measurements: Number.isFinite(s.recent_measurements) ? s.recent_measurements : 0,
+                  data_quality: Number.isFinite(s.data_quality) ? s.data_quality : null,
+                  active_alerts: 0,
+                  data_current_through: s.data_current_through || null,
+                },
+                meta: newMeta,
+                latestBySite: latest,
+              });
+              try { window.dispatchEvent(new CustomEvent('home:data:updated')); } catch (_) {}
+            } catch (_) {}
+          })();
+        } catch (_) {}
       } else {
         // Before nulling, perform a soft reauth check via /auth/health
         try {
@@ -234,6 +272,37 @@ export const AuthProvider = ({ children }) => {
       
       if (response.user) {
         setUser(response.user);
+        // Warm up Home route and KPI data immediately after login for instant landing
+        try { import('../pages/ModernHome').catch(() => {}); } catch (_) {}
+        try {
+          (async () => {
+            try {
+              const cached = safeStorage.getJSON('home:data:v1');
+              const freshMs = 2 * 60 * 1000;
+              if (cached?.savedAt && (Date.now() - cached.savedAt) < freshMs) return;
+            } catch (_) {}
+            const res = await getHomeData();
+            const s = res?.dashboard_data?.dashboard_stats || {};
+            const latest = Array.isArray(res?.dashboard_data?.latest_per_site) ? res.dashboard_data.latest_per_site : [];
+            const newMeta = { last_updated: res?.metadata?.last_updated || null };
+            try {
+              safeStorage.setJSON('home:data:v1', {
+                savedAt: Date.now(),
+                stats: {
+                  active_sites: Number.isFinite(s.active_sites) ? s.active_sites : 0,
+                  total_sites: Number.isFinite(s.total_sites) ? s.total_sites : 0,
+                  recent_measurements: Number.isFinite(s.recent_measurements) ? s.recent_measurements : 0,
+                  data_quality: Number.isFinite(s.data_quality) ? s.data_quality : null,
+                  active_alerts: 0,
+                  data_current_through: s.data_current_through || null,
+                },
+                meta: newMeta,
+                latestBySite: latest,
+              });
+              try { window.dispatchEvent(new CustomEvent('home:data:updated')); } catch (_) {}
+            } catch (_) {}
+          })();
+        } catch (_) {}
         return { success: true };
       } else {
         throw new Error('Login failed - no user data returned');

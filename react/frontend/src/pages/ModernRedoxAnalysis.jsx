@@ -611,9 +611,9 @@ const ModernRedoxAnalysis = () => {
       const halfWindow = SNAPSHOT_WINDOW_MINUTES * 60 * 1000;
       const binSize = DEPTH_BIN_SIZE_CM;
       
-      const bySite = new Map();
-      const lastSeen = new Map();
-      let hasDataInWindow = false;
+      const bySite = new Map(); // Map<site, Map<depthBin, {sum, count}>>
+      const lastSeen = new Map(); // Map<`${site}_${depthBin}`, { t, eh }>
+      const siteHasWindowData = new Map(); // Map<site, boolean>
 
       // Optimized: Use pre-parsed timestamps from perSiteSeries
       for (const [, vals] of perSiteSeries.entries()) {
@@ -643,7 +643,7 @@ const ModernRedoxAnalysis = () => {
           const inWindow = actualRefTime && Math.abs(t - actualRefTime) <= halfWindow;
           
           if (inWindow) {
-            hasDataInWindow = true;
+            siteHasWindowData.set(site, true);
             if (!bySite.has(site)) bySite.set(site, new Map());
             const siteMap = bySite.get(site);
             const cur = siteMap.get(depthBin) || { sum: 0, count: 0 };
@@ -659,14 +659,16 @@ const ModernRedoxAnalysis = () => {
         }
       }
       
-      // Use fallback if no data in window
-      if (!hasDataInWindow) {
-        for (const [key, val] of lastSeen.entries()) {
-          const underscoreIdx = key.indexOf('_');
-          const site = key.slice(0, underscoreIdx);
-          const depthBin = Number(key.slice(underscoreIdx + 1));
-          if (!bySite.has(site)) bySite.set(site, new Map());
-          bySite.get(site).set(depthBin, { sum: val.eh, count: 1 });
+      // Per-site fallback: if a site has no points in the time window, include its latest point per depth
+      for (const site of perSiteSeries.keys()) {
+        if (!siteHasWindowData.get(site)) {
+          // Gather lastSeen entries for this site
+          for (const [key, val] of lastSeen.entries()) {
+            if (!key.startsWith(site + '_')) continue;
+            const depthBin = Number(key.slice(site.length + 1));
+            if (!bySite.has(site)) bySite.set(site, new Map());
+            bySite.get(site).set(depthBin, { sum: val.eh, count: 1 });
+          }
         }
       }
 
@@ -731,6 +733,54 @@ const ModernRedoxAnalysis = () => {
     }
   }, [perSiteSeries, activeWindowEnd, endDate, siteColors, fetchState.data.length, scatterData]);
 
+  // Compute 24h rolling mean client-side from existing timeseries data
+  const rollingData = useMemo(() => {
+    if (!perSiteSeries.size) return [];
+    try {
+      const WINDOW_MS = 24 * 60 * 60 * 1000;
+      const out = [];
+      for (const [site, vals] of perSiteSeries.entries()) {
+        const { timestamps, depth, redox } = vals;
+        // Group by depth
+        const byDepth = new Map();
+        for (let i = 0; i < timestamps.length; i++) {
+          const d = depth[i];
+          const t = timestamps[i];
+          const eh = redox[i];
+          if (!Number.isFinite(d) || !Number.isFinite(t) || !Number.isFinite(eh)) continue;
+          if (!byDepth.has(d)) byDepth.set(d, { t: [], y: [] });
+          const g = byDepth.get(d);
+          g.t.push(t);
+          g.y.push(eh);
+        }
+        // For each depth, compute sliding-window mean
+        for (const [d, g] of byDepth.entries()) {
+          const ts = g.t; const ys = g.y;
+          let i = 0; let sum = 0; let cnt = 0;
+          for (let j = 0; j < ts.length; j++) {
+            const tj = ts[j];
+            const yj = ys[j];
+            sum += yj; cnt++;
+            while (tj - ts[i] > WINDOW_MS) { sum -= ys[i]; cnt--; i++; }
+            const mean = cnt > 0 ? (sum / cnt) : NaN;
+            if (Number.isFinite(mean)) {
+              out.push({
+                measurement_timestamp: new Date(tj).toISOString(),
+                site_code: site,
+                depth_cm: d,
+                processed_eh_roll24h: mean,
+              });
+            }
+          }
+        }
+      }
+      return out;
+    } catch (e) {
+      log.warn('[REDOX] rolling mean compute failed', e);
+      return [];
+    }
+  }, [perSiteSeries]);
+
   const subtitleText = useMemo(() => {
     const sitesText = selectedSites && selectedSites.length ? `Sites ${selectedSites.join(', ')}` : 'All sites';
     const start = (activeWindowStart || startDate || availableMinDate || '').slice(0, 10) || 'N/A';
@@ -773,33 +823,56 @@ const ModernRedoxAnalysis = () => {
       log.info('[FETCH] Using custom date range:', { startTsIso, endTsIso });
       setActiveWindowStart(startTsIso);
       setActiveWindowEnd(endTsIso);
+      return { startTsIso, endTsIso };
+    }
+
+    // Preset ranges: compute relative to "today"; use available range only for UI hints
+    checkAbort(controller.signal);
+    const daysMap = {
+      'Last 7 Days': 7,
+      'Last 30 Days': 30,
+      'Last 90 Days': 90,
+      'Last 6 Months': 180,
+      'Last 1 Year': 365,
+      'Last 2 Years': 730,
+    };
+    const presetDays = daysMap[timeRange];
+    const now = new Date();
+    const endUtc = new Date(now.toISOString()); // keep as ISO in UTC
+    if (presetDays) {
+      const startUtc = new Date(Date.UTC(
+        endUtc.getUTCFullYear(),
+        endUtc.getUTCMonth(),
+        endUtc.getUTCDate() - (presetDays - 1),
+        0, 0, 0, 0
+      ));
+      startTsIso = startUtc.toISOString();
+      endTsIso = endUtc.toISOString();
     } else {
-      checkAbort(controller.signal);
-      log.debug('[FETCH] Using cached date range for sites:', selectedSites);
-      
-      // Use cached date range if available, otherwise fall back to API call
+      // Fallback to 30 days if unknown preset
+      const startUtc = new Date(Date.UTC(endUtc.getUTCFullYear(), endUtc.getUTCMonth(), endUtc.getUTCDate() - 29, 0, 0, 0, 0));
+      startTsIso = startUtc.toISOString();
+      endTsIso = endUtc.toISOString();
+    }
+
+    // Load available bounds for UI min/max hints (does not affect query window)
+    try {
       let range = cachedDateRange;
       if (!range) {
         log.debug('[FETCH] Cache miss, calling getRedoxDateRange for sites:', selectedSites);
         range = await getRedoxDateRange(selectedSites, controller.signal);
       }
-      
-      log.debug('[FETCH] Date range response:', range);
       const earliest = range?.earliest_date;
       const latest = range?.latest_date;
-      if (earliest && latest) {
-        const { startIso, endIso } = computePresetWindow(earliest, latest, timeRange);
-        startTsIso = startIso;
-        endTsIso = endIso;
-        setAvailableMinDate(earliest);
-        setAvailableMaxDate(latest);
-        setActiveWindowStart(startTsIso);
-        setActiveWindowEnd(endTsIso);
-        log.info('[FETCH] preset=%s earliest=%s latest=%s => startTsIso=%s endTsIso=%s', timeRange, earliest, latest, startTsIso, endTsIso);
-      } else {
-        log.warn('[FETCH] No valid date range returned');
-      }
+      if (earliest) setAvailableMinDate(earliest);
+      if (latest) setAvailableMaxDate(latest);
+    } catch (e) {
+      log.warn('[FETCH] Failed to load available date bounds:', e);
     }
+
+    setActiveWindowStart(startTsIso);
+    setActiveWindowEnd(endTsIso);
+    log.info('[FETCH] preset=%s using today-relative window => startTsIso=%s endTsIso=%s', timeRange, startTsIso, endTsIso);
     return { startTsIso, endTsIso };
   }, [selectedSites, timeRange, startDate, endDate, cachedDateRange]);
 
@@ -816,7 +889,6 @@ const ModernRedoxAnalysis = () => {
         if (preferArrow) {
           log.debug('[REQ-CHUNK] Arrow', {
             site,
-            source: sourceMode,
             startTsIso,
             endTsIso,
             chunkSize,
@@ -833,7 +905,6 @@ const ModernRedoxAnalysis = () => {
               offset,
               resolution: suggestedResolution,
               maxDepths,
-              source: maxFidelity ? 'raw' : 'processed',
               maxFidelity: maxFidelity || undefined,
               ...(targetPoints ? { targetPoints } : {}),
             },
@@ -845,7 +916,7 @@ const ModernRedoxAnalysis = () => {
           log.debug(`[ARROW DEBUG] Parsed ${rows?.length || 0} rows for site ${site}`);
           
           if (!rows || rows.length === 0) {
-            log.info('[FALLBACK JSON-CHUNK]', { site, source: sourceMode, startTsIso, endTsIso, chunkSize, offset });
+            log.info('[FALLBACK JSON-CHUNK]', { site, startTsIso, endTsIso, chunkSize, offset });
             resp = await getProcessedEhTimeSeries(
               {
                 siteId: site,
@@ -855,7 +926,6 @@ const ModernRedoxAnalysis = () => {
                 offset,
                 resolution: suggestedResolution,
                 maxDepths,
-                source: maxFidelity ? 'raw' : 'processed',
                 maxFidelity: maxFidelity || undefined,
                 ...(targetPoints ? { targetPoints } : {}),
               },
@@ -877,7 +947,6 @@ const ModernRedoxAnalysis = () => {
         } else {
           log.debug('[REQ-CHUNK] JSON', {
             site,
-            source: sourceMode,
             startTsIso,
             endTsIso,
             chunkSize,
@@ -895,7 +964,6 @@ const ModernRedoxAnalysis = () => {
               offset,
               resolution: suggestedResolution,
               maxDepths,
-              source: maxFidelity ? 'raw' : 'processed',
               maxFidelity: maxFidelity || undefined,
               ...(targetPoints ? { targetPoints } : {}),
             },
@@ -955,6 +1023,9 @@ const ModernRedoxAnalysis = () => {
     if (!existingData || !newFetchKey || !lastFetchKeyRef.current) {
       return { compatible: false, reason: 'no-existing-data' };
     }
+    if (!Array.isArray(existingData) || existingData.length === 0) {
+      return { compatible: false, reason: 'empty-existing-data' };
+    }
 
     const parseKey = (key) => {
       const parts = key.split('|');
@@ -967,6 +1038,10 @@ const ModernRedoxAnalysis = () => {
       };
     };
 
+    // Normalize views that use identical datasets into the same data group
+    // Snapshot and Rolling reuse the full timeseries dataset client-side, so group them with 'series'
+    const toGroup = (v) => (v === 'timeseries' || v === 'details' || v === 'snapshot' || v === 'rolling' || v === 'series') ? 'series' : v;
+
     const newParams = parseKey(newFetchKey);
     const existingParams = parseKey(lastFetchKeyRef.current);
 
@@ -977,11 +1052,11 @@ const ModernRedoxAnalysis = () => {
       existingParams
     });
 
-    // Must have same sites, range, and view
+    // Must have same sites, range, and data group (treat timeseries/details as one group)
     if (newParams.sites !== existingParams.sites || 
         newParams.rangeType !== existingParams.rangeType ||
         newParams.range !== existingParams.range ||
-        newParams.view !== existingParams.view) {
+        toGroup(newParams.view) !== toGroup(existingParams.view)) {
       return { compatible: false, reason: 'different-params' };
     }
 
@@ -1198,16 +1273,21 @@ const ModernRedoxAnalysis = () => {
       const fetchId = ++currentFetchIdRef.current;
       const rangeKey = timeRange === 'Custom Range' && startDate && endDate ? `custom|${startDate}|${endDate}` : `range|${timeRange}`;
       const fidelitySig = maxFidelity ? 'max' : 'std';
-      const fetchKey = [selectedSites.join(','), rangeKey, fidelitySig, selectedView].join('|');
+      // Normalize view into a data group so Overview (timeseries), Details, Snapshot, and Rolling share cache
+      const viewGroup = (selectedView === 'timeseries' || selectedView === 'details' || selectedView === 'snapshot' || selectedView === 'rolling') ? 'series' : selectedView;
+      const fetchKey = [selectedSites.join(','), rangeKey, fidelitySig, viewGroup].join('|');
       log.debug('Generated fetchKey:', fetchKey);
 
       // Smart data reuse: check if existing data is compatible
       const compatibility = checkDataCompatibility(fetchKey, fetchState.data);
       
       if (lastFetchKeyRef.current === fetchKey) {
-        log.debug('Same fetch key as before, skipping');
-        dispatch({ type: 'RESET' });
-        return;
+        if (Array.isArray(fetchState.data) && fetchState.data.length > 0) {
+          log.debug('Same fetch key as before and have data, skipping fetch');
+          return;
+        } else {
+          log.debug('Same fetch key as before but no data present, proceeding to fetch');
+        }
       }
       
       if (compatibility.compatible) {
@@ -1265,12 +1345,12 @@ const ModernRedoxAnalysis = () => {
         // Enforce explicit cadence: 12/day when OFF, 96/day when ON. Always fixed 6 depths.
         const suggestedResolution = useMaxFidelity ? null : '2H';
         const maxDepths = 6;
-        const allowedDepths = [10, 30, 50, 100, 150, 200];
+        // Let backend choose available depths up to maxDepths; do not hard-filter depths client-side
+        const allowedDepths = null;
         const targetPoints = undefined;
         const sourceMode = 'processed';
         log.debug('[FETCH SUMMARY]', {
           preferArrow,
-          source: sourceMode,
           resolution: suggestedResolution || 'raw',
           maxDepths,
           targetPoints: targetPoints || null,
@@ -1281,12 +1361,13 @@ const ModernRedoxAnalysis = () => {
           sites: siteIds,
         });
 
-        if (!shouldChunk && (selectedView === 'timeseries' || selectedView === 'details')) {
+        // For rolling, reuse timeseries dataset and compute roll24h client-side
+        if (!shouldChunk && (selectedView === 'timeseries' || selectedView === 'details' || selectedView === 'rolling')) {
           // Full timeseries for each site (Details forces raw cadence)
           for (const s of siteIds) {
             log.debug('Adding timeseries promise for site:', s, 'full dataset');
             if (preferArrow) {
-              log.debug('[REQ] Arrow', { site: s, source: sourceMode, resolution: suggestedResolution || 'raw', maxDepths, startTsIso, endTsIso });
+              log.debug('[REQ] Arrow', { site: s, resolution: suggestedResolution || 'raw', maxDepths, startTsIso, endTsIso });
               promises.push(
                 (async () => {
                   try {
@@ -1298,8 +1379,6 @@ const ModernRedoxAnalysis = () => {
                         chunkSize: chunkSize,
                         resolution: suggestedResolution,
                         maxDepths,
-                        allowedDepths,
-                        source: sourceMode,
                         maxFidelity: useMaxFidelity || undefined,
                         ...(targetPoints ? { targetPoints } : {}),
                       },
@@ -1318,8 +1397,6 @@ const ModernRedoxAnalysis = () => {
                         chunkSize: chunkSize,
                         resolution: suggestedResolution,
                         maxDepths,
-                        allowedDepths,
-                        source: sourceMode,
                         maxFidelity: useMaxFidelity || undefined,
                         ...(targetPoints ? { targetPoints } : {}),
                       },
@@ -1337,8 +1414,6 @@ const ModernRedoxAnalysis = () => {
                         chunkSize: chunkSize,
                         resolution: suggestedResolution,
                         maxDepths,
-                        allowedDepths,
-                        source: sourceMode,
                         maxFidelity: useMaxFidelity || undefined,
                         ...(targetPoints ? { targetPoints } : {}),
                       },
@@ -1348,7 +1423,7 @@ const ModernRedoxAnalysis = () => {
                 })()
               );
             } else {
-                log.debug('[REQ] JSON', { site: s, source: sourceMode, resolution: suggestedResolution || 'raw', maxDepths, allowedDepths, startTsIso, endTsIso });
+                log.debug('[REQ] JSON', { site: s, resolution: suggestedResolution || 'raw', maxDepths, startTsIso, endTsIso });
                 promises.push(
                   getProcessedEhTimeSeries(
                     {
@@ -1357,8 +1432,6 @@ const ModernRedoxAnalysis = () => {
                       endTs: endTsIso,
                       resolution: suggestedResolution,
                       maxDepths,
-                      allowedDepths,
-                      source: sourceMode,
                       maxFidelity: useMaxFidelity || undefined,
                       ...(targetPoints ? { targetPoints } : {}),
                     },
@@ -1905,15 +1978,6 @@ const ModernRedoxAnalysis = () => {
                       </button>
                     </>
                   )}
-                  {selectedView === 'timeseries' && (
-                    <button
-                      className="btn btn-outline-secondary btn-sm ms-2"
-                      onClick={handleTogglePrimaryYAxis}
-                      title="Toggle primary Y axis (swap Depth and Redox)"
-                    >
-                      <i className="bi bi-arrow-down-up me-1"></i> Toggle Y1/Y2
-                    </button>
-                  )}
                 </div>
               </div>
               <div id="redox-analysis-chart">
@@ -1931,7 +1995,7 @@ const ModernRedoxAnalysis = () => {
                   ) : (
                     <RedoxChartRouter
                       selectedView={selectedView}
-                      data={fetchState.data}
+                      data={selectedView === 'rolling' ? rollingData : fetchState.data}
                       chartData={chartData}
                       chartType={chartType}
                       chartViewMode={chartViewMode}

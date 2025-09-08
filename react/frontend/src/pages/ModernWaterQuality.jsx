@@ -476,7 +476,9 @@ const ModernWaterQuality = () => {
             {metrics.totalRecords.toLocaleString()} measurements · {metrics.sitesCount} sites · {
               meta?.date_range?.start && meta?.date_range?.end
                 ? `${String(meta.date_range.start).slice(0,10)} → ${String(meta.date_range.end).slice(0,10)}`
-                : timeRange
+                : (startDate && endDate
+                    ? `${String(startDate).slice(0,10)} → ${String(endDate).slice(0,10)}`
+                    : timeRange)
             } · {metrics.completeness}% completeness
           </p>
         </div>
@@ -675,7 +677,11 @@ const ModernWaterQuality = () => {
                     Showing {chartData.reduce((sum, series) => sum + series.x.length, 0)} points · {chartData.length} sites
                     {meta?.date_range?.start && meta?.date_range?.end ? (
                       <> · Actual {String(meta.date_range.start).slice(0,10)} → {String(meta.date_range.end).slice(0,10)}</>
-                    ) : null}
+                    ) : (
+                      startDate && endDate ? (
+                        <> · Actual {String(startDate).slice(0,10)} → {String(endDate).slice(0,10)}</>
+                      ) : null
+                    )}
                   </p>
                 </div>
                 <WaterQualityChartControls

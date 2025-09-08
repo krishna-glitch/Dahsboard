@@ -36,7 +36,7 @@
   max-width: clamp(1024px, 94vw, 1440px);
   width: 100%;
   margin: 0 auto;
-  padding: clamp(1rem, 2.5vw, 2rem);
+  padding: clamp(1rem, 2vw, 1.5rem);
 }
 
 /* Ensure landing grid stacks header then content without pushing to bottom */
@@ -52,7 +52,7 @@
   /* Allow an extra column on medium screens while keeping cards readable */
   grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
   gap: clamp(12px, 2vw, 24px);
-  margin-top: 1.25rem;
+  /* Remove margin-top to prevent double spacing with metrics-grid margin-bottom (32px) */
   align-items: stretch;
   grid-auto-rows: 1fr; /* make rows equal height for a neater look */
 }
@@ -75,7 +75,7 @@
 .nav-card-actions { margin-top: 0.25rem; }
 
 /* Quick access tidy spacing */
-.quick-access-section { margin-top: 2rem; }
+.quick-access-section { margin-top: 1rem; }
 .quick-access-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 12px; }
 .quick-access-item { display: flex; align-items: center; gap: 8px; padding: 0.75rem 1rem; background: #fff; border: 1px solid #e9ecef; border-radius: 6px; }
 
@@ -95,3 +95,23 @@
 /* Consistent section spacing */
 .landing-section { margin-bottom: var(--spacing-section-lg); }
 .landing-section .section-title { margin: 0 0 var(--spacing-component-md) 0; color: var(--text-primary); }
+
+/* Responsive video embed for About page */
+.video-embed { margin-top: 0.5rem; }
+.video-embed__responsive {
+  position: relative;
+  padding-bottom: 56.25%; /* 16:9 */
+  height: 0;
+  overflow: hidden;
+  border-radius: 8px;
+  box-shadow: 0 1px 3px rgba(0,0,0,0.08);
+  background: #000;
+}
+.video-embed__responsive iframe {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  border: 0;
+}

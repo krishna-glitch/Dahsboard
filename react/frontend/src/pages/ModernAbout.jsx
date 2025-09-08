@@ -19,7 +19,32 @@ const ModernAbout = () => {
       </div>
 
       {/* Main Content */}
-      <div className="landing-content">
+  <div className="landing-content">
+        {/* Overview Video */}
+        <div className="about-section component-fade-in">
+          <div className="section-icon video">
+            <i className="bi bi-play-btn"></i>
+          </div>
+          <div className="section-content">
+            <h2 className="section-title">Overview Video</h2>
+            <p className="section-description">
+              A quick walkthrough to understand the dashboard and its context.
+            </p>
+            <div className="video-embed">
+              <div className="video-embed__responsive">
+                <iframe
+                  src="https://www.youtube-nocookie.com/embed/RlD8gCk1BiU"
+                  title="Water Quality Dashboard Overview"
+                  frameBorder="0"
+                  loading="lazy"
+                  referrerPolicy="strict-origin-when-cross-origin"
+                  allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share"
+                  allowFullScreen
+                />
+              </div>
+            </div>
+          </div>
+        </div>
         {/* Mission Section */}
         <div className="about-section component-fade-in">
           <div className="section-icon mission">

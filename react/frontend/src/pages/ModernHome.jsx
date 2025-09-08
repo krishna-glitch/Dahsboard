@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useCallback, useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
 import MetricCard from '../components/modern/MetricCard';
 import '../styles/modern-layout.css';
@@ -41,6 +41,8 @@ const ModernHome = () => {
         }
       }
     } catch (_e) {}
+    
+    // Auto-fetch fresh data on page load for immediate KPI display
     (async () => {
       try {
         setLoading(true);
@@ -86,12 +88,53 @@ const ModernHome = () => {
     })();
     return () => { alive = false; };
   }, []);
+
+  const handleRefresh = useCallback(async () => {
+    try {
+      setLoading(true);
+      setError(null);
+      const res = await getHomeData();
+      const s = res?.dashboard_data?.dashboard_stats || {};
+      const latest = Array.isArray(res?.dashboard_data?.latest_per_site) ? res.dashboard_data.latest_per_site : [];
+      setStats({
+        active_sites: Number.isFinite(s.active_sites) ? s.active_sites : 0,
+        total_sites: Number.isFinite(s.total_sites) ? s.total_sites : 0,
+        recent_measurements: Number.isFinite(s.recent_measurements) ? s.recent_measurements : 0,
+        data_quality: Number.isFinite(s.data_quality) ? s.data_quality : null,
+        active_alerts: 0,
+        data_current_through: s.data_current_through || null,
+      });
+      const newMeta = { last_updated: res?.metadata?.last_updated || null };
+      setMeta(newMeta);
+      setLatestBySite(latest);
+      // update cache
+      try {
+        safeStorage.setJSON('home:data:v1', {
+          savedAt: Date.now(),
+          stats: {
+            active_sites: Number.isFinite(s.active_sites) ? s.active_sites : 0,
+            total_sites: Number.isFinite(s.total_sites) ? s.total_sites : 0,
+            recent_measurements: Number.isFinite(s.recent_measurements) ? s.recent_measurements : 0,
+            data_quality: Number.isFinite(s.data_quality) ? s.data_quality : null,
+            active_alerts: 0,
+            data_current_through: s.data_current_through || null,
+          },
+          meta: newMeta,
+          latestBySite: latest,
+        });
+      } catch (_) {}
+    } catch (e) {
+      setError(String(e?.message || e));
+    } finally {
+      setLoading(false);
+    }
+  }, []);
   return (
     <div className="modern-dashboard-home landing-page">
       {/* Header Section */}
       <div className="dashboard-header landing-header">
         <div>
-          <h1 className="dashboard-title landing-title">Water Quality Dashboard</h1>
+          <h1 className="dashboard-title landing-title">Environmental Monitoring Dashboard</h1>
           <p className="dashboard-subtitle landing-subtitle">
             Monitor and analyze water quality data from multiple monitoring sites
           </p>
@@ -123,6 +166,15 @@ const ModernHome = () => {
                 Last updated {new Date(meta.last_updated).toLocaleString()}
               </span>
             )}
+            <button
+              className="btn btn-outline-secondary btn-sm"
+              onClick={handleRefresh}
+              disabled={loading}
+              title="Refresh KPIs"
+              style={{ marginLeft: 'auto' }}
+            >
+              <i className={`bi ${loading ? 'bi-arrow-repeat spin' : 'bi-arrow-clockwise'}`}></i>
+            </button>
           </div>
         )}
         {/* Quick Stats Grid */}
@@ -199,7 +251,7 @@ const ModernHome = () => {
         {/* Navigation Cards Grid */}
         <div className="navigation-grid">
           {tutorial.enabled && (
-            <div style={{ gridColumn: '1 / -1', marginBottom: '0.5rem' }}>
+            <div style={{ gridColumn: '1 / -1' }}>
               <TutorialHint id="home-navigation" title="Navigate">
                 Jump to analysis pages: Water Quality, Redox, Site Comparison, and more.
               </TutorialHint>

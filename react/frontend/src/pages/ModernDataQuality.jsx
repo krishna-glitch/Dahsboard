@@ -3,6 +3,7 @@ import { getDataQualitySummary, getAvailableSites } from '../services/api';
 import EmptyState from '../components/modern/EmptyState';
 import MetricCard from '../components/modern/MetricCard';
 import { useToast } from '../components/modern/toastUtils';
+import DuplicateRecordsModal from '../components/DuplicateRecordsModal';
 
 const DEBOUNCE_MS = 300;
 
@@ -11,10 +12,14 @@ const DataQuality = () => {
   const [availableSites, setAvailableSites] = useState([]);
   const [dataType, setDataType] = useState('water_quality');
   const [timeRange, setTimeRange] = useState('30d');
+  const [customStartDate, setCustomStartDate] = useState('');
+  const [customEndDate, setCustomEndDate] = useState('');
   const [cadence, setCadence] = useState(''); // '' -> default per dataType
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
   const [summary, setSummary] = useState(null);
+  const [duplicateModalShow, setDuplicateModalShow] = useState(false);
+  const [selectedSiteForDuplicates, setSelectedSiteForDuplicates] = useState(null);
   const toast = useToast();
 
   // Use ref to avoid effect dependency churn from toast object identity
@@ -26,7 +31,21 @@ const DataQuality = () => {
       setLoading(true); setError(null);
       const t0 = (typeof performance !== 'undefined' && performance.now) ? performance.now() : Date.now();
       const tid = toastRef.current?.showLoading('Scanning data gaps and duplicates…', { title: 'Data Quality', persistent: true, duration: 0 });
-      const params = { sites: sites.join(','), data_type: dataType, time_range: timeRange };
+      const params = { sites: sites.join(','), data_type: dataType };
+      
+      // Handle time range and custom dates
+      if (timeRange === 'custom') {
+        if (customStartDate && customEndDate) {
+          params.start_date = customStartDate;
+          params.end_date = customEndDate;
+        } else {
+          // Default to last 30 days if custom dates not set
+          params.time_range = '30d';
+        }
+      } else {
+        params.time_range = timeRange;
+      }
+      
       if (cadence) params.cadence = cadence;
       const res = await getDataQualitySummary(params);
       setSummary(res);
@@ -66,7 +85,7 @@ const DataQuality = () => {
       }, DEBOUNCE_MS);
       return () => clearTimeout(debounceTimeout);
     }
-  }, [sites, dataType, timeRange, cadence, fetchSummary]);
+  }, [sites, dataType, timeRange, customStartDate, customEndDate, cadence, fetchSummary]);
 
   const kpis = useMemo(() => {
     if (!summary?.sites?.length) return { avgCompleteness: 0, totalDuplicates: 0, daysWithMissing: 0 };
@@ -103,6 +122,39 @@ const DataQuality = () => {
     );
   };
 
+  const DuplicateRecords = ({ site }) => {
+    const duplicates = site.duplicate_records || [];
+    const totalDuplicates = site.duplicates || 0;
+    
+    if (totalDuplicates === 0) {
+      return <div style={{ color: '#6c757d', fontSize: 12 }}>No duplicate records</div>;
+    }
+
+    const handleViewDuplicates = () => {
+      setSelectedSiteForDuplicates(site);
+      setDuplicateModalShow(true);
+    };
+
+    return (
+      <div className="duplicate-records">
+        <button 
+          className="btn btn-outline-danger btn-sm" 
+          style={{ fontSize: 12 }}
+          onClick={handleViewDuplicates}
+        >
+          <i className="bi bi-table me-1"></i>
+          View {totalDuplicates.toLocaleString()} duplicates
+        </button>
+        
+        {duplicates.length > 0 && (
+          <div style={{ color: '#6c757d', fontSize: 10, marginTop: 4 }}>
+            {duplicates.length} samples available
+          </div>
+        )}
+      </div>
+    );
+  };
+
   return (
     <div className="modern-dashboard">
       <div className="dashboard-header">
@@ -111,7 +163,9 @@ const DataQuality = () => {
           <p className="dashboard-subtitle">Identify missing data by day/hour, duplicates, and coverage</p>
           {summary?.metadata && (
             <div style={{ color: '#6c757d', fontSize: 12 }}>
-              Window: {String(summary.metadata.start).slice(0,10)} → {String(summary.metadata.end).slice(0,10)} • Cadence: {summary.metadata.cadence} • Expected/day: {summary.metadata.expected_per_day}
+              Window: {String(summary.metadata.start).slice(0,10)} → {String(summary.metadata.end).slice(0,10)} 
+              {timeRange === 'custom' && <span> (Custom Range)</span>}
+              • Cadence: {summary.metadata.cadence} • Expected/day: {summary.metadata.expected_per_day}
             </div>
           )}
         </div>
@@ -165,15 +219,52 @@ const DataQuality = () => {
               <option value="7d">Last 7 Days</option>
               <option value="30d">Last 30 Days</option>
               <option value="90d">Last 90 Days</option>
+              <option value="180d">Last 6 Months</option>
+              <option value="365d">Last 1 Year</option>
+              <option value="custom">Custom Range</option>
             </select>
           </div>
+          {/* Custom Date Range Controls */}
+          {timeRange === 'custom' && (
+            <div className="control-group">
+              <label className="control-label">Custom Date Range</label>
+              <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+                <input
+                  type="date"
+                  className="control-input"
+                  value={customStartDate}
+                  onChange={(e) => setCustomStartDate(e.target.value)}
+                  placeholder="Start Date"
+                  max={customEndDate || new Date().toISOString().split('T')[0]}
+                  style={{ flex: 1 }}
+                />
+                <span style={{ color: '#6c757d', fontSize: 14 }}>to</span>
+                <input
+                  type="date"
+                  className="control-input"
+                  value={customEndDate}
+                  onChange={(e) => setCustomEndDate(e.target.value)}
+                  placeholder="End Date"
+                  min={customStartDate}
+                  max={new Date().toISOString().split('T')[0]}
+                  style={{ flex: 1 }}
+                />
+              </div>
+            </div>
+          )}
           <div className="control-group">
-            <label className="control-label">Cadence</label>
+            <label className="control-label">
+              Cadence
+              <i className="bi bi-info-circle ms-1" 
+                 title="Default: 24/day for Water Quality, 96/day for Redox. Override with manual settings." 
+                 style={{ fontSize: '12px', color: '#6c757d', cursor: 'help' }}>
+              </i>
+            </label>
             <select className="control-select" value={cadence} onChange={(e)=>setCadence(e.target.value)}>
-              <option value="">Auto</option>
-              <option value="1H">Hourly</option>
-              <option value="30min">30 min</option>
-              <option value="15min">15 min</option>
+              <option value="">Default</option>
+              <option value="1H">Hourly (24/day)</option>
+              <option value="30min">30 min (48/day)</option>
+              <option value="15min">15 min (96/day)</option>
             </select>
           </div>
         </div>
@@ -188,7 +279,13 @@ const DataQuality = () => {
           <>
             <div className="metrics-grid">
               <MetricCard title="Avg Completeness" value={`${kpis.avgCompleteness.toFixed(1)}%`} icon="check-circle" status={kpis.avgCompleteness>95?'excellent':kpis.avgCompleteness>85?'good':'warning'} />
-              <MetricCard title="Total Duplicates" value={kpis.totalDuplicates.toLocaleString()} icon="exclamation-triangle" status={kpis.totalDuplicates===0?'excellent':'warning'} />
+              <MetricCard 
+                title="Total Duplicates" 
+                value={kpis.totalDuplicates.toLocaleString()} 
+                icon="exclamation-triangle" 
+                status={kpis.totalDuplicates===0?'excellent':'warning'}
+                context={kpis.totalDuplicates > 0 ? 'Click "View duplicates" buttons below to open detailed TanStack Table viewer' : 'No duplicate records found'}
+              />
               <MetricCard title="Days with Missing" value={kpis.daysWithMissing.toLocaleString()} icon="calendar" status={kpis.daysWithMissing===0?'excellent':'warning'} />
             </div>
 
@@ -205,7 +302,8 @@ const DataQuality = () => {
                       <th>Completeness</th>
                       <th>Duplicates</th>
                       <th>Missing Days</th>
-                      <th>Details</th>
+                      <th>Missing Data Details</th>
+                      <th>Duplicate Records</th>
                       <th>Daily Heatmap</th>
                     </tr>
                   </thead>
@@ -220,6 +318,9 @@ const DataQuality = () => {
                           <td className="table-cell"><div className="cell-primary">{missingDays}</div></td>
                           <td className="table-cell">
                             <ProblemDays site={s} />
+                          </td>
+                          <td className="table-cell">
+                            <DuplicateRecords site={s} />
                           </td>
                           <td className="table-cell">
                             <div className="daily-heatmap" style={{ display: 'grid', gridTemplateColumns: 'repeat(14, 8px)', gap: 2 }}>
@@ -241,6 +342,14 @@ const DataQuality = () => {
           </>
         )}
       </div>
+
+      {/* Enhanced Duplicate Records Modal */}
+      <DuplicateRecordsModal
+        show={duplicateModalShow}
+        onHide={() => setDuplicateModalShow(false)}
+        site={selectedSiteForDuplicates}
+        duplicateRecords={selectedSiteForDuplicates?.duplicate_records || []}
+      />
     </div>
   );
 };

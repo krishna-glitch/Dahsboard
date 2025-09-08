@@ -16,38 +16,89 @@ data_quality_bp = Blueprint('data_quality_bp', __name__)
 
 def _load_window(data_type: str, sites: list, start: datetime, end: datetime) -> pd.DataFrame:
     try:
-        q = DataQuery(sites=sites, start_date=start, end_date=end, days_back=(end-start).days+1)
         if data_type == 'redox':
-            result = core_data_service._load_redox_data(q)
+            # Use materialized view like redox analysis page
+            return _load_redox_from_materialized_view(sites, start, end)
         else:
+            # Use existing water quality data loading
+            q = DataQuery(sites=sites, start_date=start, end_date=end, days_back=(end-start).days+1)
             result = core_data_service._load_water_quality_data(q)
-        if hasattr(result, 'data'):
-            df = result.data
-        else:
-            df = result
-        if df is None or len(df) == 0:
-            return pd.DataFrame()
-        # Normalize columns
-        df = df.copy()
-        # Standardize site column name
-        if 'site_code' not in df.columns:
-            if 'site' in df.columns:
-                df['site_code'] = df['site']
-        # Standardize timestamp column
-        ts_col = 'measurement_timestamp' if 'measurement_timestamp' in df.columns else None
-        if ts_col is None:
-            # Try common alternates
-            for c in df.columns:
-                if 'timestamp' in c:
-                    ts_col = c
-                    break
-        if not ts_col:
-            return pd.DataFrame()
-        df['measurement_timestamp'] = pd.to_datetime(df[ts_col], errors='coerce')
-        df = df.dropna(subset=['measurement_timestamp'])
-        return df
+            if hasattr(result, 'data'):
+                df = result.data
+            else:
+                df = result
+            if df is None or len(df) == 0:
+                return pd.DataFrame()
+            # Normalize columns
+            df = df.copy()
+            # Standardize site column name
+            if 'site_code' not in df.columns:
+                if 'site' in df.columns:
+                    df['site_code'] = df['site']
+            # Standardize timestamp column
+            ts_col = 'measurement_timestamp' if 'measurement_timestamp' in df.columns else None
+            if ts_col is None:
+                # Try common alternates
+                for c in df.columns:
+                    if 'timestamp' in c:
+                        ts_col = c
+                        break
+            if not ts_col:
+                return pd.DataFrame()
+            df['measurement_timestamp'] = pd.to_datetime(df[ts_col], errors='coerce')
+            df = df.dropna(subset=['measurement_timestamp'])
+            return df
     except Exception as e:
         logger.error(f"[DATA_QUALITY] load failed: {e}")
+        return pd.DataFrame()
+
+def _load_redox_from_materialized_view(sites: list, start: datetime, end: datetime) -> pd.DataFrame:
+    """Load redox data from materialized view like redox analysis page"""
+    try:
+        # Map site codes to site_ids (same mapping as redox analysis)
+        site_id_map = {'S1': '1', 'S2': '2', 'S3': '3', 'S4': '4'}
+        site_ids = [site_id_map.get(site) for site in sites if site_id_map.get(site)]
+        
+        if not site_ids:
+            return pd.DataFrame()
+            
+        # Query materialized view directly (no deduplication - it's already clean)
+        query = """
+        SELECT 
+            mv.site_id,
+            mv.measurement_timestamp,
+            mv.depth_cm,
+            mv.processed_eh as redox_value_mv
+        FROM impact.mv_processed_eh mv
+        WHERE mv.site_id IN :site_ids
+          AND mv.measurement_timestamp BETWEEN :start_ts AND :end_ts
+        ORDER BY mv.site_id, mv.measurement_timestamp
+        """
+        
+        params = {
+            'site_ids': site_ids,
+            'start_ts': start,
+            'end_ts': end
+        }
+        
+        df = core_data_service.db.execute_query(query, params)
+        
+        if df.empty:
+            return pd.DataFrame()
+        
+            
+        # Convert measurement_timestamp to datetime for proper processing
+        df['measurement_timestamp'] = pd.to_datetime(df['measurement_timestamp'])
+        
+        # Add site_code column for consistency
+        reverse_map = {1: 'S1', 2: 'S2', 3: 'S3', 4: 'S4'}  # Use integer keys since site_id is numeric
+        df['site_code'] = df['site_id'].map(reverse_map)
+        
+        logger.info(f"🔍 [DATA_QUALITY] Loaded {len(df)} records from materialized view for sites {sites}")
+        return df
+        
+    except Exception as e:
+        logger.error(f"[DATA_QUALITY] materialized view load failed: {e}")
         return pd.DataFrame()
 
 def _expected_per_day(cadence: str, data_type: str) -> int:
@@ -120,7 +171,7 @@ def data_quality_summary():
                                          start_date=start_str,
                                          end_date=end_str)
         
-        cached_result = cache_service.get_cached_data(cache_key)
+        cached_result = cache_service.get(cache_key)
         if cached_result:
             logger.info(f"🚀 [DATA_QUALITY] Cache hit for sites: {sites}")
             return jsonify(cached_result), 200
@@ -129,23 +180,11 @@ def data_quality_summary():
         if end_str:
             end = datetime.fromisoformat(end_str.replace('Z','+00:00'))
         else:
-            # Determine latest timestamp for data_type
+            # Use consistent end date like other APIs - data goes through 2024-05-31
             if data_type == 'redox':
-                q = """
-                    SELECT MAX(re.measurement_timestamp) AS latest
-                    FROM impact.redox_event re
-                    JOIN impact.site s ON re.site_id::varchar = s.site_id
-                    WHERE s.code IN :sites
-                """
+                end = datetime(2024, 5, 31, 23, 59, 59)
             else:
-                q = """
-                    SELECT MAX(wq.measurement_timestamp) AS latest
-                    FROM impact.water_quality wq
-                    JOIN impact.site s ON wq.site_id = s.site_id
-                    WHERE s.code IN :sites
-                """
-            latest_df = core_data_service.db.execute_query(q, {'sites': sites})
-            end = pd.to_datetime(latest_df['latest'].iloc[0]).to_pydatetime() if not latest_df.empty and pd.notna(latest_df['latest'].iloc[0]) else datetime.utcnow()
+                end = datetime(2024, 5, 31, 23, 59, 59)
         if start_str:
             start = datetime.fromisoformat(start_str.replace('Z','+00:00'))
         else:
@@ -164,31 +203,92 @@ def data_quality_summary():
                 'sites': []
             }), 200
 
-        # Round timestamps to expected granularity for duplicate detection
-        if expected == 96:
-            df['bucket'] = df['measurement_timestamp'].dt.floor('15min')
-        elif expected == 48:
-            df['bucket'] = df['measurement_timestamp'].dt.floor('30min')
-        else:
-            df['bucket'] = df['measurement_timestamp'].dt.floor('1H')
-
+        # CORRECT duplicate detection: based on exact timestamp + site_id uniqueness
+        # A duplicate is when there are multiple records with the same measurement_timestamp and site_code
         value_col = _metric_column_for(data_type, metric)
+        
         for site in sites:
-            sdf = df[df['site_code'] == site]
+            sdf = df[df['site_code'] == site].copy()
             if sdf.empty:
                 per_site.append({
                     'site_id': site,
                     'total_records': 0,
                     'completeness_pct': 0,
                     'duplicates': 0,
+                    'duplicate_records': [],
                     'days': [],
                     'total_outliers': 0,
                     'total_flatlines': 0
                 })
                 continue
-            # duplicates at bucket level
-            dup_counts = sdf.groupby('bucket').size()
-            duplicates = int((dup_counts - 1).clip(lower=0).sum())
+                
+            # Find TRUE duplicates: multiple records with identical timestamp + site + depth
+            # Group by timestamp, site, AND depth to find actual duplicates
+            if 'depth_cm' in sdf.columns:
+                duplicate_groups = sdf.groupby(['measurement_timestamp', 'depth_cm']).size()
+            else:
+                duplicate_groups = sdf.groupby('measurement_timestamp').size()
+            duplicate_groups = duplicate_groups[duplicate_groups > 1]
+            duplicates = int((duplicate_groups - 1).sum()) if len(duplicate_groups) > 0 else 0
+            
+            # Collect sample duplicate records for viewing
+            duplicate_records = []
+            max_groups_to_show = 20  # Show samples from up to 20 different duplicate groups
+            groups_shown = 0
+            
+            logger.info(f"🔍 [DATA_QUALITY] Site {site}: Found {len(duplicate_groups)} duplicate groups with {duplicates} total duplicate records")
+            
+            for group_key, count in duplicate_groups.items():
+                if groups_shown >= max_groups_to_show:
+                    break
+                
+                # Handle both single timestamp and (timestamp, depth) grouping
+                if isinstance(group_key, tuple):  # (timestamp, depth)
+                    timestamp, depth = group_key
+                    group_records = sdf[(sdf['measurement_timestamp'] == timestamp) & (sdf['depth_cm'] == depth)].copy()
+                    group_id = f"{site}_{timestamp.isoformat()}_depth_{depth}cm"
+                else:  # single timestamp
+                    timestamp = group_key
+                    group_records = sdf[sdf['measurement_timestamp'] == timestamp].copy()
+                    group_id = f"{site}_{timestamp.isoformat()}"
+                
+                # Sort by any available unique identifier
+                if 'depth_cm' in group_records.columns:
+                    group_records = group_records.sort_values('depth_cm')
+                
+                # For each group, show up to 5 records as a sample
+                max_records_per_group = min(5, count)
+                records_added = 0
+                
+                for idx, (_, record) in enumerate(group_records.iterrows()):
+                    if records_added >= max_records_per_group:
+                        break
+                        
+                    duplicate_records.append({
+                        'timestamp': record['measurement_timestamp'].isoformat() if pd.notna(record['measurement_timestamp']) else None,
+                        'site_code': site,
+                        'duplicate_group': group_id,
+                        'duplicate_index': idx + 1,
+                        'total_in_group': count,
+                        'value': record.get(value_col) if value_col in record else None,
+                        'depth_cm': record.get('depth_cm') if 'depth_cm' in record else None,
+                        'raw_record_preview': {
+                            k: (v if pd.notna(v) else None) 
+                            for k, v in record.to_dict().items() 
+                            if pd.notna(v) and k not in ['measurement_timestamp', 'site_code']
+                        }
+                    })
+                    records_added += 1
+                
+                groups_shown += 1
+                
+            # Create time buckets for completeness analysis (separate from duplicate detection)
+            if expected == 96:
+                sdf['bucket'] = sdf['measurement_timestamp'].dt.floor('15min')
+            elif expected == 48:
+                sdf['bucket'] = sdf['measurement_timestamp'].dt.floor('30min')
+            else:
+                sdf['bucket'] = sdf['measurement_timestamp'].dt.floor('1H')
             # daily completeness
             sdf['day'] = sdf['measurement_timestamp'].dt.date
             counts = sdf.groupby('day').agg(present=('bucket', lambda x: x.nunique()))
@@ -233,6 +333,7 @@ def data_quality_summary():
                 'total_records': int(len(sdf)),
                 'completeness_pct': completeness,
                 'duplicates': duplicates,
+                'duplicate_records': duplicate_records[:50],  # Limit for UI performance
                 'total_outliers': total_outliers,
                 'total_flatlines': total_flatlines,
                 'days': sorted(days_list, key=lambda d: d['date'])
@@ -253,7 +354,7 @@ def data_quality_summary():
         
         # Cache the result
         try:
-            cache_service.cache_data(cache_key, result, ttl_hours=6)
+            cache_service.set(cache_key, result, ttl=6*3600)  # 6 hours in seconds
             logger.info(f"🔥 [DATA_QUALITY] Cached result for sites: {sites}")
         except Exception as cache_error:
             logger.warning(f"[DATA_QUALITY] Cache write failed: {cache_error}")
