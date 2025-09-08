@@ -1,14 +1,40 @@
 import { defineConfig } from 'vite'
 import react from '@vitejs/plugin-react'
+import { compression } from 'vite-plugin-compression'
 
 // https://vite.dev/config/
 export default defineConfig({
-  plugins: [react()],
+  plugins: [
+    react(),
+    // Enable gzip compression for better Lighthouse scores
+    compression({
+      algorithm: 'gzip',
+      ext: '.gz'
+    }),
+    // Enable brotli compression (preferred)
+    compression({
+      algorithm: 'brotliCompress',
+      ext: '.br'
+    })
+  ],
   base: './',
   resolve: {
     alias: {
       // Use the ESM build of Apache Arrow
-      'apache-arrow': '@apache-arrow/esnext-esm'
+      'apache-arrow': '@apache-arrow/esnext-esm',
+      // Use minified Plotly bundle to reduce JS size
+      'plotly.js': 'plotly.js-dist-min'
+    }
+  },
+  build: {
+    rollupOptions: {
+      output: {
+        // Split heavy libs like Plotly into a separate chunk for better caching
+        manualChunks(id) {
+          if (id.includes('plotly')) return 'plotly-vendor';
+          if (id.includes('react-plotly')) return 'plotly-react';
+        }
+      }
     }
   },
   server: {
