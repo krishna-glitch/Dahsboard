@@ -35,6 +35,8 @@ import ErrorBoundary from '../components/redox/ErrorBoundary';
 import { log } from '../utils/log';
 import { computePresetWindow } from '../utils/dateRange';
 import { columnarToRows } from '../utils/columnar';
+import { getMonthCache as idbGetMonthCache, setMonthCache as idbSetMonthCache } from '../utils/monthCache';
+import { useQueryClient } from '@tanstack/react-query';
 
 // Unified cancellation detection
 function isRequestCancelled(err) {
@@ -112,6 +114,9 @@ const ModernRedoxAnalysis = () => {
     error: null,
     loadProgress: null,
   });
+  // Debug cache source stats
+  const monthSourceStatsRef = useRef({ mem: 0, rq: 0, idb: 0, net: 0 });
+  const [monthSourceStats, setMonthSourceStats] = useState({ mem: 0, rq: 0, idb: 0, net: 0 });
 
   // Global filter/view state via Zustand store
   const {
@@ -184,7 +189,10 @@ const ModernRedoxAnalysis = () => {
   const [activeWindowStart, setActiveWindowStart] = useState('');
   const [activeWindowEnd, setActiveWindowEnd] = useState('');
   const [primaryYAxis, setPrimaryYAxis] = useState('depth');
-  const [preferArrow, setPreferArrow] = useState(true);
+  // Default to JSON/columnar to leverage server-side caching across refreshes
+  const [preferArrow, setPreferArrow] = useState(false);
+  // React Query client for in-memory month slice caching across route changes
+  const queryClient = useQueryClient();
   const [chartViewMode, setChartViewMode] = useState('by-depth'); // 'by-depth' or 'by-site'
   const [snapshotMode, setSnapshotMode] = useState('profile'); // 'profile' or 'scatter'
   const [vizConfig, setVizConfig] = useState({
@@ -196,7 +204,8 @@ const ModernRedoxAnalysis = () => {
       'Last 1 Year': '2H',
       'Last 2 Years': '1W',
     },
-    chunkRanges: ['Last 90 Days', 'Last 6 Months', 'Last 1 Year', 'Last 2 Years'],
+    // Treat 30d and above as monthly-segmented to warm monthly cache for reuse
+    chunkRanges: ['Last 30 Days', 'Last 90 Days', 'Last 6 Months', 'Last 1 Year', 'Last 2 Years'],
     maxDepthsDefault: 10,
     targetPointsDefault: 5000,
   });
@@ -1019,6 +1028,141 @@ const ModernRedoxAnalysis = () => {
     [preferArrow, maxFidelity, parseArrowBufferToRows]
   );
 
+  // Normalize site identifier to a canonical form for cache keys and requests
+  const normalizeSiteId = useCallback((s) => {
+    if (s == null) return '';
+    try {
+      return String(s).trim().toUpperCase();
+    } catch (_) {
+      return String(s || '');
+    }
+  }, []);
+
+  // Session/IndexedDB backed month-slice cache (persists across refreshes)
+  const MONTH_CACHE_PREFIX = 'redox_month_cache_v1';
+  const MONTH_CACHE_TTL_MS = 30 * 60 * 1000; // 30 minutes
+
+  const makeMonthKey = useCallback((siteId, year, month, resolution, fidelity, maxDepths) => {
+    const y = year.toString().padStart(4, '0');
+    const m = (month + 1).toString().padStart(2, '0'); // 0-based month -> 1-based
+    const res = String(resolution || 'raw');
+    const fid = fidelity ? 'max' : 'std';
+    const md = Number.isFinite(maxDepths) ? String(maxDepths) : 'any';
+    return `${MONTH_CACHE_PREFIX}:${siteId}:${y}-${m}:${res}:${fid}:${md}`;
+  }, []);
+
+  // In-memory page cache to avoid even storage reads between navigations
+  const monthMemoryCacheRef = useRef(new Map());
+
+  const getMonthCache = useCallback(async (key) => {
+    const mem = monthMemoryCacheRef.current.get(key);
+    if (mem) return mem;
+    const qd = queryClient.getQueryData([MONTH_CACHE_PREFIX, key]);
+    if (qd) {
+      monthMemoryCacheRef.current.set(key, qd);
+      monthSourceStatsRef.current.rq += 1;
+      return qd;
+    }
+    const idb = await idbGetMonthCache(key, MONTH_CACHE_TTL_MS, true);
+    if (idb) {
+      monthMemoryCacheRef.current.set(key, idb);
+      queryClient.setQueryData([MONTH_CACHE_PREFIX, key], idb);
+      monthSourceStatsRef.current.idb += 1;
+      return idb;
+    }
+    return null;
+  }, [queryClient]);
+
+  const setMonthCache = useCallback(async (key, payload) => {
+    try {
+      monthMemoryCacheRef.current.set(key, payload);
+      queryClient.setQueryData([MONTH_CACHE_PREFIX, key], payload);
+      await idbSetMonthCache(key, payload, MONTH_CACHE_TTL_MS, true);
+    } catch (_) {}
+  }, [queryClient]);
+
+  // Build monthly windows between a start and end ISO timestamp (inclusive)
+  const buildMonthlyWindows = useCallback((startIso, endIso) => {
+    try {
+      if (!startIso || !endIso) return [];
+      const start = new Date(startIso);
+      const end = new Date(endIso);
+      if (isNaN(start.getTime()) || isNaN(end.getTime())) return [];
+
+      let y = start.getUTCFullYear();
+      let m = start.getUTCMonth();
+      const lastY = end.getUTCFullYear();
+      const lastM = end.getUTCMonth();
+      const out = [];
+      while (y < lastY || (y === lastY && m <= lastM)) {
+        const monthStart = new Date(Date.UTC(y, m, 1, 0, 0, 0, 0));
+        const monthEnd = new Date(Date.UTC(y, m + 1, 0, 23, 59, 59, 999));
+        // Always use full month window for stable keys
+        out.push({ start: monthStart.toISOString(), end: monthEnd.toISOString(), year: y, month: m });
+        m += 1;
+        if (m > 11) { m = 0; y += 1; }
+      }
+      return out;
+    } catch (e) {
+      log.warn('[MONTHLY] buildMonthlyWindows failed', e);
+      return [];
+    }
+  }, []);
+
+  // Fetch a site's data as monthly slices and merge to a single array, filtered to exact window
+  const fetchMonthlyForSite = useCallback(async (site, startTsIso, endTsIso, suggestedResolution, maxDepths, targetPoints, controller, useMaxFidelity) => {
+    const windows = buildMonthlyWindows(startTsIso, endTsIso);
+    const merged = [];
+    const MONTH_FETCH_CONCURRENCY = 6;
+    const siteNorm = normalizeSiteId(site);
+
+    for (let i = 0; i < windows.length; i += MONTH_FETCH_CONCURRENCY) {
+      checkAbort(controller.signal);
+      const slice = windows.slice(i, i + MONTH_FETCH_CONCURRENCY);
+      const batch = slice.map(async (w) => {
+        const monthKey = makeMonthKey(siteNorm, w.year, w.month, suggestedResolution, useMaxFidelity, maxDepths);
+        const cached = await getMonthCache(monthKey);
+        if (cached && Array.isArray(cached)) {
+          for (const row of cached) merged.push({ ...row, site_code: siteNorm });
+          return;
+        }
+        try {
+          const res = await getProcessedEhTimeSeries({
+            siteId: siteNorm,
+            startTs: w.start,
+            endTs: w.end,
+            resolution: suggestedResolution,
+            maxDepths,
+            maxFidelity: useMaxFidelity || undefined,
+            ...(targetPoints ? { targetPoints } : {}),
+          }, controller.signal);
+          let arr = res?.data || res?.redox_data || [];
+          if ((!arr || arr.length === 0) && res?.data_columnar) {
+            arr = columnarToRows(res.data_columnar, siteNorm);
+          }
+          // Persist month slice
+          if (Array.isArray(arr) && arr.length) {
+            await setMonthCache(monthKey, arr);
+          }
+          monthSourceStatsRef.current.net += 1;
+          for (const row of (arr || [])) merged.push({ ...row, site_code: siteNorm });
+        } catch (e) {
+          if (isRequestCancelled(e)) throw e;
+          log.warn('[MONTHLY] slice fetch failed', { site: siteNorm, window: w, error: e?.message });
+        }
+      });
+      await Promise.all(batch);
+    }
+    // strict filter to requested range
+    const minMs = new Date(startTsIso).getTime();
+    const maxMs = new Date(endTsIso).getTime();
+    const filtered = merged.filter(r => {
+      const t = r?.measurement_timestamp ? new Date(r.measurement_timestamp).getTime() : NaN;
+      return Number.isFinite(t) && t >= minMs && t <= maxMs;
+    });
+    return { data: filtered, metadata: { site_code: siteNorm, months: windows.length } };
+  }, [buildMonthlyWindows, normalizeSiteId, makeMonthKey, getMonthCache, setMonthCache]);
+
   // Smart data compatibility checking for fidelity reuse
   const checkDataCompatibility = useCallback((newFetchKey, existingData) => {
     if (!existingData || !newFetchKey || !lastFetchKeyRef.current) {
@@ -1326,6 +1470,8 @@ const ModernRedoxAnalysis = () => {
       dispatch({ type: 'START_FETCH' });
 
       const { startTsIso, endTsIso } = await determineDateWindow(controller);
+      // Reset debug counters
+      monthSourceStatsRef.current = { mem: 0, rq: 0, idb: 0, net: 0 };
 
       log.debug('[FETCH] Building API promises for view:', selectedView);
       const promises = [];
@@ -1343,8 +1489,8 @@ const ModernRedoxAnalysis = () => {
       if (selectedView === 'timeseries' || selectedView === 'rolling' || selectedView === 'details') {
         log.debug('Creating promises for time series/rolling/details view');
         const useMaxFidelity = maxFidelity; // Raw = High cadence (96/day)
-        // Enforce explicit cadence: 12/day when OFF, 96/day when ON. Always fixed 6 depths.
-        const suggestedResolution = useMaxFidelity ? null : '2H';
+        // Use per-range resolution mapping for stable cache keys when not at max fidelity
+        const suggestedResolution = useMaxFidelity ? null : (vizConfig?.resolutionByRange?.[timeRange] || '2H');
         const maxDepths = 6;
         // Let backend choose available depths up to maxDepths; do not hard-filter depths client-side
         const allowedDepths = null;
@@ -1448,53 +1594,20 @@ const ModernRedoxAnalysis = () => {
             promises.push(getProcessedEhRollingMean({ siteId: s, startTs: startTsIso, endTs: endTsIso }, controller.signal));
           }
         } else {
-          log.info('Using chunked loading with in-page progress');
-          const perSite = Object.fromEntries(siteIds.map((s) => [s, { loaded: 0, total: null }]));
-          let lastUpdateTs = 0;
-          const updateProgressToast = () => {
-            if (!isMountedRef.current || currentFetchIdRef.current !== fetchId) return;
-            const now = Date.now();
-            if (now - lastUpdateTs < PROGRESS_UPDATE_THROTTLE_MS) return;
-            lastUpdateTs = now;
-            const totals = siteIds.reduce(
-              (acc, s) => {
-                acc.loaded += perSite[s].loaded || 0;
-                acc.total += perSite[s].total || 0;
-                return acc;
-              },
-              { loaded: 0, total: 0 }
-            );
-            const expected = totals.total && totals.total < totals.loaded ? totals.loaded : totals.total || null;
-            dispatch({
-              type: 'SET_PROGRESS',
-              payload: {
-                mode: 'chunk',
-                perSite: { ...perSite },
-                totalLoaded: totals.loaded,
-                totalExpected: expected,
-                sites: siteIds,
-                windowStart: startTsIso,
-                windowEnd: endTsIso,
-              },
-            });
-          };
-
-          const resultsAcc = [];
-          for (let i = 0; i < siteIds.length; i += CHUNK_CONCURRENCY) {
-            const batch = siteIds.slice(i, i + CHUNK_CONCURRENCY).map((s) =>
-              loadAllChunksForSite(s, startTsIso, endTsIso, chunkSize, suggestedResolution, maxDepths, targetPoints, controller, perSite, updateProgressToast)
+          // Monthly segmentation mode for large ranges: fetch month-sliced data per site using JSON columnar (server-cached)
+          log.info('[MONTHLY] Using monthly segmentation for large range');
+          const MONTH_CONCURRENCY = 4; // limit site-level concurrency
+          for (let i = 0; i < siteIds.length; i += MONTH_CONCURRENCY) {
+            const batchSites = siteIds.slice(i, i + MONTH_CONCURRENCY);
+            const batch = batchSites.map((s) =>
+              fetchMonthlyForSite(s, startTsIso, endTsIso, suggestedResolution, maxDepths, targetPoints, controller, useMaxFidelity)
             );
             const batchResults = await Promise.all(batch);
             checkAbort(controller.signal);
-            resultsAcc.push(...batchResults);
+            for (const r of batchResults) {
+              promises.push(Promise.resolve({ data: r.data, metadata: { ...r.metadata, chunked: false } }));
+            }
           }
-          const chunkResults = resultsAcc;
-
-          chunkResults.forEach(({ data: siteData, allowed: allowedLocal, metadata }) => {
-            promises.push(Promise.resolve({ data: siteData, metadata: { ...metadata, allowed_inversions: allowedLocal } }));
-          });
-
-          dispatch({ type: 'SET_PROGRESS', payload: null });
         }
       } else if (selectedView === 'snapshot') {
         log.debug('Creating promises for snapshot view');
@@ -1521,6 +1634,7 @@ const ModernRedoxAnalysis = () => {
       }
 
       processResults(results, siteIds, t0, startTsIso, endTsIso, fetchId, toast);
+      setMonthSourceStats({ ...monthSourceStatsRef.current });
 
       lastFetchKeyRef.current = fetchKey;
       log.debug('Data set successfully, marking fetchKey:', fetchKey);
@@ -1743,6 +1857,11 @@ const ModernRedoxAnalysis = () => {
         <div>
           <h1 className="dashboard-title">Redox Analysis</h1>
           <p className="dashboard-subtitle">{subtitleText}</p>
+          <div style={{ display: 'flex', gap: 8, alignItems: 'center', marginTop: 4 }}>
+            <span style={{ fontSize: '0.8rem', color: '#6c757d' }}>
+              Cache: mem {monthSourceStats.mem} · rq {monthSourceStats.rq} · idb {monthSourceStats.idb} · net {monthSourceStats.net}
+            </span>
+          </div>
           <p style={{ color: '#6c757d', margin: 0, fontSize: '0.85rem' }}>Tip: Use the Y1/Y2 toggle to swap Depth and Redox axes.</p>
         </div>
         <div style={{ display: 'flex', gap: '0.75rem', alignItems: 'center' }}>

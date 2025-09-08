@@ -28,7 +28,18 @@ const RollingSmallMultiples = React.memo(function RollingSmallMultiples({ data, 
     title: { text: `<b>${depth} cm</b>`, x: 0.5, y: 0.98, xanchor: 'center', font: { size: 12 } },
     xaxis: { title: { text: 'Date' }, type: 'date', automargin: true },
     yaxis: { title: { text: 'Eh 24h mean (mV)' }, automargin: true, autorange: invertRollingY ? 'reversed' : true },
-    showlegend: depthIndex === 0,
+    showlegend: true,
+    legend: {
+      x: 1.02,
+      y: 1,
+      xanchor: 'left',
+      yanchor: 'top',
+      bgcolor: 'rgba(255,255,255,0.85)',
+      bordercolor: '#dee2e6',
+      borderwidth: 1,
+      font: { size: 12 },
+      itemsizing: 'constant'
+    },
     hovermode: 'closest',
     plot_bgcolor: 'rgba(0,0,0,0)',
     paper_bgcolor: 'rgba(0,0,0,0)'
@@ -66,11 +77,11 @@ const RollingSmallMultiples = React.memo(function RollingSmallMultiples({ data, 
                     y: [], 
                     name: site, 
                     type: useGL ? 'scattergl' : 'scatter', 
-                    mode: chartType === 'line' ? 'lines' : 'markers',
-                    line: { width: 2, color: siteColor, dash: siteDashes[site] || 'solid' },
-                    marker: { color: siteColor, size: 5, symbol: siteMarkers[site] || 'circle' },
+                    mode: chartType === 'line' ? 'lines+markers' : 'markers',
+                    line: { width: 3, color: siteColor, dash: siteDashes[site] || 'solid' },
+                    marker: { color: siteColor, size: 7, symbol: siteMarkers[site] || 'circle' },
                     hovertemplate: '<b>Site %{fullData.name}</b><br>%{x|%Y-%m-%d %H:%M}<br>Eh 24h mean: %{y:.2f} mV<extra></extra>',
-                    showlegend: depthIndex === 0
+                    showlegend: true
                   });
                 }
                 const s = bySite.get(site);

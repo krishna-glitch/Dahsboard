@@ -1,6 +1,8 @@
 import React, { useState, useEffect, useCallback, Suspense } from 'react';
 import { Routes, Route, Link, useLocation } from 'react-router-dom';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
+import { persistQueryClient } from '@tanstack/query-persist-client-core';
+import { createSyncStoragePersister } from '@tanstack/query-sync-storage-persister';
 import { AuthProvider } from './contexts/AuthContext';
 import { useAuth } from './contexts/authUtils';
 import { ErrorBoundary, ProtectedRoute } from './components';
@@ -256,8 +258,9 @@ function AppContent() {
 const queryClient = new QueryClient({
   defaultOptions: {
     queries: {
-      staleTime: 5 * 60 * 1000, // 5 minutes
-      gcTime: 10 * 60 * 1000, // 10 minutes (was cacheTime)
+      // Increase TTLs so month slices persist longer in memory
+      staleTime: 15 * 60 * 1000, // 15 minutes
+      gcTime: 60 * 60 * 1000, // 60 minutes
       retry: 1,
       refetchOnWindowFocus: false,
       refetchOnMount: false,
@@ -265,6 +268,18 @@ const queryClient = new QueryClient({
     },
   },
 });
+
+// Persist React Query cache across reloads using sessionStorage
+if (typeof window !== 'undefined' && window.sessionStorage) {
+  const persister = createSyncStoragePersister({ storage: window.sessionStorage });
+  // Max age aligns with server-side TTL for processed endpoints (12h)
+  persistQueryClient({
+    queryClient,
+    persister,
+    maxAge: 12 * 60 * 60 * 1000,
+    buster: 'rq-cache-v1',
+  });
+}
 
 function App() {
   return (

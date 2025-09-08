@@ -328,7 +328,7 @@ def get_redox_date_range():
 # New endpoints backed by mv_processed_eh
 @redox_analysis_bp.route('/processed/time_series', methods=['GET'])
 @enterprise_performance(data_type='redox_processed_time_series')
-@cached_api_response(ttl=900)  # Re-enable caching for performance
+@cached_api_response(ttl=43200)  # 12 hours for better monthly reuse
 def processed_time_series():
     """Dual-axis time series from mv_processed_eh.
 
@@ -548,7 +548,7 @@ def processed_time_series():
 
 @redox_analysis_bp.route('/processed/depth_snapshot', methods=['GET'])
 @enterprise_performance(data_type='redox_processed_depth_snapshot')
-@cached_api_response(ttl=900)  # Re-enable caching for performance
+@cached_api_response(ttl=43200)  # 12 hours for better monthly reuse
 def processed_depth_snapshot():
     """Depth profile snapshot (Eh vs Depth) from mv_processed_eh.
 
@@ -578,7 +578,7 @@ def processed_depth_snapshot():
 
 @redox_analysis_bp.route('/processed/rolling_mean', methods=['GET'])
 @enterprise_performance(data_type='redox_processed_rolling_mean')
-@cached_api_response(ttl=900)  # Re-enable caching for performance
+@cached_api_response(ttl=43200)  # 12 hours for better monthly reuse
 def processed_rolling_mean():
     """High-performance rolling mean using dedicated Polars/Pandas service.
     

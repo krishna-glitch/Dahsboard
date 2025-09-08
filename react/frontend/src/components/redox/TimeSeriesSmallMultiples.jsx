@@ -57,7 +57,18 @@ const TimeSeriesSmallMultiples = React.memo(function TimeSeriesSmallMultiples({ 
     title: null, // Remove duplicate title since we have custom header
     xaxis: { title: { text: 'Date' }, type: 'date', automargin: true },
     yaxis: { title: { text: 'Eh (mV)' }, automargin: true, autorange: invertSeriesY ? 'reversed' : true },
-    showlegend: depthIndex === 0,
+    showlegend: true,
+    legend: {
+      x: 1.02,
+      y: 1,
+      xanchor: 'left',
+      yanchor: 'top',
+      bgcolor: 'rgba(255,255,255,0.85)',
+      bordercolor: '#dee2e6',
+      borderwidth: 1,
+      font: { size: 12 },
+      itemsizing: 'constant'
+    },
     hovermode: 'closest',
     plot_bgcolor: 'rgba(0,0,0,0)',
     paper_bgcolor: 'rgba(0,0,0,0)'
@@ -190,16 +201,16 @@ const TimeSeriesSmallMultiples = React.memo(function TimeSeriesSmallMultiples({ 
                     y: [], 
                     name: site, 
                     type: useGL ? 'scattergl' : 'scatter', 
-                    mode: chartType === 'line' ? (useGL ? 'markers' : 'lines') : 'markers', // WebGL doesn't support lines well
-                    line: useGL ? undefined : { width: 1, color: siteColor, dash: siteDashes[site] || 'solid' },
+                    mode: chartType === 'line' ? (useGL ? 'markers' : 'lines+markers') : 'markers',
+                    line: useGL ? undefined : { width: 2, color: siteColor, dash: siteDashes[site] || 'solid' },
                     marker: { 
                       color: siteColor, 
-                      size: useGL ? 2 : 4, // Smaller markers for WebGL performance
+                      size: useGL ? 3 : 6,
                       symbol: siteMarkers[site] || 'circle',
                       opacity: useGL ? 0.6 : 1 // Lower opacity for dense data
                     },
                     hovertemplate: useGL ? undefined : '<b>Site %{fullData.name}</b><br>%{x|%Y-%m-%d %H:%M}<br>Eh: %{y:.2f} mV<extra></extra>', // Disable hover for WebGL performance
-                    showlegend: depthIndex === 0
+                    showlegend: true
                   });
                   dataStats.set(site, { count: 0, timestamps: new Set(), ehValues: new Set() });
                 }

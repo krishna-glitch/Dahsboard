@@ -69,16 +69,18 @@ const TimeSeriesBySite = React.memo(function TimeSeriesBySite({
       automargin: true, 
       autorange: invertSeriesY ? 'reversed' : true 
     },
-    showlegend: siteIndex === 0, // Only show legend on first chart
-    legend: siteIndex === 0 ? {
+    showlegend: true,
+    legend: {
       x: 1.02,
       y: 1,
       xanchor: 'left',
       yanchor: 'top',
-      bgcolor: 'rgba(255,255,255,0.8)',
+      bgcolor: 'rgba(255,255,255,0.85)',
       bordercolor: '#dee2e6',
-      borderwidth: 1
-    } : undefined,
+      borderwidth: 1,
+      font: { size: 12 },
+      itemsizing: 'constant'
+    },
     hovermode: 'closest',
     plot_bgcolor: 'rgba(0,0,0,0)',
     paper_bgcolor: 'rgba(0,0,0,0)'
@@ -209,19 +211,19 @@ const TimeSeriesBySite = React.memo(function TimeSeriesBySite({
                     y: depthData.y,
                     name: `${depth}cm`,
                     type: useGL ? 'scattergl' : 'scatter',
-                    mode: chartType === 'line' ? (useGL ? 'markers' : 'lines') : 'markers', // WebGL doesn't support lines well
+                    mode: chartType === 'line' ? (useGL ? 'markers' : 'lines+markers') : 'markers',
                     line: useGL ? undefined : { 
-                      width: 1, 
+                      width: 2, 
                       color: depthColor
                     },
                     marker: { 
                       color: depthColor, 
-                      size: useGL ? 2 : (chartType === 'scatter' ? 6 : 4),
+                      size: useGL ? 3 : (chartType === 'scatter' ? 8 : 6),
                       opacity: useGL ? 0.6 : 1,
                       symbol: 'circle'
                     },
                     hovertemplate: `<b>${site} - %{fullData.name}</b><br>%{x|%Y-%m-%d %H:%M}<br>Eh: %{y:.2f} mV<extra></extra>`,
-                    showlegend: siteIndex === 0 // Only show legend on first chart
+                    showlegend: true
                   });
                 });
                 
