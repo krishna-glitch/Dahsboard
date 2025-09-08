@@ -61,8 +61,8 @@ const Login = () => {
               <i className="bi bi-droplet-half"></i>
             </div>
             <div className="brand-text">
-              <h2>Water Quality</h2>
-              <p>Insights that flow</p>
+              <h2>Environmental Monitoring System</h2>
+              <p>Welcome</p>
             </div>
           </div>
           {/* Decorative, lightweight animation (CSS only) */}

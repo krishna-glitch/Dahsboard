@@ -826,7 +826,7 @@ const ModernRedoxAnalysis = () => {
       return { startTsIso, endTsIso };
     }
 
-    // Preset ranges: compute relative to "today"; use available range only for UI hints
+    // Preset ranges: anchor the window to the latest available data for the selected sites, falling back to today
     checkAbort(controller.signal);
     const daysMap = {
       'Last 7 Days': 7,
@@ -837,8 +837,24 @@ const ModernRedoxAnalysis = () => {
       'Last 2 Years': 730,
     };
     const presetDays = daysMap[timeRange];
-    const now = new Date();
-    const endUtc = new Date(now.toISOString()); // keep as ISO in UTC
+
+    // Ensure we have date bounds; prefer cached range to avoid extra request
+    let range = cachedDateRange;
+    if (!range) {
+      try {
+        log.debug('[FETCH] Cache miss, calling getRedoxDateRange for sites:', selectedSites);
+        range = await getRedoxDateRange(selectedSites, controller.signal);
+      } catch (e) {
+        log.warn('[FETCH] Failed to load available date bounds (will anchor to today):', e);
+      }
+    }
+
+    const latestIso = range?.latest_date || new Date().toISOString();
+    const earliestIso = range?.earliest_date || null;
+    if (earliestIso) setAvailableMinDate(earliestIso);
+    if (latestIso) setAvailableMaxDate(latestIso);
+
+    const endUtc = new Date(latestIso); // anchor to latest available (or today)
     if (presetDays) {
       const startUtc = new Date(Date.UTC(
         endUtc.getUTCFullYear(),
@@ -855,24 +871,9 @@ const ModernRedoxAnalysis = () => {
       endTsIso = endUtc.toISOString();
     }
 
-    // Load available bounds for UI min/max hints (does not affect query window)
-    try {
-      let range = cachedDateRange;
-      if (!range) {
-        log.debug('[FETCH] Cache miss, calling getRedoxDateRange for sites:', selectedSites);
-        range = await getRedoxDateRange(selectedSites, controller.signal);
-      }
-      const earliest = range?.earliest_date;
-      const latest = range?.latest_date;
-      if (earliest) setAvailableMinDate(earliest);
-      if (latest) setAvailableMaxDate(latest);
-    } catch (e) {
-      log.warn('[FETCH] Failed to load available date bounds:', e);
-    }
-
     setActiveWindowStart(startTsIso);
     setActiveWindowEnd(endTsIso);
-    log.info('[FETCH] preset=%s using today-relative window => startTsIso=%s endTsIso=%s', timeRange, startTsIso, endTsIso);
+    log.info('[FETCH] preset=%s anchored to latest=%s => startTsIso=%s endTsIso=%s', timeRange, latestIso, startTsIso, endTsIso);
     return { startTsIso, endTsIso };
   }, [selectedSites, timeRange, startDate, endDate, cachedDateRange]);
 

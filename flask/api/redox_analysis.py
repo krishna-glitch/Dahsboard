@@ -104,7 +104,7 @@ def _intelligent_downsample_redox(df: pd.DataFrame, target_size: int = 5000) -> 
 @redox_analysis_bp.route('/data', methods=['GET'])
 # @login_required  # Temporarily disabled for testing
 @enterprise_performance(data_type='redox_analysis')
-@cached_api_response(ttl=1800)  # Site-aware caching that preserves filtering - 30 minutes
+@cached_api_response(ttl=43200)  # Site-aware caching that preserves filtering - 12 hours
 def get_redox_analysis_data():
     start_time = time.time()
     logger.info(f"[REDOX DEBUG] API data loading triggered.")

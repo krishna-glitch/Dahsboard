@@ -15,6 +15,13 @@ export function computeMetricsInline(data, selectedSites = []) {
     };
   }
 
+  // Debug: Log first few records to understand data structure
+  if (data.length > 0) {
+    console.debug('[REDOX METRICS DEBUG] Sample data record:', data[0]);
+    console.debug('[REDOX METRICS DEBUG] Available fields:', Object.keys(data[0] || {}));
+    console.debug('[REDOX METRICS DEBUG] Selected sites:', selectedSites);
+  }
+
   // Overall metrics
   let count = data.length, valid = 0, min = Infinity, max = -Infinity, sum = 0;
   
@@ -23,9 +30,14 @@ export function computeMetricsInline(data, selectedSites = []) {
   
   for (let i = 0; i < data.length; i++) {
     const d = data[i];
-    const vRaw = d?.processed_eh != null ? d.processed_eh : d?.redox_value_mv;
+    // Check multiple possible redox value field names
+    const vRaw = d?.processed_eh != null ? d.processed_eh : 
+                 d?.redox_value_mv != null ? d.redox_value_mv :
+                 d?.redox_mv != null ? d.redox_mv : 
+                 d?.eh_mv != null ? d.eh_mv : null;
     const v = vRaw == null ? NaN : Number(vRaw);
-    const siteCode = d?.site_code || d?.site_id;
+    // Check multiple possible site identifier field names
+    const siteCode = d?.site_code || d?.site_id || d?.code;
     
     // Initialize site data if not exists
     if (siteCode && !bySite.has(siteCode)) {
@@ -58,6 +70,11 @@ export function computeMetricsInline(data, selectedSites = []) {
       sum += v;
     }
   }
+
+  // Debug: Log what sites were found in the data
+  console.debug('[REDOX METRICS DEBUG] Sites found in data:', Array.from(bySite.keys()));
+  console.debug('[REDOX METRICS DEBUG] Site data summary:', 
+    Array.from(bySite.entries()).map(([site, data]) => ({ site, validCount: data.validCount, totalCount: data.count })));
 
   // Calculate per-site metrics using precomputed streaming values
   const siteBreakdown = { redoxRange: [], avgRedox: [] };
