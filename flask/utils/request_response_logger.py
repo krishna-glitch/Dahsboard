@@ -12,9 +12,12 @@ def setup_flask_request_logging(app: Flask):
     
     @app.before_request
     def log_request_info():
-        logger.info(f"Request: {request.method} {request.url}")
+        # Reduce log verbosity in production
+        level = logging.INFO if app.debug else logging.DEBUG
+        logger.log(level, f"Request: {request.method} {request.path}")
     
     @app.after_request
     def log_response_info(response):
-        logger.info(f"Response: {response.status_code}")
+        level = logging.INFO if app.debug else logging.DEBUG
+        logger.log(level, f"Response: {response.status_code} {request.path}")
         return response

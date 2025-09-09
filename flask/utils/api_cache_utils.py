@@ -6,13 +6,42 @@ Creates proper cache keys that include site parameters to prevent filtering issu
 import hashlib
 import json
 from functools import wraps
-from flask import request
+from flask import request, jsonify
 from services.consolidated_cache_service import cache_service
 from utils.data_compressor import compressor
 from flask import Response as FlaskResponse
 import logging
 
 logger = logging.getLogger(__name__)
+
+def _compute_etag(obj: dict) -> str:
+    """Compute a strong ETag for a JSON-serializable object."""
+    try:
+        payload = json.dumps(obj, sort_keys=True, separators=(",", ":")).encode("utf-8")
+        return '"' + hashlib.md5(payload).hexdigest() + '"'  # quoted per RFC
+    except Exception:
+        # Fallback: hash of string repr
+        return '"' + hashlib.md5(str(obj).encode("utf-8")).hexdigest() + '"'
+
+def _if_none_match_matches(etag: str) -> bool:
+    """Check If-None-Match header for a matching ETag.
+    Supports simple comma-separated list and weak validators.
+    """
+    inm = request.headers.get('If-None-Match')
+    if not inm:
+        return False
+    try:
+        # Split comma-separated ETags, strip whitespace/quotes, ignore weak prefix W/
+        candidates = []
+        for token in inm.split(','):
+            t = token.strip()
+            if t.startswith('W/'):  # weak validator
+                t = t[2:].strip()
+            candidates.append(t)
+        # Our etag is quoted; compare raw tokens
+        return etag in candidates or etag.strip('"') in [c.strip('"') for c in candidates]
+    except Exception:
+        return False
 
 def generate_api_cache_key(endpoint_name: str, **kwargs) -> str:
     """
@@ -134,13 +163,28 @@ def cached_api_response(ttl: int = 900):
             # Try hierarchical cache lookup
             cached_result, cache_type = get_compatible_cached_data(cache_key, requested_fidelity)
             if cached_result is not None:
+                etag = _compute_etag(cached_result)
+                if _if_none_match_matches(etag):
+                    resp_304 = FlaskResponse(status=304)
+                    resp_304.headers['ETag'] = etag
+                    resp_304.headers['Cache-Control'] = f'public, max-age={ttl}'
+                    resp_304.headers['X-Cache'] = 'HIT-304'
+                    return resp_304
                 if cache_type == 'max_for_std':
                     logger.info(f"🚀 [FIDELITY CACHE HIT] Serving {endpoint_name} from max fidelity cache for std request")
-                    # TODO: Apply server-side filtering here if needed for data size optimization
-                    return cached_result
+                    # Return JSON with cache headers
+                    resp = jsonify(cached_result)
+                    resp.headers['Cache-Control'] = f'public, max-age={ttl}'
+                    resp.headers['X-Cache'] = 'HIT(max_fidelity)'
+                    resp.headers['ETag'] = etag
+                    return resp
                 else:
                     logger.info(f"🚀 [CACHE HIT] Serving {endpoint_name} from cache")
-                    return cached_result
+                    resp = jsonify(cached_result)
+                    resp.headers['Cache-Control'] = f'public, max-age={ttl}'
+                    resp.headers['X-Cache'] = 'HIT'
+                    resp.headers['ETag'] = etag
+                    return resp
             
             # Execute function
             logger.info(f"🔄 [CACHE MISS] Executing {endpoint_name}")
@@ -187,7 +231,28 @@ def cached_api_response(ttl: int = 900):
                 cache_service.set(cache_key, json_payload, ttl)
                 logger.info(f"💾 [CACHED] Stored {endpoint_name} result for {ttl}s (fidelity: {requested_fidelity}) - uncompressed")
 
-            return result
+            # Return JSON with cache headers on MISS as well (with ETag and 304 handling)
+            try:
+                # If original result is a tuple (resp, status), try to preserve status code when possible
+                status_code = None
+                if isinstance(result, tuple) and len(result) >= 2 and isinstance(result[1], int):
+                    status_code = result[1]
+                etag = _compute_etag(json_payload)
+                if _if_none_match_matches(etag):
+                    resp_304 = FlaskResponse(status=304)
+                    resp_304.headers['ETag'] = etag
+                    resp_304.headers['Cache-Control'] = f'public, max-age={ttl}'
+                    resp_304.headers['X-Cache'] = 'MISS-304'
+                    return resp_304
+                resp = jsonify(json_payload)
+                resp.headers['Cache-Control'] = f'public, max-age={ttl}'
+                resp.headers['X-Cache'] = 'MISS'
+                resp.headers['ETag'] = etag
+                if status_code:
+                    resp.status_code = status_code
+                return resp
+            except Exception:
+                return result
         
         return wrapper
     return decorator
