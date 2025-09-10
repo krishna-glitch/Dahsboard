@@ -130,51 +130,7 @@ const ModernAbout = () => {
           </div>
         </div>
 
-        {/* Technology Section */}
-        <div className="technology-section">
-          <h2 className="section-title">Technology Stack</h2>
-          <div className="tech-stack-grid">
-            <div className="tech-item">
-              <div className="tech-icon frontend">
-                <i className="bi bi-layers"></i>
-              </div>
-              <div className="tech-content">
-                <h4 className="tech-name">Frontend</h4>
-                <p className="tech-description">React 18, Modern CSS Grid, Design System Tokens</p>
-              </div>
-            </div>
-
-            <div className="tech-item">
-              <div className="tech-icon backend">
-                <i className="bi bi-server"></i>
-              </div>
-              <div className="tech-content">
-                <h4 className="tech-name">Backend</h4>
-                <p className="tech-description">Flask REST API, Advanced Caching, Performance Optimization</p>
-              </div>
-            </div>
-
-            <div className="tech-item">
-              <div className="tech-icon visualization">
-                <i className="bi bi-graph-up-arrow"></i>
-              </div>
-              <div className="tech-content">
-                <h4 className="tech-name">Visualization</h4>
-                <p className="tech-description">Plotly.js, Interactive Charts, Real-time Data Streaming</p>
-              </div>
-            </div>
-
-            <div className="tech-item">
-              <div className="tech-icon security">
-                <i className="bi bi-shield-check"></i>
-              </div>
-              <div className="tech-content">
-                <h4 className="tech-name">Security</h4>
-                <p className="tech-description">Authentication, Protected Routes, Data Validation</p>
-              </div>
-            </div>
-          </div>
-        </div>
+        {/* Technology Section removed per request */}
 
         {/* Contact Section */}
         <div className="contact-section">

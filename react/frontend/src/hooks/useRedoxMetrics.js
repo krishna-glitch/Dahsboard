@@ -173,8 +173,7 @@ export function useRedoxMetrics(data, selectedSites = []) {
       setMetrics(computeMetricsInline(data, selectedSites));
     }
     return () => { cancelled = true; };
-  }, [Array.isArray(data) ? data.length : 0, selectedSites?.join?.(',')]);
+  }, [data, selectedSites?.join?.(',')]);
 
   return metrics;
 }
-

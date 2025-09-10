@@ -40,6 +40,7 @@ const ModernSiteComparison = () => {
   const [seriesError, setSeriesError] = useState(null);
   // Removed separate export format state; using ExportButton only
   const [chartViewMode, setChartViewMode] = useState('overlay'); // 'overlay' or 'per-site'
+  const [chartType, setChartType] = useState('line'); // 'line' | 'scatter'
   
   // NEW: Analysis mode state
   const [analysisMode, setAnalysisMode] = useState('concurrent'); // 'concurrent' or 'full_period'
@@ -341,7 +342,7 @@ const ModernSiteComparison = () => {
             x: series.x,
             y: series.y,
             type: 'scatter',
-            mode: 'lines',
+            mode: chartType === 'line' ? 'lines' : 'markers',
             name: sitesLookup.get(sid)?.name || sid,
             line: { color: colors[sid] || colors.Unknown || '#6c757d', width: 2 },
           }));
@@ -392,7 +393,7 @@ const ModernSiteComparison = () => {
             x: series.x,
             y: series.y,
             type: 'scatter',
-            mode: 'lines',
+            mode: chartType === 'line' ? 'lines' : 'markers',
             name: `${sitesLookup.get(sid)?.name || sid}`,
             line: { color: colors[sid] || colors.Unknown || '#6c757d', width: 2 },
           }));
@@ -407,7 +408,7 @@ const ModernSiteComparison = () => {
     };
     build();
     return () => { aborted = true; };
-  }, [metaStart, metaEnd, selectedSites, selectedMetric, selectedDepth, availableSites, sitesLookup]);
+  }, [metaStart, metaEnd, selectedSites, selectedMetric, selectedDepth, availableSites, sitesLookup, chartType]);
 
   // Previous-period comparison removed
 
@@ -431,6 +432,10 @@ const ModernSiteComparison = () => {
     setChartViewMode(e.target.value);
   }, []);
 
+  const handleChartTypeChange = useCallback((e) => {
+    setChartType(e.target.value);
+  }, []);
+
   // Transform series traces for per-site view (memoized for performance)
   const perSiteChartData = useMemo(() => {
     if (chartViewMode !== 'per-site' || !seriesTraces.length) return [];
@@ -446,7 +451,7 @@ const ModernSiteComparison = () => {
           y: trace.y,
           name: selectedMetric === 'redox' ? 'Redox (Eh)' : selectedMetricInfo?.name || 'Value',
           type: trace.type || 'scatter',
-          mode: 'lines+markers',
+          mode: chartType === 'line' ? 'lines' : 'markers',
           line: { width: 2, color: SITE_COLORS[siteName] || trace.line?.color || '#1f77b4' },
           marker: { size: 4, color: SITE_COLORS[siteName] || trace.marker?.color || '#1f77b4' }
         });
@@ -457,7 +462,7 @@ const ModernSiteComparison = () => {
       siteName,
       data: [traceData]
     }));
-  }, [seriesTraces, chartViewMode, selectedMetric, selectedMetricInfo]);
+  }, [seriesTraces, chartViewMode, selectedMetric, selectedMetricInfo, chartType]);
 
   // Threshold bands for current metric
   const thresholdShapes = useMemo(() => {
@@ -700,7 +705,15 @@ const ModernSiteComparison = () => {
               </div>
             )}
           </div>
-          
+
+          <div className="control-group">
+            <label className="control-label">Chart Type</label>
+            <select className="control-select" value={chartType} onChange={handleChartTypeChange}>
+              <option value="line">Line</option>
+              <option value="scatter">Scatter</option>
+            </select>
+          </div>
+
           <div className="control-group">
             <label className="control-label">Time Range</label>
             <select 

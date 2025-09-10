@@ -11,6 +11,22 @@ const RedoxMetrics = React.memo(function RedoxMetrics({ metrics, selectedSites =
     breakdown: { redoxRange: [], avgRedox: [] }
   };
 
+  // Prefer selectedSites, but if none of them have data (e.g., only S3 loaded),
+  // fall back to sites detected in metric breakdown to avoid showing "No Data".
+  const breakdownSites = Array.from(new Set([
+    ...(m.breakdown?.avgRedox || []).map(x => x.site),
+    ...(m.breakdown?.redoxRange || []).map(x => x.site),
+  ].filter(Boolean)));
+  const hasDataForSite = (sc) => {
+    const item = (m.breakdown?.avgRedox || []).find(x => x.site === sc);
+    return !!(item && item.count > 0 && Number.isFinite(item.avg));
+  };
+  const selectedHasAnyData = Array.isArray(selectedSites) && selectedSites.some(hasDataForSite);
+  // Display logic: if selected sites include any with data, use them; otherwise fall back to detected sites
+  const displaySites = selectedHasAnyData
+    ? selectedSites
+    : (breakdownSites.length > 0 ? breakdownSites : (Array.isArray(selectedSites) ? selectedSites : []));
+
   return (
     <div className="metrics-grid">
       <MetricCard
@@ -32,7 +48,7 @@ const RedoxMetrics = React.memo(function RedoxMetrics({ metrics, selectedSites =
           <div style={{ height: '100%', display: 'grid', gridTemplateRows: 'auto 1fr', padding: '8px', gap: 6 }}>
             <div style={{ fontSize: '0.9rem', fontWeight: 600, color: 'var(--text-primary)', margin: 0 }}>Per-site Redox Range</div>
             <div style={{ display: 'grid', gap: 4, overflowY: 'auto', paddingRight: 2 }}>
-              {selectedSites.map(sc => {
+              {displaySites.map(sc => {
                 const item = (m.breakdown?.redoxRange || [])?.find?.(x => x.site === sc);
                 const val = item ? item.range : 'No Data';
                 return (
@@ -58,7 +74,7 @@ const RedoxMetrics = React.memo(function RedoxMetrics({ metrics, selectedSites =
           <div style={{ height: '100%', display: 'grid', gridTemplateRows: 'auto 1fr', padding: '8px', gap: 6 }}>
             <div style={{ fontSize: '0.9rem', fontWeight: 600, color: 'var(--text-primary)', margin: 0 }}>Per-site Avg Redox</div>
             <div style={{ display: 'grid', gap: 4, overflowY: 'auto', paddingRight: 2 }}>
-              {selectedSites.map(sc => {
+              {displaySites.map(sc => {
                 const item = (m.breakdown?.avgRedox || [])?.find?.(x => x.site === sc);
                 const val = item && item.avg !== null ? `${item.avg.toFixed(0)} mV` : 'No Data';
                 const count = item ? ` (${item.count})` : '';
@@ -85,4 +101,3 @@ const RedoxMetrics = React.memo(function RedoxMetrics({ metrics, selectedSites =
 });
 
 export default RedoxMetrics;
-
