@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { getUploadHistory, uploadFile } from '../services/api';
+import { getUploadHistory, uploadFile, listS3Objects, getS3PresignedGetUrl } from '../services/api';
 import EmptyState from '../components/modern/EmptyState';
 import MetricCard from '../components/modern/MetricCard';
 
@@ -440,7 +440,7 @@ const ModernUpload = () => {
                               const res = await getS3PresignedGetUrl(it.key);
                               const url = res?.url;
                               if (url) window.open(url, '_blank');
-                            } catch (e) { /* ignore */ }
+                            } catch { /* ignore */ }
                           }}
                         >
                           View

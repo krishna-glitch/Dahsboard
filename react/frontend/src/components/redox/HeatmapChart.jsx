@@ -1,5 +1,5 @@
 import React, { useMemo } from 'react';
-import Plot from 'react-plotly.js';
+import Plot from '../../components/PlotlyLite';
 
 const HeatmapChart = React.memo(function HeatmapChart({ data }) {
   const heatmap = useMemo(() => {
@@ -50,6 +50,7 @@ const HeatmapChart = React.memo(function HeatmapChart({ data }) {
         layout={layout}
         config={{ displayModeBar: true, responsive: true, displaylogo: false, modeBarButtonsToRemove: ['lasso2d', 'select2d'] }}
         style={{ width: '100%', height: '450px' }}
+        bundle="full"
       />
       <div style={{ color: '#6c757d', fontSize: '0.85rem', marginTop: 6 }}>
         Daily heatmap of average Eh (mV) across depth bins to reveal patterns and gaps.
@@ -59,4 +60,3 @@ const HeatmapChart = React.memo(function HeatmapChart({ data }) {
 });
 
 export default HeatmapChart;
-

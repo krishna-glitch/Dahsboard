@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback, useMemo, useRef, useReducer } from 'react';
+import React, { useState, useEffect, useCallback, useMemo, useRef, useReducer, Suspense, lazy } from 'react';
 
 // Modern components
 import EmptyState from '../components/modern/EmptyState';
@@ -6,7 +6,7 @@ import SidebarFilters from '../components/filters/SidebarFilters';
 import ExportButton from '../components/ExportButton';
 import { useToast } from '../components/modern/toastUtils';
 import TutorialHint from '../components/modern/TutorialHint';
-import { useTutorial } from '../contexts/TutorialContext.jsx';
+import { useTutorial } from '../hooks/useTutorial.js';
 
 // Services
 import {
@@ -17,7 +17,6 @@ import {
   getRedoxDateRange,
   getRedoxAnalysisData,
   getRedoxSettings,
-  getAvailableSites,
 } from '../services/api';
 
 // Import modern layout styles
@@ -26,14 +25,18 @@ import { buildPerSiteSeries } from '../utils/typedSeries';
 import { useRedoxStore } from '../store/redoxStore';
 import { shallow } from 'zustand/shallow';
 import RedoxMetrics from '../components/redox/RedoxMetrics';
+import VisibleOnView from '../components/VisibleOnView';
 import RedoxProgress from '../components/redox/RedoxProgress';
 import RedoxTablePanel from '../components/redox/RedoxTablePanel';
 import { useRedoxMetrics } from '../hooks/useRedoxMetrics';
 import { useCachedDateRange } from '../hooks/useCachedDateRange';
-import RedoxChartRouter from '../components/redox/RedoxChartRouter';
+const RedoxChartRouter = lazy(() => 
+  import('../components/redox/RedoxChartRouter').then(module => ({
+    default: module.default || module
+  }))
+);
 import ErrorBoundary from '../components/redox/ErrorBoundary';
 import { log } from '../utils/log';
-import { computePresetWindow } from '../utils/dateRange';
 import { columnarToRows } from '../utils/columnar';
 import { getMonthCache as idbGetMonthCache, setMonthCache as idbSetMonthCache } from '../utils/monthCache';
 import { useQueryClient } from '@tanstack/react-query';
@@ -53,7 +56,7 @@ function looksLikeJson(buffer) {
     while (i < bytes.length && bytes[i] <= 32) i++;
     const ch = bytes[i];
     return ch === 0x7B /* '{' */ || ch === 0x5B /* '[' */;
-  } catch (_) {
+  } catch {
     return false;
   }
 }
@@ -134,10 +137,6 @@ const ModernRedoxAnalysis = () => {
     setStartDate,
     endDate,
     setEndDate,
-    invertY1,
-    setInvertY1,
-    invertY2,
-    setInvertY2,
     invertX,
     setInvertX,
     invertY,
@@ -164,10 +163,6 @@ const ModernRedoxAnalysis = () => {
       setStartDate: s.setStartDate,
       endDate: s.endDate,
       setEndDate: s.setEndDate,
-      invertY1: s.invertY1,
-      setInvertY1: s.setInvertY1,
-      invertY2: s.invertY2,
-      setInvertY2: s.setInvertY2,
       invertX: s.invertX,
       setInvertX: s.setInvertX,
       invertY: s.invertY,
@@ -188,7 +183,7 @@ const ModernRedoxAnalysis = () => {
   const [availableMinDate, setAvailableMinDate] = useState('');
   const [activeWindowStart, setActiveWindowStart] = useState('');
   const [activeWindowEnd, setActiveWindowEnd] = useState('');
-  const [primaryYAxis, setPrimaryYAxis] = useState('depth');
+  const [primaryYAxis] = useState('depth');
   // Default to JSON/columnar to leverage server-side caching across refreshes
   const [preferArrow, setPreferArrow] = useState(false);
   // React Query client for in-memory month slice caching across route changes
@@ -210,12 +205,23 @@ const ModernRedoxAnalysis = () => {
     targetPointsDefault: 5000,
   });
 
+  // Prefer Arrow automatically for large windows when max fidelity is ON
+  useEffect(() => {
+    const largeRanges = new Set(['Last 6 Months', 'Last 1 Year', 'Last 2 Years']);
+    if (maxFidelity && largeRanges.has(timeRange)) {
+      if (!preferArrow) setPreferArrow(true);
+    } else if (!maxFidelity && preferArrow) {
+      // For standard fidelity, default to JSON/columnar to maximize proxy cache reuse
+      setPreferArrow(false);
+    }
+  }, [maxFidelity, timeRange]);
+
   // Cached date range hook
-  const { dateRange: cachedDateRange, loading: dateRangeLoading } = useCachedDateRange(selectedSites);
+  const { dateRange: cachedDateRange } = useCachedDateRange(selectedSites);
 
   // Constants
   const CHUNK_CONCURRENCY = 2;
-  const DEBOUNCE_MS = 300;
+  const DEBOUNCE_MS = 500;
   const LOADING_TOAST_DELAY_MS = 500;
   const PROGRESS_UPDATE_THROTTLE_MS = 200;
   const SNAPSHOT_WINDOW_MINUTES = 60;
@@ -262,7 +268,6 @@ const ModernRedoxAnalysis = () => {
   // Arrow parsing helper
   const parseArrowBufferToRows = useCallback(async (buffer, fallbackSite) => {
     try {
-      const t0 = performance?.now() ?? Date.now();
       if (!buffer) return null;
       if (looksLikeJson(buffer) || buffer.byteLength < 128) {
         log.warn('[ARROW] Buffer does not look like Arrow; skipping parse and falling back');
@@ -309,7 +314,7 @@ const ModernRedoxAnalysis = () => {
         if (typeof v === 'string') return v;
         try {
           return new Date(v).toISOString();
-        } catch (_) {
+        } catch {
           return undefined;
         }
       };
@@ -742,52 +747,35 @@ const ModernRedoxAnalysis = () => {
     }
   }, [perSiteSeries, activeWindowEnd, endDate, siteColors, fetchState.data.length, scatterData]);
 
-  // Compute 24h rolling mean client-side from existing timeseries data
-  const rollingData = useMemo(() => {
-    if (!perSiteSeries.size) return [];
+  // Compute 24h rolling mean off the main thread via Web Worker
+  const [rollingData, setRollingData] = useState([]);
+  const rollingWorkerRef = useRef(null);
+  useEffect(() => {
     try {
-      const WINDOW_MS = 24 * 60 * 60 * 1000;
-      const out = [];
-      for (const [site, vals] of perSiteSeries.entries()) {
-        const { timestamps, depth, redox } = vals;
-        // Group by depth
-        const byDepth = new Map();
-        for (let i = 0; i < timestamps.length; i++) {
-          const d = depth[i];
-          const t = timestamps[i];
-          const eh = redox[i];
-          if (!Number.isFinite(d) || !Number.isFinite(t) || !Number.isFinite(eh)) continue;
-          if (!byDepth.has(d)) byDepth.set(d, { t: [], y: [] });
-          const g = byDepth.get(d);
-          g.t.push(t);
-          g.y.push(eh);
-        }
-        // For each depth, compute sliding-window mean
-        for (const [d, g] of byDepth.entries()) {
-          const ts = g.t; const ys = g.y;
-          let i = 0; let sum = 0; let cnt = 0;
-          for (let j = 0; j < ts.length; j++) {
-            const tj = ts[j];
-            const yj = ys[j];
-            sum += yj; cnt++;
-            while (tj - ts[i] > WINDOW_MS) { sum -= ys[i]; cnt--; i++; }
-            const mean = cnt > 0 ? (sum / cnt) : NaN;
-            if (Number.isFinite(mean)) {
-              out.push({
-                measurement_timestamp: new Date(tj).toISOString(),
-                site_code: site,
-                depth_cm: d,
-                processed_eh_roll24h: mean,
-              });
-            }
+      if (!perSiteSeries.size) { setRollingData([]); return; }
+      // Lazy init worker
+      if (!rollingWorkerRef.current) {
+        rollingWorkerRef.current = new Worker(new URL('../workers/rollingWorker.js', import.meta.url), { type: 'module' });
+        rollingWorkerRef.current.onmessage = (e) => {
+          const { ok, data, error } = e.data || {};
+          if (ok) setRollingData(Array.isArray(data) ? data : []);
+          else {
+            log.warn('[REDOX] rolling worker error', error);
+            setRollingData([]);
           }
-        }
+        };
       }
-      return out;
+      // Build series list payload
+      const series = [];
+      for (const [site, vals] of perSiteSeries.entries()) {
+        series.push({ site, timestamps: vals.timestamps, depth: vals.depth, redox: vals.redox });
+      }
+      rollingWorkerRef.current.postMessage({ cmd: 'rolling24h', payload: { series, windowMs: 24 * 60 * 60 * 1000 } });
     } catch (e) {
-      log.warn('[REDOX] rolling mean compute failed', e);
-      return [];
+      log.warn('[REDOX] rolling worker dispatch failed', e);
+      setRollingData([]);
     }
+    return () => { /* keep worker alive across renders for reuse */ };
   }, [perSiteSeries]);
 
   const subtitleText = useMemo(() => {
@@ -886,12 +874,11 @@ const ModernRedoxAnalysis = () => {
     return { startTsIso, endTsIso };
   }, [selectedSites, timeRange, startDate, endDate, cachedDateRange]);
 
-  const loadAllChunksForSite = useCallback(
+  const _loadAllChunksForSite = useCallback(
     async (site, startTsIso, endTsIso, chunkSize, suggestedResolution, maxDepths, targetPoints, controller, perSite, updateProgressToast) => {
       let offset = 0;
       let siteMerged = [];
       let allowedLocal = {};
-      const sourceMode = maxFidelity ? 'raw' : 'processed';
       while (true) {
         checkAbort(controller.signal);
 
@@ -1033,14 +1020,14 @@ const ModernRedoxAnalysis = () => {
     if (s == null) return '';
     try {
       return String(s).trim().toUpperCase();
-    } catch (_) {
+    } catch {
       return String(s || '');
     }
   }, []);
 
   // Session/IndexedDB backed month-slice cache (persists across refreshes)
   const MONTH_CACHE_PREFIX = 'redox_month_cache_v1';
-  const MONTH_CACHE_TTL_MS = 30 * 60 * 1000; // 30 minutes
+  const MONTH_CACHE_TTL_MS = 3 * 24 * 60 * 60 * 1000; // 3 days
 
   const makeMonthKey = useCallback((siteId, year, month, resolution, fidelity, maxDepths) => {
     const y = year.toString().padStart(4, '0');
@@ -1071,15 +1058,61 @@ const ModernRedoxAnalysis = () => {
       return idb;
     }
     return null;
-  }, [queryClient]);
+  }, [queryClient, MONTH_CACHE_TTL_MS]);
 
   const setMonthCache = useCallback(async (key, payload) => {
     try {
       monthMemoryCacheRef.current.set(key, payload);
       queryClient.setQueryData([MONTH_CACHE_PREFIX, key], payload);
       await idbSetMonthCache(key, payload, MONTH_CACHE_TTL_MS, true);
-    } catch (_) {}
-  }, [queryClient]);
+    } catch { /* ignore */ }
+  }, [queryClient, MONTH_CACHE_TTL_MS]);
+
+  // Lightweight idle-time prefetch: warm next month's cache for the first selected site
+  useEffect(() => {
+    if (!Array.isArray(selectedSites) || selectedSites.length === 0) return;
+    // Determine current window from availableMinDate/MaxDate or start/endDate
+    const sIso = (startDate || availableMinDate || '').slice(0, 10);
+    const eIso = (endDate || availableMaxDate || '').slice(0, 10);
+    if (!sIso || !eIso) return;
+
+    const site = selectedSites[0];
+    const res = (vizConfig?.resolutionByRange?.[timeRange] || 'raw');
+    const useMax = !!maxFidelity;
+
+    const schedule = (fn) => {
+      if (typeof window !== 'undefined' && 'requestIdleCallback' in window) {
+        window.requestIdleCallback(fn, { timeout: 1500 });
+      } else {
+        setTimeout(fn, 250);
+      }
+    };
+
+    schedule(async () => {
+      try {
+        // Compute next month window
+        const d = new Date(eIso);
+        if (isNaN(d.getTime())) return;
+        const nextStart = new Date(Date.UTC(d.getUTCFullYear(), d.getUTCMonth() + 1, 1, 0, 0, 0, 0));
+        const nextEnd = new Date(Date.UTC(d.getUTCFullYear(), d.getUTCMonth() + 2, 0, 23, 59, 59, 999));
+        const y = nextStart.getUTCFullYear();
+        const m = nextStart.getUTCMonth();
+        const key = makeMonthKey(normalizeSiteId(site), y, m, res, useMax, 'any');
+        const cached = await getMonthCache(key);
+        if (cached) return; // already warm
+
+        // Fetch minimally to prewarm cache
+        await getProcessedEhTimeSeries({
+          siteId: normalizeSiteId(site),
+          startTs: nextStart.toISOString(),
+          endTs: nextEnd.toISOString(),
+          resolution: res,
+          maxDepths: 'any',
+          maxFidelity: useMax || undefined,
+        });
+      } catch { /* ignore */ }
+    });
+  }, [selectedSites, timeRange, startDate, endDate, availableMinDate, availableMaxDate, vizConfig, maxFidelity, makeMonthKey, getMonthCache, normalizeSiteId]);
 
   // Build monthly windows between a start and end ISO timestamp (inclusive)
   const buildMonthlyWindows = useCallback((startIso, endIso) => {
@@ -1110,10 +1143,11 @@ const ModernRedoxAnalysis = () => {
   }, []);
 
   // Fetch a site's data as monthly slices and merge to a single array, filtered to exact window
+   
   const fetchMonthlyForSite = useCallback(async (site, startTsIso, endTsIso, suggestedResolution, maxDepths, targetPoints, controller, useMaxFidelity) => {
     const windows = buildMonthlyWindows(startTsIso, endTsIso);
     const merged = [];
-    const MONTH_FETCH_CONCURRENCY = 6;
+    const MONTH_FETCH_CONCURRENCY = 3;
     const siteNorm = normalizeSiteId(site);
 
     for (let i = 0; i < windows.length; i += MONTH_FETCH_CONCURRENCY) {
@@ -1345,7 +1379,7 @@ const ModernRedoxAnalysis = () => {
                       details += `\n• ${s}: ${n.toLocaleString()} records • ~${estDays.toLocaleString()} days • depths present: ${depthCount}/6`;
                     }
                   }
-                } catch {}
+                } catch { /* ignore */ }
 
                 if (chunkingInfo) {
                   details += `\n\n📦 Chunking Info:\n• Total Available: ${chunkingInfo.totalRecords?.toLocaleString() || 'unknown'}\n• Chunk Size: ${chunkingInfo.chunkSize?.toLocaleString() || 'N/A'}\n• More Available: ${chunkingInfo.hasMore ? 'Yes' : 'No'}`;
@@ -1493,9 +1527,7 @@ const ModernRedoxAnalysis = () => {
         const suggestedResolution = useMaxFidelity ? null : (vizConfig?.resolutionByRange?.[timeRange] || '2H');
         const maxDepths = 6;
         // Let backend choose available depths up to maxDepths; do not hard-filter depths client-side
-        const allowedDepths = null;
         const targetPoints = undefined;
-        const sourceMode = 'processed';
         log.debug('[FETCH SUMMARY]', {
           preferArrow,
           resolution: suggestedResolution || 'raw',
@@ -1514,7 +1546,8 @@ const ModernRedoxAnalysis = () => {
           for (const s of siteIds) {
             log.debug('Adding timeseries promise for site:', s, 'full dataset');
             if (preferArrow) {
-              log.debug('[REQ] Arrow', { site: s, resolution: suggestedResolution || 'raw', maxDepths, startTsIso, endTsIso });
+              const resParam = (suggestedResolution || 'raw');
+              log.debug('[REQ] Arrow', { site: s, resolution: resParam, maxDepths, startTsIso, endTsIso });
               promises.push(
                 (async () => {
                   try {
@@ -1524,7 +1557,7 @@ const ModernRedoxAnalysis = () => {
                         startTs: startTsIso,
                         endTs: endTsIso,
                         chunkSize: chunkSize,
-                        resolution: suggestedResolution,
+                        resolution: resParam && typeof resParam === 'string' ? resParam.toLowerCase() : resParam,
                         maxDepths,
                         maxFidelity: useMaxFidelity || undefined,
                         ...(targetPoints ? { targetPoints } : {}),
@@ -1542,7 +1575,7 @@ const ModernRedoxAnalysis = () => {
                         startTs: startTsIso,
                         endTs: endTsIso,
                         chunkSize: chunkSize,
-                        resolution: suggestedResolution,
+                        resolution: resParam && typeof resParam === 'string' ? resParam.toLowerCase() : resParam,
                         maxDepths,
                         maxFidelity: useMaxFidelity || undefined,
                         ...(targetPoints ? { targetPoints } : {}),
@@ -1559,7 +1592,7 @@ const ModernRedoxAnalysis = () => {
                         startTs: startTsIso,
                         endTs: endTsIso,
                         chunkSize: chunkSize,
-                        resolution: suggestedResolution,
+                        resolution: resParam && typeof resParam === 'string' ? resParam.toLowerCase() : resParam,
                         maxDepths,
                         maxFidelity: useMaxFidelity || undefined,
                         ...(targetPoints ? { targetPoints } : {}),
@@ -1570,14 +1603,15 @@ const ModernRedoxAnalysis = () => {
                 })()
               );
             } else {
-                log.debug('[REQ] JSON', { site: s, resolution: suggestedResolution || 'raw', maxDepths, startTsIso, endTsIso });
+                const resParam = (suggestedResolution || 'raw');
+                log.debug('[REQ] JSON', { site: s, resolution: resParam, maxDepths, startTsIso, endTsIso });
                 promises.push(
                   getProcessedEhTimeSeries(
                     {
                       siteId: s,
                       startTs: startTsIso,
                       endTs: endTsIso,
-                      resolution: suggestedResolution,
+                      resolution: resParam && typeof resParam === 'string' ? resParam.toLowerCase() : resParam,
                       maxDepths,
                       maxFidelity: useMaxFidelity || undefined,
                       ...(targetPoints ? { targetPoints } : {}),
@@ -1587,7 +1621,7 @@ const ModernRedoxAnalysis = () => {
                 );
             }
           }
-        } else if (!shouldChunk && selectedView === 'rolling') {
+        } else if (selectedView === 'rolling') {
           // Rolling mean per site
           for (const s of siteIds) {
             log.debug('Adding rolling mean promise for site:', s);
@@ -1669,7 +1703,7 @@ const ModernRedoxAnalysis = () => {
         toast.removeToast(loadingToastId);
       }
     }
-  }, [selectedSites, timeRange, startDate, endDate, maxFidelity, selectedView, vizConfig, preferArrow, toast, determineDateWindow, loadAllChunksForSite, processResults, parseArrowBufferToRows, fetchState.data, checkDataCompatibility, applyFidelityFilter]);
+  }, [selectedSites, timeRange, startDate, endDate, maxFidelity, selectedView, vizConfig, preferArrow, toast, determineDateWindow, processResults, parseArrowBufferToRows, fetchState.data, checkDataCompatibility, applyFidelityFilter, fetchMonthlyForSite]);
 
   
   // Stable reference to trigger fetchData
@@ -1748,10 +1782,6 @@ const ModernRedoxAnalysis = () => {
   const handleInvertY = useCallback(() => {
     setInvertY((v) => !v);
   }, [setInvertY]);
-
-  const handleTogglePrimaryYAxis = useCallback(() => {
-    setPrimaryYAxis((p) => (p === 'depth' ? 'redox' : 'depth'));
-  }, []);
 
   const handleFiltersToggle = useCallback(() => {
     setFiltersCollapsed(!filtersCollapsed);
@@ -2113,22 +2143,32 @@ const ModernRedoxAnalysis = () => {
                       endDate={endDate}
                     />
                   ) : (
-                    <RedoxChartRouter
-                      selectedView={selectedView}
-                      data={selectedView === 'rolling' ? rollingData : fetchState.data}
-                      chartData={chartData}
-                      chartType={chartType}
-                      chartViewMode={chartViewMode}
-                      snapshotMode={snapshotMode}
-                      invertSeriesY={invertSeriesY}
-                      invertRollingY={invertRollingY}
-                      invertX={invertX}
-                      invertY={invertY}
-                      snapshotSeries={snapshotSeries}
-                      parameterLabel={parameterLabel}
-                      selectedSites={selectedSites}
-                      siteColors={siteColors}
-                    />
+                    <ErrorBoundary>
+                      {(((selectedView === 'rolling' ? rollingData : fetchState.data) || []).length) === 0 ? (
+                        <div className="text-muted small" style={{ padding: '0.5rem 0', minHeight: 320 }}>No data to display for the selected filters.</div>
+                      ) : (
+                        <VisibleOnView minHeight={320} rootMargin="200px">
+                          <Suspense fallback={<div className="text-muted small" style={{ padding: '0.5rem 0' }}>Loading chart…</div>}>
+                            <RedoxChartRouter
+                              selectedView={selectedView}
+                              data={selectedView === 'rolling' ? (rollingData || []) : (fetchState.data || [])}
+                              chartData={chartData || {}}
+                              chartType={chartType}
+                              chartViewMode={chartViewMode}
+                              snapshotMode={snapshotMode}
+                              invertSeriesY={invertSeriesY}
+                              invertRollingY={invertRollingY}
+                              invertX={invertX}
+                              invertY={invertY}
+                              snapshotSeries={snapshotSeries || { profile: [], scatter: [] }}
+                              parameterLabel={parameterLabel || 'Depth & Redox'}
+                              selectedSites={selectedSites || []}
+                              siteColors={siteColors || {}}
+                            />
+                          </Suspense>
+                        </VisibleOnView>
+                      )}
+                    </ErrorBoundary>
                   )}
                   {/* END: REDOX DETAILS VIEW ENHANCEMENTS */}
                 </ErrorBoundary>

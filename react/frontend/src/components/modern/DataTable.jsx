@@ -1,5 +1,9 @@
 import React, { useState, useMemo, useEffect, useCallback, useRef } from 'react';
-import { Button, Form, InputGroup, Dropdown, ButtonGroup } from 'react-bootstrap';
+import Button from 'react-bootstrap/Button';
+import Form from 'react-bootstrap/Form';
+import InputGroup from 'react-bootstrap/InputGroup';
+import Dropdown from 'react-bootstrap/Dropdown';
+import ButtonGroup from 'react-bootstrap/ButtonGroup';
 import ExportButton from '../ExportButton';
 
 /**
@@ -36,7 +40,7 @@ const DataTable = ({
   // Virtualization state
   const [scrollTop, setScrollTop] = useState(0);
   const containerRef = useRef(null);
-  const [containerHeight, setContainerHeight] = useState(maxHeight);
+  const [containerHeight] = useState(maxHeight);
 
   // Columns dropdown visibility (controlled for proper close UX)
   const [columnsOpen, setColumnsOpen] = useState(false);
@@ -150,7 +154,7 @@ const DataTable = ({
   }, []);
 
   // Handle sorting
-  const handleSort = (columnKey) => {
+  const handleSort = useCallback((columnKey) => {
     if (!sortable) return;
     
     if (sortColumn === columnKey) {
@@ -159,10 +163,10 @@ const DataTable = ({
       setSortColumn(columnKey);
       setSortDirection('asc');
     }
-  };
+  }, [sortable, sortColumn, sortDirection]);
 
   // Handle row selection
-  const handleRowSelect = (rowIndex, isSelected) => {
+  const handleRowSelect = useCallback((rowIndex, isSelected) => {
     if (!onRowSelect) return;
     
     const newSelected = new Set(selectedPageRows);
@@ -176,7 +180,7 @@ const DataTable = ({
     // Call parent handler with actual row data
     const selectedRowsData = Array.from(newSelected).map(index => paginatedData[index]);
     onRowSelect(selectedRowsData);
-  };
+  }, [onRowSelect, selectedPageRows, paginatedData]);
 
   // Reset pagination when data changes
   useEffect(() => {
@@ -215,7 +219,7 @@ const DataTable = ({
 
   const handleSortClick = useCallback((columnKey) => {
     handleSort(columnKey);
-  }, []);
+  }, [handleSort]);
 
   const handleRowClick = useCallback((row, index) => {
     // Toggle highlight selection for quick compare
@@ -254,7 +258,7 @@ const DataTable = ({
   const handleRowCheckChange = useCallback((e, index) => {
     e.stopPropagation();
     handleRowSelect(index, e.target.checked);
-  }, []);
+  }, [handleRowSelect]);
 
   const handlePageClick = useCallback((page) => {
     setCurrentPage(page);
@@ -420,7 +424,7 @@ const DataTable = ({
               className="columns-menu"
               show={columnsOpen}
               onToggle={(isOpen, e, meta) => {
-                try { console.log('[DataTable] onToggle columns dropdown', { isOpen, source: meta?.source }); } catch {}
+                try { console.log('[DataTable] onToggle columns dropdown', { isOpen, source: meta?.source }); } catch { /* ignore */ }
                 setColumnsOpen(isOpen);
               }}
             >
@@ -429,7 +433,7 @@ const DataTable = ({
                 size="sm"
                 className="columns-btn"
                 onClick={() => {
-                  try { console.log('[DataTable] Main Columns button clicked', { columnsOpenBefore: columnsOpen }); } catch {}
+                  try { console.log('[DataTable] Main Columns button clicked', { columnsOpenBefore: columnsOpen }); } catch { /* ignore */ }
                   setColumnsOpen(v => !v);
                 }}
               >
@@ -441,15 +445,15 @@ const DataTable = ({
                 id="columns-split"
                 size="sm"
                 className="columns-toggle"
-                onClick={(e) => {
-                  try { console.log('[DataTable] Toggle clicked', { columnsOpenBefore: columnsOpen }); } catch {}
+                onClick={() => {
+                  try { console.log('[DataTable] Toggle clicked', { columnsOpenBefore: columnsOpen }); } catch { /* ignore */ }
                   setColumnsOpen(v => !v);
                 }}
               />
               {columnsOpen && (
                 <Dropdown.Menu
                   className="columns-dropdown-menu"
-                  onClick={(e) => { try { console.log('[DataTable] Menu click', { target: e.target?.outerHTML?.slice(0, 80) }); } catch {} }}
+                  onClick={(e) => { try { console.log('[DataTable] Menu click', { target: e.target?.outerHTML?.slice(0, 80) }); } catch { /* ignore */ } }}
                 >
                 <div className="d-flex justify-content-between align-items-center px-2 py-1" style={{borderBottom: '1px solid var(--border-primary)'}}>
                   <span style={{fontSize: '0.85rem', color: 'var(--text-secondary)'}}>Show/Hide Columns</span>
@@ -457,9 +461,9 @@ const DataTable = ({
                     type="button"
                     className="btn btn-sm btn-light"
                     aria-label="Close"
-                    onMouseDown={(e) => { try { console.log('[DataTable] Close X mousedown', { targetTag: e.target?.tagName }); } catch {} }}
+                    onMouseDown={(e) => { try { console.log('[DataTable] Close X mousedown', { targetTag: e.target?.tagName }); } catch { /* ignore */ } }}
                     onClick={(e) => {
-                      try { console.log('[DataTable] Close X clicked', { columnsOpenBefore: columnsOpen, target: e.target?.tagName }); } catch {}
+                      try { console.log('[DataTable] Close X clicked', { columnsOpenBefore: columnsOpen, target: e.target?.tagName }); } catch { /* ignore */ }
                       e.preventDefault();
                       e.stopPropagation();
                       setColumnsOpen(false);
@@ -523,10 +527,10 @@ const DataTable = ({
 
       {/* Table */}
       <div className={virtualized ? "virtualized-table-container" : "table-responsive"} 
-           style={virtualized ? { height: maxHeight, overflowY: 'auto' } : {}}
+           style={virtualized ? { height: maxHeight, overflowY: 'auto', position: 'relative' } : {}}
            onScroll={virtualized ? handleScroll : undefined}
            ref={virtualized ? containerRef : undefined}>
-        <table className="data-table-modern">
+        <table className="data-table-modern" style={virtualized ? { position: 'relative' } : {}}>
           <thead className="data-table-head">
             <tr>
               {pinnable && (<th className="data-table-pin-col"></th>)}
@@ -558,7 +562,12 @@ const DataTable = ({
               })}
             </tr>
           </thead>
-          <tbody className="data-table-body">
+          <tbody className="data-table-body" style={virtualized && virtualizedData ? { display: 'block', position: 'relative', height: virtualizedData.totalHeight } : {}}>
+            {virtualized && virtualizedData && (
+              <tr style={{ height: virtualizedData.offsetY }}>
+                <td style={{ padding: 0, border: 0 }} colSpan={columns.length + (onRowSelect ? 1 : 0) + (pinnable ? 1 : 0)} />
+              </tr>
+            )}
             {dataToRender.length === 0 ? (
               <tr>
                 <td colSpan={columns.length + (onRowSelect ? 1 : 0) + (pinnable ? 1 : 0)} className="text-center py-4 text-muted">
@@ -570,10 +579,15 @@ const DataTable = ({
                 <TableRow
                   key={virtualized && virtualizedData ? virtualizedData.startIndex + index : index}
                   row={row}
-                  index={index}
+                  index={virtualized && virtualizedData ? virtualizedData.startIndex + index : index}
                   isSelected={selectedPageRows.has(index)}
                 />
               ))
+            )}
+            {virtualized && virtualizedData && (
+              <tr style={{ height: Math.max(virtualizedData.totalHeight - virtualizedData.offsetY - (dataToRender.length * rowHeight), 0) }}>
+                <td style={{ padding: 0, border: 0 }} colSpan={columns.length + (onRowSelect ? 1 : 0) + (pinnable ? 1 : 0)} />
+              </tr>
             )}
           </tbody>
         </table>

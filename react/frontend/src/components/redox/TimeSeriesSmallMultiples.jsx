@@ -1,5 +1,5 @@
 import React, { useMemo } from 'react';
-import Plot from 'react-plotly.js';
+import Plot from '../../components/PlotlyLite';
 
 
 // Add keyframes for 3D animations

@@ -62,7 +62,7 @@ html, body {
 
 .navbar-nav .nav-link {
   font-weight: 600;
-  color: rgba(248, 249, 250, 0.85);
+  color: rgb(248 249 250 / 85%);
   padding: 0.75rem 1rem;
   border-radius: var(--border-radius-sm);
   margin: 0 0.25rem;
@@ -71,13 +71,13 @@ html, body {
 
 .navbar-nav .nav-link:hover {
   color: var(--light-color);
-  background-color: rgba(248, 249, 250, 0.1);
+  background-color: rgb(248 249 250 / 10%);
   transform: translateY(-1px);
 }
 
 .navbar-nav .nav-link.active {
   color: var(--light-color);
-  background-color: rgba(248, 249, 250, 0.2);
+  background-color: rgb(248 249 250 / 20%);
   font-weight: 700;
 }
 
@@ -95,21 +95,21 @@ html, body {
 }
 
 .navbar-text {
-  color: rgba(248, 249, 250, 0.85);
+  color: rgb(248 249 250 / 85%);
   font-weight: 500;
 }
 
 /* User Authentication Display */
 .navbar .btn-outline-light {
-  border-color: rgba(248, 249, 250, 0.5);
-  color: rgba(248, 249, 250, 0.85);
+  border-color: rgb(248 249 250 / 50%);
+  color: rgb(248 249 250 / 85%);
   font-weight: 600;
   padding: 0.375rem 1rem;
 }
 
 .navbar .btn-outline-light:hover {
-  background-color: rgba(248, 249, 250, 0.1);
-  border-color: rgba(248, 249, 250, 0.8);
+  background-color: rgb(248 249 250 / 10%);
+  border-color: rgb(248 249 250 / 80%);
   color: var(--light-color);
 }
 
@@ -220,13 +220,13 @@ html, body {
 }
 
 /* Responsive Adjustments */
-@media (max-width: 1400px) {
+@media (width <= 1400px) {
   .dashboard-grid-4 {
     grid-template-columns: 1fr 1fr;
   }
 }
 
-@media (max-width: 992px) {
+@media (width <= 992px) {
   .navbar {
     padding: 0 0.75rem;
   }
@@ -258,7 +258,7 @@ html, body {
   }
 }
 
-@media (max-width: 768px) {
+@media (width <= 768px) {
   .navbar {
     padding: 0 0.5rem;
   }
@@ -291,7 +291,7 @@ html, body {
   }
 }
 
-@media (max-width: 576px) {
+@media (width <= 576px) {
   .home-layout {
     padding: 0.5rem;
   }

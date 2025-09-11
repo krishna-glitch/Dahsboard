@@ -166,6 +166,48 @@ def get_alerts_data():
             }
         }), 500
 
+
+@alerts_bp.route('/active', methods=['GET'])
+# @login_required
+def get_active_alerts_data():
+    logger.info("Received request for active alerts data API.")
+    try:
+        # Mock data for active alerts
+        active_alerts = [
+            {
+                "id": "alert_123",
+                "type": "High Temperature",
+                "severity": "critical",
+                "message": "Temperature in S1 exceeded critical threshold (35°C)",
+                "timestamp": "2025-09-09T10:30:00Z",
+                "site": "S1",
+                "parameter": "temperature_c"
+            },
+            {
+                "id": "alert_124",
+                "type": "Low pH",
+                "severity": "high",
+                "message": "pH level in S2 dropped below critical threshold (6.0)",
+                "timestamp": "2025-09-09T11:00:00Z",
+                "site": "S2",
+                "parameter": "ph"
+            },
+            {
+                "id": "alert_125",
+                "type": "Sensor Offline",
+                "severity": "medium",
+                "message": "Sensor 'Flow_01' in S1 is offline for 30 minutes",
+                "timestamp": "2025-09-09T09:45:00Z",
+                "site": "S1",
+                "parameter": "sensor_status"
+            }
+        ]
+        logger.info("Successfully retrieved mock active alerts data.")
+        return jsonify({"alerts": active_alerts}), 200
+    except Exception as e:
+        logger.error(f"Error in get_active_alerts_data API: {e}", exc_info=True)
+        return jsonify({'error': 'Failed to retrieve active alerts data', 'details': str(e)}), 500
+
 @alerts_bp.route('/acknowledge', methods=['POST'])
 @login_required
 def acknowledge_alert():

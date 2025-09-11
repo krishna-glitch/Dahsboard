@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import RoleGate from '../components/auth/RoleGate';
-import Plot from 'react-plotly.js';
+import Plot from '../components/PlotlyLite';
 import MetricCard from '../components/modern/MetricCard';
 import EmptyState from '../components/modern/EmptyState';
 import ExportButton from '../components/ExportButton';

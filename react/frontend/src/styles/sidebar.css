@@ -23,7 +23,7 @@
   font-weight: 700;
   font-size: var(--font-size-sm);
   padding: var(--spacing-lg);
-  border-bottom: 1px solid rgba(241, 245, 249, 0.1);
+  border-bottom: 1px solid rgb(241 245 249 / 10%);
   position: relative;
   display: flex;
   justify-content: flex-start;
@@ -46,8 +46,7 @@
   background: transparent;
   height: calc(100vh - var(--header-height) - 80px);
   max-height: calc(100vh - var(--header-height) - 80px); /* Ensure it doesn't exceed viewport */
-  overflow-y: auto;
-  overflow-x: hidden; /* Prevent horizontal overflow */
+  overflow: hidden auto; /* Prevent horizontal overflow */
   transition: all 0.3s ease;
   display: block;
   scrollbar-width: thin; /* Firefox */
@@ -62,12 +61,12 @@
 }
 
 .sidebar-card-body::-webkit-scrollbar-thumb {
-  background: rgba(241, 245, 249, 0.2);
+  background: rgb(241 245 249 / 20%);
   border-radius: 2px;
 }
 
 .sidebar-card-body::-webkit-scrollbar-thumb:hover {
-  background: rgba(241, 245, 249, 0.4);
+  background: rgb(241 245 249 / 40%);
 }
 
 .sidebar-card.collapsed .sidebar-card-body {
@@ -75,7 +74,8 @@
   display: flex;
   flex-direction: column;
   align-items: center;
-  overflow: visible;
+  /* Use CSS containment for better performance */
+  contain: layout;
 }
 
 .sidebar-toggle-button {
@@ -212,11 +212,11 @@
   border-radius: var(--border-radius-lg);
   cursor: pointer;
   transition: all 0.2s ease;
-  background: rgba(241, 245, 249, 0.05);
+  background: rgb(241 245 249 / 5%);
 }
 
 .site-checkbox-item:hover {
-  background: rgba(241, 245, 249, 0.1);
+  background: rgb(241 245 249 / 10%);
   transform: translateX(2px);
 }
 
@@ -236,7 +236,7 @@
 }
 
 .site-checkbox-item.checked {
-  background: rgba(59, 130, 246, 0.15);
+  background: rgb(59 130 246 / 15%);
 }
 
 .site-checkbox-item.checked .site-checkbox-label {
@@ -270,8 +270,8 @@
 }
 
 .modern-select .form-select {
-  background: rgba(241, 245, 249, 0.1);
-  border: 1px solid rgba(241, 245, 249, 0.2);
+  background: rgb(241 245 249 / 10%);
+  border: 1px solid rgb(241 245 249 / 20%);
   color: var(--sidebar-text);
   border-radius: var(--border-radius-lg);
   padding: var(--spacing-sm) var(--spacing-md);
@@ -279,10 +279,10 @@
 }
 
 .modern-select .form-select:focus {
-  background: rgba(241, 245, 249, 0.15);
+  background: rgb(241 245 249 / 15%);
   border-color: var(--sidebar-accent);
   color: var(--light-color);
-  box-shadow: 0 0 0 2px rgba(59, 130, 246, 0.2);
+  box-shadow: 0 0 0 2px rgb(59 130 246 / 20%);
 }
 
 .modern-select .form-select option {
@@ -318,13 +318,13 @@
 }
 
 .action-btn.secondary {
-  background: rgba(241, 245, 249, 0.1);
+  background: rgb(241 245 249 / 10%);
   color: var(--sidebar-text);
-  border: 1px solid rgba(241, 245, 249, 0.2);
+  border: 1px solid rgb(241 245 249 / 20%);
 }
 
 .action-btn.secondary:hover {
-  background: rgba(241, 245, 249, 0.2);
+  background: rgb(241 245 249 / 20%);
 }
 
 /* =============================================================================
@@ -332,15 +332,12 @@
    ============================================================================= */
 
 /* Mobile Devices (max-width: 768px) */
-@media (max-width: 768px) {
+@media (width <= 768px) {
   .sidebar-card {
     width: 100vw; /* Ensure it doesn't exceed viewport width */
     height: auto;
     position: fixed;
-    top: var(--header-height);
-    left: 0;
-    right: 0;
-    bottom: auto;
+    inset: var(--header-height) 0 auto 0;
     transform: translateY(-100%);
     transition: transform 0.3s ease;
     z-index: 1040; /* Lower than dropdown menus */
@@ -423,7 +420,7 @@
 }
 
 /* Tablet Devices (769px to 1024px) */
-@media (min-width: 769px) and (max-width: 1024px) {
+@media (width >= 769px) and (width <= 1024px) {
   .sidebar-card {
     width: 240px;
   }
@@ -454,14 +451,14 @@
 }
 
 /* Large Desktop (1025px and up) - Default styles already defined */
-@media (min-width: 1025px) {
+@media (width >= 1025px) {
   .sidebar-card {
     width: var(--sidebar-width);
   }
 }
 
 /* Ultra Wide Screens (1400px+) */
-@media (min-width: 1400px) {
+@media (width >= 1400px) {
   .sidebar-card {
     width: 320px;
   }
@@ -499,7 +496,7 @@
   height: 48px;
   border: none;
   border-radius: 12px;
-  background: rgba(241, 245, 249, 0.1);
+  background: rgb(241 245 249 / 10%);
   color: var(--sidebar-text);
   cursor: pointer;
   transition: all 0.2s ease;
@@ -511,7 +508,7 @@
 }
 
 .filter-icon-btn:hover {
-  background: rgba(241, 245, 249, 0.2);
+  background: rgb(241 245 249 / 20%);
   transform: scale(1.05);
 }
 
@@ -549,7 +546,7 @@
 .sidebar-container {
   background: var(--gradient-sidebar, linear-gradient(145deg, #1e293b 0%, #0f172a 100%));
   border-radius: var(--border-radius-lg, 12px);
-  box-shadow: var(--shadow-lg, 0 10px 25px rgba(0, 0, 0, 0.15));
+  box-shadow: var(--shadow-lg, 0 10px 25px rgb(0 0 0 / 15%));
   overflow: hidden;
   transition: all 0.3s ease;
 }
@@ -605,8 +602,8 @@
   align-items: center;
   gap: var(--spacing-sm, 12px);
   padding: var(--spacing-md, 16px);
-  background: rgba(241, 245, 249, 0.05);
-  border: 1px solid rgba(241, 245, 249, 0.1);
+  background: rgb(241 245 249 / 5%);
+  border: 1px solid rgb(241 245 249 / 10%);
   border-radius: var(--border-radius-lg, 12px);
   color: var(--sidebar-text, #f1f5f9);
   font-size: var(--font-size-sm, 14px);
@@ -618,10 +615,10 @@
 }
 
 .sidebar-action-btn:hover {
-  background: rgba(241, 245, 249, 0.1);
-  border-color: rgba(59, 130, 246, 0.3);
+  background: rgb(241 245 249 / 10%);
+  border-color: rgb(59 130 246 / 30%);
   transform: translateY(-2px);
-  box-shadow: 0 4px 12px rgba(59, 130, 246, 0.15);
+  box-shadow: 0 4px 12px rgb(59 130 246 / 15%);
 }
 
 .sidebar-action-btn:active {
@@ -635,8 +632,8 @@
 }
 
 .sidebar-action-btn:disabled:hover {
-  background: rgba(241, 245, 249, 0.05);
-  border-color: rgba(241, 245, 249, 0.1);
+  background: rgb(241 245 249 / 5%);
+  border-color: rgb(241 245 249 / 10%);
   transform: none;
   box-shadow: none;
 }
@@ -663,13 +660,13 @@
   align-items: center;
   gap: var(--spacing-sm, 12px);
   padding: var(--spacing-sm, 12px);
-  background: rgba(241, 245, 249, 0.03);
+  background: rgb(241 245 249 / 3%);
   border-radius: var(--border-radius-md, 8px);
   transition: all 0.2s ease;
 }
 
 .status-item:hover {
-  background: rgba(241, 245, 249, 0.06);
+  background: rgb(241 245 249 / 6%);
 }
 
 .status-dot {
@@ -682,18 +679,18 @@
 
 .status-dot.status-online {
   background: var(--status-excellent, #10b981);
-  box-shadow: 0 0 10px rgba(16, 185, 129, 0.4);
+  box-shadow: 0 0 10px rgb(16 185 129 / 40%);
 }
 
 .status-dot.status-warning {
   background: var(--status-warning, #f59e0b);
-  box-shadow: 0 0 10px rgba(245, 158, 11, 0.4);
+  box-shadow: 0 0 10px rgb(245 158 11 / 40%);
 }
 
 .status-dot.status-error,
 .status-dot.status-offline {
   background: var(--status-poor, #ef4444);
-  box-shadow: 0 0 10px rgba(239, 68, 68, 0.4);
+  box-shadow: 0 0 10px rgb(239 68 68 / 40%);
 }
 
 .status-text {
@@ -709,6 +706,7 @@
     opacity: 1;
     transform: scale(1);
   }
+
   50% {
     opacity: 0.7;
     transform: scale(1.1);
@@ -720,7 +718,7 @@
    ============================================================================= */
 
 /* Mobile adjustments for DashboardSidebar */
-@media (max-width: 768px) {
+@media (width <= 768px) {
   .sidebar-container {
     border-radius: 0 0 var(--border-radius-lg, 12px) var(--border-radius-lg, 12px);
   }
@@ -765,7 +763,7 @@
 }
 
 /* Tablet adjustments */
-@media (min-width: 769px) and (max-width: 1024px) {
+@media (width >= 769px) and (width <= 1024px) {
   .sidebar-content {
     padding: var(--spacing-lg, 20px);
   }
@@ -776,7 +774,7 @@
 }
 
 /* Large screen enhancements */
-@media (min-width: 1025px) {
+@media (width >= 1025px) {
   .sidebar-action-btn {
     padding: var(--spacing-md, 16px) var(--spacing-lg, 20px);
   }

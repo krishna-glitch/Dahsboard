@@ -5,10 +5,11 @@
   min-height: 100vh;
   display: grid;
   place-items: center;
+
   /* Tokenized background: subtle surface gradient with soft brand tints */
   background:
-    radial-gradient(60% 80% at 20% 10%, rgba(59, 130, 246, 0.18) 0%, rgba(59, 130, 246, 0) 60%),
-    radial-gradient(60% 80% at 80% 90%, rgba(30, 64, 175, 0.18) 0%, rgba(30, 64, 175, 0) 60%),
+    radial-gradient(60% 80% at 20% 10%, rgb(59 130 246 / 18%) 0%, rgb(59 130 246 / 0%) 60%),
+    radial-gradient(60% 80% at 80% 90%, rgb(30 64 175 / 18%) 0%, rgb(30 64 175 / 0%) 60%),
     var(--gradient-surface);
   padding: 20px;
 }
@@ -26,10 +27,12 @@
   position: relative;
   border-radius: 20px;
   padding: 36px;
+
   /* Use brand gradient tones */
-  background: linear-gradient(180deg, rgba(59, 130, 246, 0.08), rgba(37, 99, 235, 0.08));
-  border: 1px solid rgba(255, 255, 255, 0.1);
-  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.04), 0 10px 30px rgba(0, 0, 0, 0.25);
+  background: linear-gradient(180deg, rgb(59 130 246 / 8%), rgb(37 99 235 / 8%));
+  border: 1px solid rgb(255 255 255 / 10%);
+  box-shadow: inset 0 0 0 1px rgb(255 255 255 / 4%), 0 10px 30px rgb(0 0 0 / 25%);
+
   /* Use dark text for readability */
   color: #111827;
   overflow: hidden;
@@ -41,18 +44,19 @@
   inset: -60px -120px auto auto;
   width: 360px;
   height: 360px;
-  background: radial-gradient(closest-side, rgba(99, 102, 241, 0.35), rgba(99, 102, 241, 0));
+  background: radial-gradient(closest-side, rgb(99 102 241 / 35%), rgb(99 102 241 / 0%));
   filter: blur(12px);
   transform: rotate(25deg);
 }
 
 .brand { display: flex; align-items: center; gap: 14px; margin-bottom: 18px; }
+
 .brand-logo {
   width: 48px; height: 48px; border-radius: 12px;
   display: grid; place-items: center; font-size: 22px;
   background: linear-gradient(135deg, #60a5fa, #a78bfa);
   color: #0b1020; font-weight: 700;
-  box-shadow: 0 8px 24px rgba(99, 102, 241, 0.35);
+  box-shadow: 0 8px 24px rgb(99 102 241 / 35%);
 }
 .brand-text h2 { margin: 0; color: #111827; font-size: 22px; font-weight: 600; }
 .brand-text p { margin: 0; color: #111827; font-size: 13px; }
@@ -62,16 +66,17 @@
 .features i { color: #111827; }
 
 .auth-card {
-  background: #ffffff; /* align with site cards */
+  background: #fff; /* align with site cards */
   border-radius: 16px;
   border: 1px solid var(--border-primary, #dee2e6);
-  box-shadow: 0 12px 24px rgba(16, 24, 40, 0.08);
+  box-shadow: 0 12px 24px rgb(16 24 40 / 8%);
   padding: 34px;
   width: 100%;
   max-width: 440px;
 }
 
 .login-header { text-align: center; margin-bottom: 30px; }
+
 .login-header.modern h1 {
   color: #212529;
   font-size: 28px;
@@ -88,16 +93,17 @@
 .form-group .input-wrap {
   display: grid; grid-template-columns: 32px 1fr 36px; align-items: center;
   padding: 6px 6px 6px 10px; border: 1px solid var(--border-primary, #dee2e6);
-  background: #ffffff;
+  background: #fff;
   border-radius: 12px; transition: border-color .2s ease, box-shadow .2s ease;
 }
 .form-group .input-wrap i { color: #6c757d; font-size: 16px; }
+
 .form-group .input-wrap input {
   padding: 12px 10px; border: none; background: transparent; color: #212529; font-size: 16px;
 }
 .form-group .input-wrap input::placeholder { color: #6c757d; }
 .form-group .input-wrap input:focus { outline: none; }
-.form-group .input-wrap:focus-within { border-color: var(--primary-color, #0d6efd); box-shadow: 0 0 0 4px rgba(13, 110, 253, 0.15); }
+.form-group .input-wrap:focus-within { border-color: var(--primary-color, #0d6efd); box-shadow: 0 0 0 4px rgb(13 110 253 / 15%); }
 
 .form-group input:disabled { background-color: #f8f9fa; cursor: not-allowed; opacity: 0.6; }
 
@@ -107,7 +113,7 @@
 .login-button {
   display: flex; align-items: center; justify-content: center; gap: 8px;
   padding: 12px 24px; background: var(--primary-color, #3148f6);
-  color: #ffffff; border: none; border-radius: 12px; font-size: 16px; font-weight: 600;
+  color: #fff; border: none; border-radius: 12px; font-size: 16px; font-weight: 600;
   cursor: pointer; transition: all 0.2s ease; margin-top: 10px;
 }
 .login-button.large { padding: 14px 26px; font-size: 17px; }
@@ -115,6 +121,7 @@
 .login-button:active { transform: translateY(0); }
 .login-button:disabled { opacity: 0.6; cursor: not-allowed; transform: none; box-shadow: none; }
 .login-button .spin { animation: spin 1s linear infinite; }
+
 @keyframes spin { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }
 
 .login-footer { margin-top: 20px; text-align: center; }
@@ -132,25 +139,28 @@
 .link-muted:hover { color: var(--secondary-color, #6f7cf4); text-decoration: underline; }
 
 /* Lightweight brand animation */
-.brand-logo { animation: logoPulse 4s ease-in-out infinite; }
-@keyframes logoPulse { 0%,100% { transform: scale(1); } 50% { transform: scale(1.05); } }
+.brand-logo { animation: logo-pulse 4s ease-in-out infinite; }
+
+@keyframes logo-pulse { 0%,100% { transform: scale(1); } 50% { transform: scale(1.05); } }
 
 /* Decorative water animation (pure CSS) */
-.animated-water { position: absolute; inset: auto 0 0 0; height: 120px; pointer-events: none; }
-.wave { position: absolute; left: -25%; right: -25%; height: 60px; opacity: 0.3; background: radial-gradient(200px 60px at 50% 40%, rgba(59,130,246,.5), transparent 60%); filter: blur(8px); }
-.wave.w1 { animation: waveDrift 14s linear infinite; bottom: 24px; }
-.wave.w2 { animation: waveDrift 20s linear infinite reverse; bottom: 0; opacity: 0.2; }
-@keyframes waveDrift { from { transform: translateX(0); } to { transform: translateX(25%); } }
+.animated-water { position: absolute; inset: auto 0 0; height: 120px; pointer-events: none; }
+.wave { position: absolute; left: -25%; right: -25%; height: 60px; opacity: 0.3; background: radial-gradient(200px 60px at 50% 40%, rgb(59 130 246 / 50%), transparent 60%); filter: blur(8px); }
+.wave.w1 { animation: wave-drift 14s linear infinite; bottom: 24px; }
+.wave.w2 { animation: wave-drift 20s linear infinite reverse; bottom: 0; opacity: 0.2; }
 
-.bubble { position: absolute; bottom: 6px; width: 10px; height: 10px; border-radius: 50%; background: rgba(147,197,253,0.6); filter: blur(0.5px); animation: floatUp 6s ease-in infinite; }
+@keyframes wave-drift { from { transform: translateX(0); } to { transform: translateX(25%); } }
+
+.bubble { position: absolute; bottom: 6px; width: 10px; height: 10px; border-radius: 50%; background: rgb(147 197 253 / 60%); filter: blur(0.5px); animation: float-up 6s ease-in infinite; }
 .bubble.b1 { left: 20%; animation-delay: 0s; }
 .bubble.b2 { left: 45%; animation-delay: 1.2s; width: 8px; height: 8px; }
 .bubble.b3 { left: 70%; animation-delay: 2.2s; width: 12px; height: 12px; }
 .bubble.b4 { left: 85%; animation-delay: 3s; width: 9px; height: 9px; }
-@keyframes floatUp { 0% { transform: translateY(0) scale(1); opacity: 0.8; } 80% { opacity: 0.2; } 100% { transform: translateY(-90px) scale(0.9); opacity: 0; } }
+
+@keyframes float-up { 0% { transform: translateY(0) scale(1); opacity: 0.8; } 80% { opacity: 0.2; } 100% { transform: translateY(-90px) scale(0.9); opacity: 0; } }
 
 /* Responsive design */
-@media (max-width: 480px) {
+@media (width <= 480px) {
   .login-container { padding: 10px; }
   .auth-wrapper { grid-template-columns: 1fr; gap: 18px; }
   .auth-visual { display: none; }

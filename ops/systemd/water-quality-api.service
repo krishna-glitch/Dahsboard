@@ -1,0 +1,21 @@
+[Unit]
+Description=Water Quality Flask API (gunicorn)
+After=network.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=www-data
+Group=www-data
+WorkingDirectory=/srv/water-quality/flask
+Environment="PYTHONUNBUFFERED=1"
+Environment="PYTHONPATH=/srv/water-quality"
+ExecStart=/srv/water-quality/venv/bin/gunicorn -c /srv/water-quality/ops/gunicorn/gunicorn.conf.py flask.wsgi:app
+Restart=always
+RestartSec=3
+KillSignal=SIGTERM
+TimeoutStopSec=30
+
+[Install]
+WantedBy=multi-user.target
+

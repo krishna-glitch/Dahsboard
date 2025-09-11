@@ -1,12 +1,5 @@
-import React, { createContext, useContext, useEffect, useMemo, useState } from 'react';
-
-const TutorialContext = createContext({
-  enabled: false,
-  toggle: () => {},
-  disable: () => {},
-  isHintDismissed: () => false,
-  dismissHint: () => {}
-});
+import React, { useEffect, useMemo, useState, useCallback } from 'react';
+import { TutorialContext } from '../hooks/useTutorial';
 
 const STORAGE_ENABLED = 'tutorial_enabled';
 const STORAGE_HINTS = 'tutorial_dismissed_hints';
@@ -37,8 +30,8 @@ export const TutorialProvider = ({ children }) => {
     }
   }, [enabled]);
 
-  const isHintDismissed = (id) => dismissed.has(id);
-  const dismissHint = (id) => {
+  const isHintDismissed = useCallback((id) => dismissed.has(id), [dismissed]);
+  const dismissHint = useCallback((id) => {
     setDismissed(prev => {
       const next = new Set(prev);
       next.add(id);
@@ -49,7 +42,7 @@ export const TutorialProvider = ({ children }) => {
       }
       return next;
     });
-  };
+  }, [setDismissed]);
 
   const value = useMemo(() => ({
     enabled,
@@ -57,7 +50,7 @@ export const TutorialProvider = ({ children }) => {
     disable: () => setEnabled(false),
     isHintDismissed,
     dismissHint
-  }), [enabled, dismissed, isHintDismissed]);
+  }), [enabled, isHintDismissed, dismissHint]);
 
   return (
     <TutorialContext.Provider value={value}>
@@ -65,6 +58,4 @@ export const TutorialProvider = ({ children }) => {
     </TutorialContext.Provider>
   );
 };
-
-export const useTutorial = () => useContext(TutorialContext);
 

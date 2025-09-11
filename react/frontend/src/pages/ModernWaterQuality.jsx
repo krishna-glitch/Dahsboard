@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useCallback, useMemo, useRef, lazy, Suspense } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import { useNavigate } from 'react-router-dom';
-import Plot from 'react-plotly.js';
+import Plot from '../components/PlotlyLite';
 
 // Modern components
 import MetricCard from '../components/modern/MetricCard';
@@ -12,9 +12,11 @@ import ExportButton from '../components/ExportButton';
 // import ProgressiveLoadingBar from '../components/modern/ProgressiveLoadingBar';
 import { useToast } from '../components/modern/toastUtils';
 import useWaterQualityData from '../hooks/useWaterQualityData';
+import usePredictiveLoader from '../hooks/usePredictiveLoader';
 const WaterQualityChartRouter = lazy(() => import('../components/water/WaterQualityChartRouter'));
 import WaterQualityChartControls from '../components/water/WaterQualityChartControls';
 import { log } from '../utils/log';
+import VisibleOnView from '../components/VisibleOnView';
 
 // Error boundaries and performance monitoring
 import DataLoadingErrorBoundary from '../components/boundaries/DataLoadingErrorBoundary';
@@ -85,6 +87,9 @@ const ModernWaterQuality = () => {
   // Toast notifications
   const toast = useToast();
   const [searchParams, setSearchParams] = useSearchParams();
+  
+  // Predictive loading for cache optimization
+  const predictiveLoader = usePredictiveLoader();
 
   // URL -> State (initialize once to avoid URL/state feedback loops)
   const initializedFromUrlRef = useRef(false);
@@ -101,7 +106,7 @@ const ModernWaterQuality = () => {
     if (cmpQ) setCompareParameter(cmpQ);
     if (modeQ) setCompareMode(modeQ);
     initializedFromUrlRef.current = true;
-  }, []);
+  }, [searchParams]);
 
   // State -> URL
   useEffect(() => {
@@ -128,6 +133,21 @@ const ModernWaterQuality = () => {
     compareParameter
   });
   useEffect(() => { if (hookError) setError(hookError); }, [hookError]);
+  
+  // Track behavior for predictive loading
+  useEffect(() => {
+    if (data.length > 0 && !loading) {
+      predictiveLoader.addBehavior({
+        service: 'water_quality',
+        sites: selectedSites,
+        timeRange: timeRange,
+        parameters: [selectedParameter],
+        compareMode,
+        timestamp: Date.now()
+      });
+    }
+  }, [data.length, loading, selectedSites, timeRange, selectedParameter, compareMode, predictiveLoader]);
+  
   // Track actual server data window for UI hints
   useEffect(() => {
     const start = meta?.date_range?.start ? String(meta.date_range.start).slice(0, 10) : '';
@@ -705,21 +725,27 @@ const ModernWaterQuality = () => {
                 onShowDataTable={() => setActiveView('details')}
                 onDownloadData={() => log.info('[WQ] Download data requested')}
               >
-                <Suspense fallback={<div style={{ padding: 12 }}>Loading chart…</div>}>
-                  <WaterQualityChartRouter
-                    activeView={activeView}
-                    chartData={chartData}
-                    chartType={chartType}
-                    selectedParameter={selectedParameter}
-                    compareMode={compareMode}
-                    compareParameter={compareParameter}
-                    parameterConfig={PARAMETER_CONFIG}
-                    alertShapes={alertShapes}
-                    data={data}
-                    onShowDataTable={() => setActiveView('details')}
-                    onRetry={() => refetch()}
-                  />
-                </Suspense>
+                {(!Array.isArray(data) || data.length === 0) ? (
+                  <div className="text-muted small" style={{ padding: '0.5rem 0', minHeight: 320 }}>No data to display for the selected filters.</div>
+                ) : (
+                  <VisibleOnView minHeight={320} rootMargin="200px">
+                    <Suspense fallback={<div style={{ padding: 12 }}>Loading chart…</div>}>
+                      <WaterQualityChartRouter
+                        activeView={activeView}
+                        chartData={chartData}
+                        chartType={chartType}
+                        selectedParameter={selectedParameter}
+                        compareMode={compareMode}
+                        compareParameter={compareParameter}
+                        parameterConfig={PARAMETER_CONFIG}
+                        alertShapes={alertShapes}
+                        data={data}
+                        onShowDataTable={() => setActiveView('details')}
+                        onRetry={() => refetch()}
+                      />
+                    </Suspense>
+                  </VisibleOnView>
+                )}
               </ChartErrorBoundary>
             )}
             </div>

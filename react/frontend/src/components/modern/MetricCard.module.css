@@ -1,7 +1,7 @@
 /* MetricCard component – single source of truth for KPI card styles */
 
 .metricCard {
-  background: #ffffff;
+  background: #fff;
   border-radius: var(--metric-card-border-radius);
   padding: var(--metric-card-padding);
   box-shadow: var(--metric-card-shadow);
@@ -21,6 +21,7 @@
   display: flex;
   justify-content: space-between;
   align-items: flex-start;
+
   /* Tighter spacing between title and value for compact KPIs */
   margin-bottom: var(--spacing-component-xs);
 }
@@ -41,7 +42,7 @@
   width: 36px;
   height: 36px;
   border-radius: 10px;
-  background: #ffffff;
+  background: #fff;
   border: 1px solid var(--border-primary);
   color: var(--text-secondary);
 }
@@ -92,7 +93,7 @@
 .progressBar {
   width: 100%;
   height: 6px;
-  background: rgba(0, 0, 0, 0.08);
+  background: rgb(0 0 0 / 8%);
   border-radius: 3px;
   overflow: hidden;
   position: relative;
@@ -110,11 +111,11 @@
   content: '';
   position: absolute;
   inset: 0;
-  background: linear-gradient(90deg, transparent, rgba(255,255,255,0.3), transparent);
-  animation: progressShine 2s infinite;
+  background: linear-gradient(90deg, transparent, rgb(255 255 255 / 30%), transparent);
+  animation: progress-shine 2s infinite;
 }
 
-@keyframes progressShine {
+@keyframes progress-shine {
   0% { transform: translateX(-100%); }
   100% { transform: translateX(100%); }
 }
@@ -133,7 +134,7 @@
 
 /* Loading shimmer (optional hook) */
 .metricCardLoading {
-  background: linear-gradient(90deg, rgba(255,255,255,0.8) 25%, rgba(255,255,255,0.95) 50%, rgba(255,255,255,0.8) 75%);
+  background: linear-gradient(90deg, rgb(255 255 255 / 80%) 25%, rgb(255 255 255 / 95%) 50%, rgb(255 255 255 / 80%) 75%);
   background-size: 200% 100%;
   animation: shimmer 2s infinite;
 }
@@ -145,12 +146,12 @@
 
 /* Entrance animation */
 .componentFadeIn {
-  animation: fadeInUp 0.6s cubic-bezier(0.4, 0, 0.2, 1) forwards;
+  animation: fade-in-up 0.6s cubic-bezier(0.4, 0, 0.2, 1) forwards;
   opacity: 0;
   transform: translateY(20px);
 }
 
-@keyframes fadeInUp {
+@keyframes fade-in-up {
   to { opacity: 1; transform: translateY(0); }
 }
 
@@ -183,7 +184,7 @@
 
 /* Flip content styling to match front */
 .flipContent {
-  padding: 12px 10px 8px 10px;
+  padding: 12px 10px 8px;
   display: grid;
   gap: 8px;
 }
@@ -192,7 +193,7 @@
   font-size: 0.9rem;
   font-weight: 600;
   color: var(--text-primary);
-  margin: 0 0 2px 0;
+  margin: 0 0 2px;
 }
 
 .flipList {

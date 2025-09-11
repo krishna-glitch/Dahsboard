@@ -1,13 +1,14 @@
 /* Dashboard Header Styles */
 
 .header-container {
-  background: rgba(255, 255, 255, 0.95);
+  background: rgb(255 255 255 / 95%);
   backdrop-filter: blur(20px);
   border-bottom: 1px solid var(--border-color);
   box-shadow: var(--shadow-sm);
   position: sticky;
   top: 0;
   z-index: 1000;
+
   /* Subtle water wave background using inline SVG for performance */
   --wave-svg: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 1200 120' preserveAspectRatio='none'%3E%3Cpath d='M0,0 C150,100 350,-50 600,50 C850,150 1050,0 1200,80 L1200,120 L0,120 Z' fill='%23F3F6FF'/%3E%3C/svg%3E");
 }
@@ -135,7 +136,7 @@
 
 .nav-link:hover {
   color: var(--primary-color);
-  background: rgba(49, 72, 246, 0.05);
+  background: rgb(49 72 246 / 5%);
 }
 
 .nav-link:hover::after,
@@ -145,7 +146,7 @@
 
 .nav-link[aria-current="page"] {
   color: var(--primary-color);
-  background: rgba(49, 72, 246, 0.1);
+  background: rgb(49 72 246 / 10%);
 }
 
 .nav-icon {
@@ -239,7 +240,7 @@
 }
 
 /* Responsive Design */
-@media (max-width: 1023px) {
+@media (width <= 1023px) {
   .header-content {
     padding: var(--spacing-md);
     gap: var(--spacing-md);
@@ -263,7 +264,7 @@
   }
 }
 
-@media (max-width: 767px) {
+@media (width <= 767px) {
   .header-content {
     flex-direction: column;
     gap: var(--spacing-sm);
@@ -303,7 +304,7 @@
   }
 }
 
-@media (max-width: 479px) {
+@media (width <= 479px) {
   .brand-title {
     font-size: var(--font-size-base);
   }

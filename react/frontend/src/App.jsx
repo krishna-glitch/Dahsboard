@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useCallback, Suspense } from 'react';
-import { Routes, Route, Link, useLocation } from 'react-router-dom';
+import { Routes, Route, Link, useLocation, useNavigate } from 'react-router-dom';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { persistQueryClient } from '@tanstack/query-persist-client-core';
 import { createSyncStoragePersister } from '@tanstack/query-sync-storage-persister';
@@ -15,12 +15,13 @@ const ModernReports = React.lazy(() => import('./pages/ModernReports'));
 const ModernSiteComparison = React.lazy(() => import('./pages/ModernSiteComparison'));
 const ModernRedoxAnalysis = React.lazy(() => import('./pages/ModernRedoxAnalysis'));
 const ModernUpload = React.lazy(() => import('./pages/ModernUpload'));
-const ModernPerformanceDashboard = React.lazy(() => import('./pages/ModernPerformanceDashboard'));
+const ModernPerformanceDashboard = React.lazy(() => import('./pages/EnhancedPerformanceDashboard'));
 const ModernSystemHealth = React.lazy(() => import('./pages/ModernSystemHealth'));
 const ModernAdmin = React.lazy(() => import('./pages/ModernAdmin'));
 const ModernIntroduction = React.lazy(() => import('./pages/ModernIntroduction'));
 const ModernDataDiagnostics = React.lazy(() => import('./pages/ModernDataDiagnostics'));
 const ModernDataQuality = React.lazy(() => import('./pages/ModernDataQuality'));
+const ModernSettings = React.lazy(() => import('./pages/ModernSettings'));
 const Login = React.lazy(() => import('./pages/Login'));
 const Support = React.lazy(() => import('./pages/Support'));
 
@@ -29,6 +30,7 @@ const Support = React.lazy(() => import('./pages/Support'));
 // Navigation component using the auth context
 const Navigation = () => {
   const { isAuthenticated, user, logout } = useAuth();
+  const navigate = useNavigate();
   const [showPagesDropdown, setShowPagesDropdown] = useState(false);
   const [showUserMenu, setShowUserMenu] = useState(false);
   // Normalize profile display and avoid duplicate name/role appearance
@@ -64,7 +66,7 @@ const Navigation = () => {
   };
 
   // Lightweight route prefetch on hover (no data fetched)
-  const prefetchWaterQuality = () => { try { import('./pages/ModernWaterQuality'); } catch {} };
+  const prefetchWaterQuality = () => { try { import('./pages/ModernWaterQuality'); } catch { /* prefetch failed, this is fine */ } };
 
   // Close dropdown when clicking outside
   useEffect(() => {
@@ -132,7 +134,7 @@ const Navigation = () => {
         <div className="nav-cta">
           {isAuthenticated ? (
             <>
-              <div className="user-menu-container" style={{ position: 'relative' }}>
+              <div className="user-menu-container" style={{ position: 'relative', minWidth: 160, minHeight: 40 }}>
                 <div className="modern-user-chip" role="button" aria-haspopup="menu" aria-expanded={showUserMenu}
                   onClick={() => setShowUserMenu(prev => !prev)}
                   title="Account menu">
@@ -169,7 +171,10 @@ const Navigation = () => {
                     <div className="dropdown-section">
                       <button
                         className="modern-dropdown-item"
-                        onClick={() => { setShowUserMenu(false); }}
+                        onClick={() => { 
+                          setShowUserMenu(false); 
+                          navigate('/settings');
+                        }}
                         role="menuitem"
                       >
                         <div className="item-icon">
@@ -246,6 +251,7 @@ function AppContent() {
               <Route path="/introduction" element={<ModernIntroduction />} />
               <Route path="/data-diagnostics" element={<ProtectedRoute><ModernDataDiagnostics /></ProtectedRoute>} />
               <Route path="/data-quality" element={<ProtectedRoute><ModernDataQuality /></ProtectedRoute>} />
+              <Route path="/settings" element={<ProtectedRoute><ModernSettings /></ProtectedRoute>} />
             </Routes>
           </Suspense>
         </ErrorBoundary>

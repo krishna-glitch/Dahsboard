@@ -2,43 +2,59 @@ import { defineConfig } from 'vite'
 import react from '@vitejs/plugin-react'
 
 // https://vite.dev/config/
-export default defineConfig({
-  plugins: [react()],
-  base: './',
-  resolve: {
-    alias: {
-      // Use the ESM build of Apache Arrow
-      'apache-arrow': '@apache-arrow/esnext-esm'
+export default defineConfig(async () => {
+  const plugins = [react()];
+  if (process.env.ANALYZE === '1' || process.env.VISUALIZE === '1') {
+    try {
+      const { visualizer } = await import('rollup-plugin-visualizer');
+      plugins.push(visualizer({
+        filename: 'dist/stats.html',
+        template: 'treemap',
+        gzipSize: true,
+        brotliSize: true,
+      }));
+    } catch (e) {
+      // eslint-disable-next-line no-console
+      console.warn('[vite] rollup-plugin-visualizer not installed; skip analyze');
     }
-  },
-  server: {
-    proxy: {
-      '/api': {
-        target: 'http://127.0.0.1:5000',
-        changeOrigin: true, // Forward correct Host so cookies apply to frontend origin
-        secure: false,
-        ws: true,
-        cookieDomainRewrite: { '*': 'localhost' }, // Rewrite any domain to localhost (dev origin)
-        cookiePathRewrite: false,   // Preserve cookie path
-        configure: (proxy) => {
-          proxy.on('error', (err) => {
-            console.log('proxy error', err);
-          });
-          proxy.on('proxyReq', (proxyReq, req) => {
-            console.log('Sending Request to the Target:', req.method, req.url);
-            // Ensure cookies are forwarded
-            if (req.headers.cookie) {
-              console.log('Forwarding cookies:', req.headers.cookie);
-            }
-          });
-          proxy.on('proxyRes', (proxyRes, req) => {
-            console.log('Received Response from the Target:', proxyRes.statusCode, req.url);
-            // Log set-cookie headers
-            if (proxyRes.headers['set-cookie']) {
-              console.log('Received Set-Cookie:', proxyRes.headers['set-cookie']);
-            }
-          });
-        },
+  }
+  return {
+    plugins,
+    base: './',
+    build: {
+      // Use default minifier unless explicitly requested; avoids requiring lightningcss
+      cssMinify: process.env.CSS_MINIFIER === 'lightningcss' ? 'lightningcss' : true,
+      // Enable source maps by default for better debugging and Lighthouse scores
+      sourcemap: process.env.VITE_SOURCEMAP !== '0',
+      rollupOptions: {
+        output: {
+          // Optimize chunk sizes and enable source maps for better debugging
+          manualChunks: {
+            // Separate large vendor libraries for better caching
+            'plotly-basic': ['plotly.js-basic-dist-min'],
+            'plotly-gl2d': ['plotly.js-gl2d-dist-min'], 
+            'plotly-full': ['plotly.js-dist-min'],
+            'react-vendor': ['react', 'react-dom', 'react-router-dom'],
+            'data-vendor': ['@tanstack/react-query', '@apache-arrow/esnext-esm'],
+          },
+          sourcemapExcludeSources: true, // Exclude source content to reduce map file size
+        }
+      }
+    },
+    resolve: {
+      alias: {
+        // Use the ESM build of Apache Arrow
+        'apache-arrow': '@apache-arrow/esnext-esm'
+      }
+    },
+    server: {
+      proxy: {
+        '/api': {
+          target: 'http://127.0.0.1:5000',
+          changeOrigin: true,
+          secure: false,
+          ws: true,
+        }
       }
     }
   }

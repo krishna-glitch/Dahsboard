@@ -286,7 +286,7 @@ export const ToastProvider = ({ children, maxToasts = 5, exitDuration = 300 }) =
       
       return updatedToasts;
     });
-  }, []);
+  }, [exitDuration]);
 
   const clearAllToasts = useCallback(() => {
     setToasts([]);

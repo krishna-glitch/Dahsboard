@@ -1,5 +1,5 @@
 import React from 'react';
-import Plot from 'react-plotly.js';
+import Plot from '../PlotlyLite';
 
 // Memoized component following performance cheat sheet
 const PerSiteCharts = React.memo(function PerSiteCharts({ 

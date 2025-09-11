@@ -1,5 +1,5 @@
 import React from 'react';
-import { useTutorial } from '../../contexts/TutorialContext';
+import { useTutorial } from '../../hooks/useTutorial';
 
 const TutorialHint = ({ id, title = 'Tip', children, style = {}, className = '' }) => {
   const { enabled, isHintDismissed, dismissHint } = useTutorial();

@@ -1,5 +1,6 @@
 import React, { useState, useRef } from 'react';
-import { Dropdown, Spinner } from 'react-bootstrap';
+import Dropdown from 'react-bootstrap/Dropdown';
+import Spinner from 'react-bootstrap/Spinner';
 import { useToast } from './modern/toastUtils';
 import { 
   performExport,

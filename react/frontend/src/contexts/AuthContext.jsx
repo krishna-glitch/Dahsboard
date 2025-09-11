@@ -19,8 +19,8 @@ export const AuthProvider = ({ children }) => {
   const bcRef = useRef(null);
   // Initialize BroadcastChannel once
   useEffect(() => {
-    try { bcRef.current = new BroadcastChannel('auth-sync'); } catch (_) { bcRef.current = null; }
-    return () => { try { bcRef.current?.close(); } catch (_) {} };
+    try { bcRef.current = new BroadcastChannel('auth-sync'); } catch { bcRef.current = null; }
+    return () => { try { bcRef.current?.close(); } catch { /* ignore */ } };
   }, []);
 
   const tabIdRef = useRef(`${Date.now()}_${Math.random().toString(36).slice(2)}`);
@@ -37,7 +37,7 @@ export const AuthProvider = ({ children }) => {
           return;
         }
       }
-    } catch (_) {}
+    } catch { /* ignore */ }
     // Cross-tab lock using localStorage to prevent parallel checks across tabs
     const LOCK_KEY = 'auth:lock';
     const now = Date.now();
@@ -53,7 +53,7 @@ export const AuthProvider = ({ children }) => {
         const verify = safeStorage.getJSON(LOCK_KEY) || {};
         haveLock = verify.holder === tabIdRef.current;
       }
-    } catch (_) { /* ignore storage errors */ }
+    } catch { /* ignore storage errors */ }
     if (!haveLock) {
       // Another tab is leader; let it broadcast results
       return;
@@ -94,7 +94,7 @@ export const AuthProvider = ({ children }) => {
       
       if (response.authenticated && response.user) {
         setUser(response.user);
-        try { safeStorage.setRaw('auth:lastOK', String(Date.now())); } catch (_) {}
+        try { safeStorage.setRaw('auth:lastOK', String(Date.now())); } catch { /* ignore */ }
         // reset backoff on success
         backoffRef.attempts = 0;
 
@@ -102,7 +102,7 @@ export const AuthProvider = ({ children }) => {
         try {
           // Fire-and-forget: preload Home page module
           import('../pages/ModernHome').catch(() => {});
-        } catch (_) {}
+        } catch { /* ignore */ }
         try {
           // Background prefetch of home KPI data with cache seed (skip if fresh)
           (async () => {
@@ -112,7 +112,7 @@ export const AuthProvider = ({ children }) => {
               if (cached?.savedAt && (Date.now() - cached.savedAt) < freshMs) {
                 return; // skip prefetch if recent cache exists
               }
-            } catch (_) {}
+            } catch { /* ignore */ }
             const res = await getHomeData();
             const s = res?.dashboard_data?.dashboard_stats || {};
             const latest = Array.isArray(res?.dashboard_data?.latest_per_site) ? res.dashboard_data.latest_per_site : [];
@@ -131,10 +131,10 @@ export const AuthProvider = ({ children }) => {
                 meta: newMeta,
                 latestBySite: latest,
               });
-              try { window.dispatchEvent(new CustomEvent('home:data:updated')); } catch (_) {}
-            } catch (_) {}
+              try { window.dispatchEvent(new CustomEvent('home:data:updated')); } catch { /* ignore */ }
+            } catch { /* ignore */ }
           })();
-        } catch (_) {}
+        } catch { /* ignore */ }
       } else {
         // Before nulling, perform a soft reauth check via /auth/health
         try {
@@ -144,7 +144,7 @@ export const AuthProvider = ({ children }) => {
             await checkAuthStatus(false);
             return;
           }
-        } catch (_) {}
+        } catch { /* ignore */ }
         // Suppress stale unauth if lastOK was recent (< 2 min) and this wasn't a user-initiated check
         try {
           const lastOK = Number(safeStorage.getRaw('auth:lastOK') || '0');
@@ -153,10 +153,10 @@ export const AuthProvider = ({ children }) => {
             setTimeout(() => checkAuthStatus(false), 1500);
             return;
           }
-        } catch (_) {}
+        } catch { /* ignore */ }
         setUser(null);
       }
-      try { bcRef.current?.postMessage({ type: 'auth-status', payload: response }); } catch (_) {}
+      try { bcRef.current?.postMessage({ type: 'auth-status', payload: response }); } catch { /* ignore */ }
     } catch (error) {
       console.error('🛡️ [AUTH DEBUG] Auth status check failed:', error);
       sendClientDebug('auth_check_error', { requestId, error: String(error?.message || error) });
@@ -167,7 +167,7 @@ export const AuthProvider = ({ children }) => {
         const idx = Math.min(backoffRef.attempts, delays.length - 1);
         const delay = delays[idx];
         backoffRef.attempts = Math.min(backoffRef.attempts + 1, delays.length - 1);
-        try { clearTimeout(backoffRef.timer); } catch (_) {}
+        try { clearTimeout(backoffRef.timer); } catch { /* ignore */ }
         backoffRef.timer = setTimeout(() => checkAuthStatus(false), delay);
         return;
       }
@@ -176,14 +176,14 @@ export const AuthProvider = ({ children }) => {
         setUser(null);
       }
     } finally {
-      try { safeStorage.setRaw('auth:lastCheckAt', String(Date.now())); } catch (_) {}
+      try { safeStorage.setRaw('auth:lastCheckAt', String(Date.now())); } catch { /* ignore */ }
       // Release lock if held by us
       try {
         const obj = safeStorage.getJSON(LOCK_KEY);
         if (obj && obj.holder === tabIdRef.current) {
           safeStorage.remove(LOCK_KEY);
         }
-      } catch (_) {}
+      } catch { /* ignore */ }
       if (showLoading) {
         setLoading(false);
       }
@@ -213,15 +213,15 @@ export const AuthProvider = ({ children }) => {
       } else if (type === 'auth-request') {
         // Another tab requested an auth status sync
         checkAuthStatus(false).then(() => {
-          try { bcRef.current?.postMessage({ type: 'auth-status', payload: { authenticated: !!user, user } }); } catch (_) {}
+          try { bcRef.current?.postMessage({ type: 'auth-status', payload: { authenticated: !!user, user } }); } catch { /* ignore */ }
         });
       }
     };
     bc.addEventListener('message', handler);
     // Announce presence and request status from other tabs
-    try { bc.postMessage({ type: 'auth-request' }); } catch (_) {}
+    try { bc.postMessage({ type: 'auth-request' }); } catch { /* ignore */ }
     return () => bc.removeEventListener('message', handler);
-  }, [checkAuthStatus]);
+  }, [checkAuthStatus, user]);
 
   // Initialize authentication - rely solely on Flask backend session
   useEffect(() => {
@@ -263,7 +263,7 @@ export const AuthProvider = ({ children }) => {
     };
   }, [checkAuthStatus]);
 
-  const login = async (username, password) => {
+  const login = useCallback(async (username, password) => {
     try {
       setLoading(true);
       setError(null);
@@ -273,14 +273,15 @@ export const AuthProvider = ({ children }) => {
       if (response.user) {
         setUser(response.user);
         // Warm up Home route and KPI data immediately after login for instant landing
-        try { import('../pages/ModernHome').catch(() => {}); } catch (_) {}
+        try { import('../pages/ModernHome').catch(() => {}); } catch { /* ignore */ }
         try {
+          // Background prefetch of home KPI data with cache seed (skip if fresh)
           (async () => {
             try {
               const cached = safeStorage.getJSON('home:data:v1');
-              const freshMs = 2 * 60 * 1000;
+              const freshMs = 2 * 60 * 1000; // consider fresh for 2 minutes
               if (cached?.savedAt && (Date.now() - cached.savedAt) < freshMs) return;
-            } catch (_) {}
+            } catch { /* ignore */ }
             const res = await getHomeData();
             const s = res?.dashboard_data?.dashboard_stats || {};
             const latest = Array.isArray(res?.dashboard_data?.latest_per_site) ? res.dashboard_data.latest_per_site : [];
@@ -299,10 +300,10 @@ export const AuthProvider = ({ children }) => {
                 meta: newMeta,
                 latestBySite: latest,
               });
-              try { window.dispatchEvent(new CustomEvent('home:data:updated')); } catch (_) {}
-            } catch (_) {}
+              try { window.dispatchEvent(new CustomEvent('home:data:updated')); } catch { /* ignore */ }
+            } catch { /* ignore */ }
           })();
-        } catch (_) {}
+        } catch { /* ignore */ }
         return { success: true };
       } else {
         throw new Error('Login failed - no user data returned');
@@ -314,9 +315,9 @@ export const AuthProvider = ({ children }) => {
     } finally {
       setLoading(false);
     }
-  };
+  }, [setLoading, setError, setUser]);
 
-  const logout = async () => {
+  const logout = useCallback(async () => {
     try {
       setLoading(true);
       await logoutUser();
@@ -328,11 +329,11 @@ export const AuthProvider = ({ children }) => {
       setError(null);
       setLoading(false);
     }
-  };
+  }, [setLoading, setUser, setError]);
 
-  const clearError = () => {
+  const clearError = useCallback(() => {
     setError(null);
-  };
+  }, [setError]);
 
   // Memoize context value to prevent unnecessary re-renders of consumers
   const value = useMemo(() => ({

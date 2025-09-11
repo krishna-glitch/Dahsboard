@@ -12,8 +12,10 @@
 .landing-header {
   background: var(--surface-primary);
   border-bottom: 1px solid var(--border-primary);
+
   /* Responsive header padding to reduce wasted space on laptops */
   padding: clamp(0.75rem, 2vw, 1.25rem) clamp(1rem, 3vw, 2rem);
+
   /* Static positioning for landing pages only */
   position: static;
   z-index: 1;
@@ -26,7 +28,7 @@
 }
 
 .landing-subtitle {
-  margin: 0.25rem 0 0 0;
+  margin: 0.25rem 0 0;
   color: var(--text-secondary);
   font: var(--typography-body-medium);
 }
@@ -49,9 +51,11 @@
 .navigation-grid,
 .landing-content .navigation-grid {
   display: grid;
+
   /* Allow an extra column on medium screens while keeping cards readable */
   grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
   gap: clamp(12px, 2vw, 24px);
+
   /* Remove margin-top to prevent double spacing with metrics-grid margin-bottom (32px) */
   align-items: stretch;
   grid-auto-rows: 1fr; /* make rows equal height for a neater look */
@@ -61,7 +65,7 @@
   background: var(--surface-primary, #fff);
   border: 1px solid var(--border-primary, #e9ecef);
   border-radius: 8px;
-  box-shadow: 0 1px 3px rgba(0,0,0,0.06);
+  box-shadow: 0 1px 3px rgb(0 0 0 / 6%);
   padding: 1rem;
   display: flex;
   flex-direction: column;
@@ -80,13 +84,13 @@
 .quick-access-item { display: flex; align-items: center; gap: 8px; padding: 0.75rem 1rem; background: #fff; border: 1px solid #e9ecef; border-radius: 6px; }
 
 /* Landing page specific responsive adjustments only */
-@media (max-width: 768px) {
+@media (width <= 768px) {
   .navigation-grid {
     gap: var(--spacing-component-md, 16px);
   }
 }
 
-@media (max-width: 768px) {
+@media (width <= 768px) {
   .landing-header { padding: 1rem; }
   .landing-content { padding: 1rem; }
   .nav-card { padding: 0.875rem; }
@@ -98,15 +102,17 @@
 
 /* Responsive video embed for About page */
 .video-embed { margin-top: 0.5rem; }
+
 .video-embed__responsive {
   position: relative;
   padding-bottom: 56.25%; /* 16:9 */
   height: 0;
   overflow: hidden;
   border-radius: 8px;
-  box-shadow: 0 1px 3px rgba(0,0,0,0.08);
+  box-shadow: 0 1px 3px rgb(0 0 0 / 8%);
   background: #000;
 }
+
 .video-embed__responsive iframe {
   position: absolute;
   top: 0;

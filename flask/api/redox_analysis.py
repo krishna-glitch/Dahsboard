@@ -358,11 +358,17 @@ def processed_time_series():
         chunk_size = request.args.get('chunk_size', type=int) or 100000
         offset = request.args.get('offset', 0, type=int)
         logger.info(f"🚀 [TIME SERIES] Loading data for site={site_param} start={start_ts} end={end_ts} chunk_size={chunk_size} offset={offset}")
-        logger.info(f"🧭 [TIME SERIES PARAMS] wire_format={wire_format} source={source} max_fidelity={request.args.get('max_fidelity')}")
+        logger.info(f"🧭 [TIME SERIES PARAMS] wire_format={wire_format} source={source} max_fidelity={request.args.get('max_fidelity')} resolution={request.args.get('resolution')}")
 
-        # Derive cadence from max_fidelity flag: ON -> 96/day, OFF -> 12/day
+        # Derive cadence from max_fidelity flag and requested resolution
         max_fidelity_val = (request.args.get('max_fidelity', '') or '').lower() in ('1', 'true', 'yes', 'on', 't')
-        cadence_per_day = 96 if max_fidelity_val else 12
+        requested_resolution = (request.args.get('resolution') or '').lower()
+        # Effective resolution: raw for max fidelity, else default to 2h unless explicitly provided
+        if max_fidelity_val:
+            effective_resolution = 'raw'
+        else:
+            effective_resolution = requested_resolution or '2h'
+        cadence_per_day = 96 if effective_resolution == 'raw' else 12
 
         # Enforce time range <= 366 days
         days_range = max(0, (end_dt.normalize() - start_dt.normalize()).days or 0)
@@ -374,24 +380,52 @@ def processed_time_series():
         if expected_total > 1_000_000:
             return jsonify({'error': 'The record limit is too high. Please reduce the time range to 1 year or less.'}), 400
 
-        # MV PATH with SQL pagination; restrict depths strictly
+        # MV PATH with SQL pagination; restrict depths strictly; switch MV based on resolution
         try:
-            total_records = core_data_service.count_processed_eh_time_series(
-                site_code=site_param,
-                start_ts=start_dt,
-                end_ts=end_dt,
-                allowed_depths=allowed_depths
-            )
-        except Exception:
+            if effective_resolution == '2h':
+                try:
+                    total_records = core_data_service.count_processed_eh_time_series_2h(
+                        site_code=site_param,
+                        start_ts=start_dt,
+                        end_ts=end_dt,
+                        allowed_depths=allowed_depths
+                    )
+                    df = core_data_service.load_processed_eh_time_series_2h(
+                        site_code=site_param,
+                        start_ts=start_dt,
+                        end_ts=end_dt,
+                        allowed_depths=allowed_depths,
+                        limit=chunk_size if chunk_size else None,
+                        offset=offset if chunk_size else 0
+                    )
+                except Exception as mv_err:
+                    logger.warning(f"2h MV path failed, falling back to adhoc aggregation: {mv_err}")
+                    total_records = None  # unknown count on adhoc
+                    df = core_data_service.load_processed_eh_time_series_2h_adhoc(
+                        site_code=site_param,
+                        start_ts=start_dt,
+                        end_ts=end_dt,
+                        allowed_depths=allowed_depths
+                    )
+            else:
+                total_records = core_data_service.count_processed_eh_time_series(
+                    site_code=site_param,
+                    start_ts=start_dt,
+                    end_ts=end_dt,
+                    allowed_depths=allowed_depths
+                )
+                df = core_data_service.load_processed_eh_time_series(
+                    site_code=site_param,
+                    start_ts=start_dt,
+                    end_ts=end_dt,
+                    allowed_depths=allowed_depths,
+                    limit=chunk_size if chunk_size else None,
+                    offset=offset if chunk_size else 0
+                )
+        except Exception as e_load:
+            logger.error(f"Failed to load time series: {e_load}")
             total_records = None
-        df = core_data_service.load_processed_eh_time_series(
-            site_code=site_param,
-            start_ts=start_dt,
-            end_ts=end_dt,
-            allowed_depths=allowed_depths,
-            limit=chunk_size if chunk_size else None,
-            offset=offset if chunk_size else 0
-        )
+            df = pd.DataFrame()
         logger.info(f"[TIME SERIES] rows(initial)={len(df)}")
 
         # Ensure proper dtypes before any aggregation or dedup
@@ -535,10 +569,11 @@ def processed_time_series():
                     'chunk_size': chunk_size,
                     'has_more': bool(chunk_size and (offset + chunk_size) < total_records)
                 } if chunk_size else None),
-                'allowed_inversions': { 'y1': True, 'y2': True, 'x': False }
+                'allowed_inversions': { 'y1': True, 'y2': True, 'x': False },
+                'resolution': effective_resolution
             }
         }
-        logger.info(f"📄 [TIME SERIES META] source={source} wire_format={wire_format} total={total_records} returned={response_payload['metadata']['returned_records']} chunked={bool(chunk_size)}")
+        logger.info(f"📄 [TIME SERIES META] source={source} wire_format={wire_format} res={effective_resolution} total={total_records} returned={response_payload['metadata']['returned_records']} chunked={bool(chunk_size)}")
         # No thinning metadata; server does not thin beyond cadence selection
         return jsonify(response_payload), 200
     except Exception as e:

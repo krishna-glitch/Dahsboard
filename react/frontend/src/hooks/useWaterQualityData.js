@@ -4,9 +4,11 @@ import { loadCache, persistCache } from '../utils/cache';
 import { featureFlags } from '../config/featureFlags';
 import { useToast } from '../components/modern/toastUtils';
 import { log } from '../utils/log';
+import usePersistentCache from './usePersistentCache';
 
 const CACHE_STORAGE_KEY = 'wq_cache_v1';
 const CACHE_TTL_MS = 10 * 60 * 1000;
+const PERSISTENT_CACHE_TTL_MS = 24 * 60 * 60 * 1000; // 24 hours for persistent cache
 const CACHE_MAX_CHARS = 3000000;
 
 export function useWaterQualityData({
@@ -27,14 +29,17 @@ export function useWaterQualityData({
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
   const [meta, setMeta] = useState(null);
-  // Initialize cache map conditionally based on feature flag
+  
+  // Multi-layer caching: in-memory + persistent
   const cacheRef = useRef(featureFlags.wqCacheEnabled ? loadCache(CACHE_STORAGE_KEY, CACHE_TTL_MS) : new Map());
+  const persistentCache = usePersistentCache(CACHE_STORAGE_KEY, PERSISTENT_CACHE_TTL_MS);
+  
   const lastFetchKeyRef = useRef(null);
   const abortRef = useRef(null);
   const mountedRef = useRef(true);
   const toast = useToast();
 
-  useEffect(() => () => { mountedRef.current = false; try { abortRef.current?.abort(); } catch {} }, []);
+  useEffect(() => () => { mountedRef.current = false; try { abortRef.current?.abort(); } catch { /* ignore */ } }, []);
 
   const buildParams = () => {
     const params = {
@@ -55,8 +60,8 @@ export function useWaterQualityData({
     return params;
   };
 
-  const shapeSig = useMemo(() => (
-    JSON.stringify({
+  const shapeSig = useMemo(() => {
+    return JSON.stringify({
       useAdvancedFilters: !!useAdvancedFilters,
       selectedParameters: (selectedParameters || []).slice().sort(),
       valueRanges: valueRanges || {},
@@ -65,8 +70,8 @@ export function useWaterQualityData({
       selectedParameter: selectedParameter || null,
       compareMode: compareMode || 'off',
       compareParameter: compareParameter || null,
-    })
-  ), [useAdvancedFilters, JSON.stringify(selectedParameters||[]), JSON.stringify(valueRanges||{}), dataQualityFilter, alertsFilter, selectedParameter, compareMode, compareParameter]);
+    });
+  }, [useAdvancedFilters, selectedParameters, valueRanges, dataQualityFilter, alertsFilter, selectedParameter, compareMode, compareParameter]);
 
   const refetch = useCallback(async () => {
     log.debug('[WQ Hook] refetch called with:', {
@@ -83,7 +88,7 @@ export function useWaterQualityData({
       return;
     }
     // Abort previous
-    try { abortRef.current?.abort(); } catch {}
+    try { abortRef.current?.abort(); } catch { /* ignore */ }
     const controller = new AbortController();
     abortRef.current = controller;
     setError(null);
@@ -98,17 +103,50 @@ export function useWaterQualityData({
 
       log.debug('[WQ Hook] Fetch key:', fetchKey);
 
-      // Cache read
+      // Multi-layer cache read: in-memory first, then persistent
       let cachedAggregate = [];
       let cacheHit = false;
       const missing = [];
-      if (featureFlags.wqCacheEnabled && cacheRef.current) {
+      
+      if (featureFlags.wqCacheEnabled) {
         for (const s of selectedSites) {
           const k = `${s}|${cacheRangeKey}`;
-          const c = cacheRef.current.get(k);
-          if (c && Array.isArray(c.data) && (Date.now() - (c.ts || 0) < CACHE_TTL_MS)) {
-            cachedAggregate = cachedAggregate.concat(c.data);
-          } else {
+          let found = false;
+          
+          // Layer 1: In-memory cache (fastest)
+          if (cacheRef.current) {
+            const c = cacheRef.current.get(k);
+            if (c && Array.isArray(c.data) && (Date.now() - (c.ts || 0) < CACHE_TTL_MS)) {
+              cachedAggregate = cachedAggregate.concat(c.data);
+              found = true;
+              log.debug(`[WQ Cache] In-memory hit for ${s}`);
+            }
+          }
+          
+          // Layer 2: Persistent cache (slower but cross-session)
+          if (!found && persistentCache.isReady) {
+            try {
+              const persistentData = await persistentCache.get(k);
+              if (persistentData && Array.isArray(persistentData.data)) {
+                cachedAggregate = cachedAggregate.concat(persistentData.data);
+                found = true;
+                log.debug(`[WQ Cache] Persistent hit for ${s}`);
+                
+                // Promote to in-memory cache
+                if (cacheRef.current) {
+                  cacheRef.current.set(k, {
+                    data: persistentData.data,
+                    ts: Date.now(),
+                    meta: persistentData.meta
+                  });
+                }
+              }
+            } catch (error) {
+              log.warn(`[WQ Cache] Persistent cache error for ${s}:`, error);
+            }
+          }
+          
+          if (!found) {
             missing.push(s);
           }
         }
@@ -148,7 +186,7 @@ export function useWaterQualityData({
             message: `Loaded ${rows.length.toLocaleString()} records…`,
             duration: 10000
           });
-        } catch {}
+        } catch { /* ignore */ }
         // Capture date_range from the first successful response
         if (!dateRange && res?.metadata?.date_range && (res?.metadata?.date_range.start || res?.metadata?.date_range.end)) {
           dateRange = {
@@ -163,7 +201,7 @@ export function useWaterQualityData({
       }
       const metadata = dateRange ? { date_range: dateRange } : null;
 
-      // Populate cache by site (only when enabled)
+      // Populate multi-layer cache by site (only when enabled)
       if (featureFlags.wqCacheEnabled) {
         try {
           const bySite = new Map();
@@ -172,12 +210,36 @@ export function useWaterQualityData({
             if (!bySite.has(sc)) bySite.set(sc, []);
             bySite.get(sc).push(r);
           }
+          
           const now = Date.now();
           for (const [sc, list] of bySite.entries()) {
-            cacheRef.current.set(`${sc}|${cacheRangeKey}`, { ts: now, data: list });
+            const cacheKey = `${sc}|${cacheRangeKey}`;
+            const cacheEntry = { ts: now, data: list, meta: metadata };
+            
+            // Layer 1: In-memory cache (immediate access)
+            if (cacheRef.current) {
+              cacheRef.current.set(cacheKey, cacheEntry);
+            }
+            
+            // Layer 2: Persistent cache (cross-session, async)
+            if (persistentCache.isReady) {
+              persistentCache.set(cacheKey, cacheEntry, PERSISTENT_CACHE_TTL_MS, 'water_quality')
+                .then(success => {
+                  if (success) {
+                    log.debug(`[WQ Cache] Stored ${sc} in persistent cache`);
+                  }
+                })
+                .catch(error => {
+                  log.warn(`[WQ Cache] Failed to store ${sc} in persistent cache:`, error);
+                });
+            }
           }
+          
+          // Legacy localStorage persistence (for backward compatibility)
           persistCache(CACHE_STORAGE_KEY, cacheRef.current, CACHE_MAX_CHARS, CACHE_TTL_MS);
-        } catch {}
+        } catch (error) {
+          log.warn('[WQ Cache] Cache storage error:', error);
+        }
       }
 
       if (mountedRef.current) {
@@ -206,7 +268,7 @@ export function useWaterQualityData({
         const windowSuffix = (wStart && wEnd) ? ` • Window: ${wStart} → ${wEnd}` : '';
 
         // Remove loading toast before final result
-        try { toast.removeToast(loadingToastId); } catch {}
+        try { toast.removeToast(loadingToastId); } catch { /* ignore */ }
         if (rows.length === 0) {
           toast.showWarning(
             `No water quality records found for sites ${sitesText}${windowSuffix}`,
@@ -290,7 +352,7 @@ export function useWaterQualityData({
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [Array.isArray(selectedSites) ? selectedSites.join(',') : '', timeRange, startDate, endDate, shapeSig]);
 
-  return useMemo(() => ({ data, loading, error, meta, refetch }), [data, loading, error, meta]);
+  return useMemo(() => ({ data, loading, error, meta, refetch }), [data, loading, error, meta, refetch]);
 }
 
 export default useWaterQualityData;

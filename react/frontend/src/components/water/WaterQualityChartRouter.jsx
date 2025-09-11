@@ -1,5 +1,5 @@
 import React from 'react';
-import Plot from 'react-plotly.js';
+import Plot from '../PlotlyLite';
 import { log } from '../../utils/log';
 
 const WaterQualityChartRouter = ({
@@ -12,8 +12,6 @@ const WaterQualityChartRouter = ({
   parameterConfig = {},
   alertShapes = [],
   data = [],
-  onShowDataTable,
-  onRetry,
 }) => {
   if (activeView === 'details') return null;
 
@@ -58,7 +56,7 @@ const WaterQualityChartRouter = ({
           config={{ displayModeBar: true, responsive: true, displaylogo: false, scrollZoom: true, modeBarButtonsToRemove: ['pan2d', 'lasso2d', 'select2d'] }}
           style={{ width: '100%', height: '400px' }}
           onError={(error) => {
-            try { log.error('[WQ] Plotly rendering error:', error); } catch {}
+            try { log.error('[WQ] Plotly rendering error:', error); } catch { /* ignore log error */ }
           }}
         />
       ) : (

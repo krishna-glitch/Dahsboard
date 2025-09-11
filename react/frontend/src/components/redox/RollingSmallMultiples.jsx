@@ -1,5 +1,5 @@
 import React, { useMemo } from 'react';
-import Plot from 'react-plotly.js';
+import Plot from '../../components/PlotlyLite';
 
 const RollingSmallMultiples = React.memo(function RollingSmallMultiples({ data, chartType = 'line', invertRollingY = false, maxDepthsToShow = 6 }) {
   // Site color palette - consistent colors for each site
@@ -19,6 +19,41 @@ const RollingSmallMultiples = React.memo(function RollingSmallMultiples({ data, 
       .sort((a, b) => a - b);
     return ds.slice(0, maxDepthsToShow);
   }, [data, maxDepthsToShow]);
+
+  // Pre-group once: depth -> site -> { x:[], y:[] } and sort by time
+  const groupedByDepth = useMemo(() => {
+    const depthMap = new Map();
+    (data || []).forEach(r => {
+      const d = Number(r.depth_cm);
+      if (!Number.isFinite(d)) return;
+      const site = r.site_code;
+      // Use 24h rolling value if present; else fallback to processed/raw Eh
+      const eh = (r.processed_eh_roll24h != null ? r.processed_eh_roll24h : (r.processed_eh != null ? r.processed_eh : r.redox_value_mv));
+      const y = Number(eh);
+      const ts = r.measurement_timestamp;
+      if (!site || ts == null || !Number.isFinite(y)) return;
+      if (!depthMap.has(d)) depthMap.set(d, new Map());
+      const bySite = depthMap.get(d);
+      if (!bySite.has(site)) bySite.set(site, { x: [], y: [] });
+      const s = bySite.get(site);
+      s.x.push(ts);
+      s.y.push(y);
+    });
+    // Sort each site's series by time so lines render correctly
+    depthMap.forEach(bySite => {
+      bySite.forEach(series => {
+        try {
+          const idx = series.x.map((v, i) => [i, new Date(v).getTime()])
+            .filter(([, t]) => Number.isFinite(t))
+            .sort((a, b) => a[1] - b[1])
+            .map(([i]) => i);
+          series.x = idx.map(i => series.x[i]);
+          series.y = idx.map(i => series.y[i]);
+        } catch { /* no-op */ }
+      });
+    });
+    return depthMap;
+  }, [data]);
 
   // Memoized layout factory function 
   const createLayout = useMemo(() => (depth, depthIndex, invertRollingY) => ({
@@ -64,35 +99,27 @@ const RollingSmallMultiples = React.memo(function RollingSmallMultiples({ data, 
         <div key={`roll-${depth}`} className="subchart" style={{ width: '100%' }}>
           <Plot
             data={(() => {
-              const useGL = false;
-              const bySite = new Map();
-              (data || []).forEach(r => {
-                const d = Number(r.depth_cm);
-                if (!Number.isFinite(d) || d !== depth) return;
-                const site = r.site_code;
-                if (!bySite.has(site)) {
-                  const siteColor = siteColors[site] || '#666666'; // Default gray for unknown sites
-                  bySite.set(site, { 
-                    x: [], 
-                    y: [], 
-                    name: site, 
-                    type: useGL ? 'scattergl' : 'scatter', 
-                    mode: chartType === 'line' ? 'lines+markers' : 'markers',
-                    line: { width: 3, color: siteColor, dash: siteDashes[site] || 'solid' },
-                    marker: { color: siteColor, size: 7, symbol: siteMarkers[site] || 'circle' },
-                    hovertemplate: '<b>Site %{fullData.name}</b><br>%{x|%Y-%m-%d %H:%M}<br>Eh 24h mean: %{y:.2f} mV<extra></extra>',
-                    showlegend: true
-                  });
-                }
-                const s = bySite.get(site);
-                const ts = r.measurement_timestamp;
-                const eh = (r.processed_eh_roll24h != null ? r.processed_eh_roll24h : (r.processed_eh != null ? r.processed_eh : r.redox_value_mv));
-                const ehNum = Number(eh);
-                if (ts == null || !Number.isFinite(ehNum)) return;
-                s.x.push(ts);
-                s.y.push(ehNum);
+              const bySite = groupedByDepth.get(depth) || new Map();
+              // Compute total points to decide GL usage
+              let totalPts = 0;
+              bySite.forEach(s => { totalPts += Math.max(s.x.length, s.y.length); });
+              const useGL = totalPts > 8000; // threshold for WebGL
+              const traces = [];
+              bySite.forEach((series, site) => {
+                const siteColor = siteColors[site] || '#666666';
+                traces.push({
+                  x: series.x,
+                  y: series.y,
+                  name: site,
+                  type: useGL ? 'scattergl' : 'scatter',
+                  mode: chartType === 'line' ? 'lines' : 'markers',
+                  line: { width: 2, color: siteColor, dash: siteDashes[site] || 'solid' },
+                  marker: { color: siteColor, size: useGL ? 3 : 5, symbol: siteMarkers[site] || 'circle', opacity: chartType === 'line' ? 0 : 0.9 },
+                  hovertemplate: '<b>Site %{fullData.name}</b><br>%{x|%Y-%m-%d %H:%M}<br>Eh 24h mean: %{y:.2f} mV<extra></extra>',
+                  showlegend: true
+                });
               });
-              return Array.from(bySite.values());
+              return traces;
             })()}
             layout={createLayout(depth, depthIndex, invertRollingY)}
             config={{ displayModeBar: true, responsive: true, displaylogo: false }}

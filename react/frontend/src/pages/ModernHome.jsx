@@ -3,7 +3,7 @@ import { Link } from 'react-router-dom';
 import MetricCard from '../components/modern/MetricCard';
 import '../styles/modern-layout.css';
 import TutorialHint from '../components/modern/TutorialHint';
-import { useTutorial } from '../contexts/TutorialContext.jsx';
+import { useTutorial } from '../hooks/useTutorial.js';
 import '../styles/landing-pages.css';
 import { getHomeData } from '../services/api';
 import { safeStorage } from '../utils/safeStorage';
@@ -40,7 +40,7 @@ const ModernHome = () => {
           setLatestBySite(Array.isArray(cached.latestBySite) ? cached.latestBySite : []);
         }
       }
-    } catch (_e) {}
+    } catch { /* ignore */ }
     
     // Auto-fetch fresh data on page load for immediate KPI display
     (async () => {
@@ -78,7 +78,7 @@ const ModernHome = () => {
             meta: newMeta,
             latestBySite: latest,
           });
-        } catch (_e) {}
+        } catch { /* ignore */ }
       } catch (e) {
         if (!alive) return;
         setError(String(e?.message || e));
@@ -122,7 +122,7 @@ const ModernHome = () => {
           meta: newMeta,
           latestBySite: latest,
         });
-      } catch (_) {}
+      } catch { /* ignore */ }
     } catch (e) {
       setError(String(e?.message || e));
     } finally {

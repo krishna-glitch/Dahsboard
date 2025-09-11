@@ -1,5 +1,5 @@
 import React, { useMemo } from 'react';
-import Plot from 'react-plotly.js';
+import Plot from '../../components/PlotlyLite';
 
 const ZonesChart = React.memo(function ZonesChart({ data, parameterLabel = 'Depth & Redox' }) {
   const zonesData = useMemo(() => {
@@ -58,4 +58,3 @@ const ZonesChart = React.memo(function ZonesChart({ data, parameterLabel = 'Dept
 });
 
 export default ZonesChart;
-

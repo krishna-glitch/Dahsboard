@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import DataLoadingErrorBoundary from './boundaries/DataLoadingErrorBoundary';
 import ChartErrorBoundary from './boundaries/ChartErrorBoundary';
-import Plot from 'react-plotly.js';
+import Plot from './PlotlyLite';
 
 /**
  * Error Boundary Test Component

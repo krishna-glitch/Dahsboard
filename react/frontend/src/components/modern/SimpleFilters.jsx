@@ -77,9 +77,10 @@ const SimpleFilters = ({
   }, []);
 
   // Keep local state in sync when parent props change (prevents filter/UI drift)
+  const stringifiedSelectedSites = JSON.stringify(selectedSites);
   useEffect(() => {
     setLocalSites(selectedSites);
-  }, [JSON.stringify(selectedSites)]);
+  }, [stringifiedSelectedSites, selectedSites]);
 
   useEffect(() => {
     setLocalTimeRange(timeRange);

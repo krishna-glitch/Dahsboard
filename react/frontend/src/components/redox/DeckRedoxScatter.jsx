@@ -6,7 +6,7 @@ async function loadDeck() {
     const core = await import('@deck.gl/core');
     const layers = await import('@deck.gl/layers');
     return { core, layers };
-  } catch (e) {
+  } catch {
     return null;
   }
 }
@@ -110,7 +110,7 @@ const DeckRedoxScatter = ({
     return () => {
       alive = false;
       if (deckRef.current) {
-        try { deckRef.current.finalize(); } catch {}
+        try { deckRef.current.finalize(); } catch { /* ignore */ }
         deckRef.current = null;
       }
     };

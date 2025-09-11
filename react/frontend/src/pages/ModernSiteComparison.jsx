@@ -1,5 +1,5 @@
 import React, { useEffect, useState, useCallback, useMemo, useRef } from 'react';
-import Plot from 'react-plotly.js';
+import Plot from '../components/PlotlyLite';
 import { useSearchParams } from 'react-router-dom';
 import MetricCard from '../components/modern/MetricCard';
 import EmptyState from '../components/modern/EmptyState';

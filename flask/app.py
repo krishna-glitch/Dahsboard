@@ -36,6 +36,7 @@ logger = get_advanced_logger(__name__)
 
 # Import advanced performance integration
 from utils.advanced_performance_integration_simple import init_performance_optimization
+from utils.cache_headers import init_cache_headers
 
 def create_app():
     """
@@ -56,7 +57,10 @@ def create_app():
     CORS(server, 
          origins=["http://localhost:5173", "http://127.0.0.1:5173", 
                  "http://localhost:5174", "http://127.0.0.1:5174",
-                 "http://localhost:5175", "http://127.0.0.1:5175"], 
+                 "http://localhost:5175", "http://127.0.0.1:5175",
+                 # Vite preview defaults (4173/4174)
+                 "http://localhost:4173", "http://127.0.0.1:4173",
+                 "http://localhost:4174", "http://127.0.0.1:4174"], 
          supports_credentials=True,
          expose_headers=[
             'X-Total-Records', 'X-Returned-Records', 'X-Chunk-Offset', 'X-Chunk-Size', 'X-Chunk-Has-More'
@@ -83,6 +87,10 @@ def create_app():
             logger.info("HTTP compression enabled (Flask-Compress)")
         except Exception as _e:  # pragma: no cover
             logger.warning("Flask-Compress initialization failed; continuing without compression")
+
+    # Phase 3 (revalidation): add conservative cache headers + ETag for safe JSON APIs
+    # This is safe to enable in dev/prod; it only affects whitelisted paths and 200 JSON responses
+    init_cache_headers(server, default_ttl_seconds=3600)
 
     login_manager = LoginManager()
     login_manager.init_app(server)
@@ -242,6 +250,7 @@ def create_app():
         logger.warning(f"Performance test API not available: {e}")
     from api.debug import debug_bp  # Client debug log API
     from api.data_quality import data_quality_bp
+    from api.code_quality import code_quality_bp  # Code quality analysis API
     # Add root route for API status
     # @server.route('/')
     # def api_status():
@@ -280,6 +289,7 @@ def create_app():
     # Global search removed to reduce confusion
     server.register_blueprint(debug_bp, url_prefix='/api/v1/debug')  # Register client debug API
     server.register_blueprint(data_quality_bp, url_prefix='/api/v1/data_quality')
+    server.register_blueprint(code_quality_bp, url_prefix='/api/v1/code_quality')  # Register code quality analysis API
 
     # Initialize advanced performance optimization with cache prewarming
     init_performance_optimization(server)

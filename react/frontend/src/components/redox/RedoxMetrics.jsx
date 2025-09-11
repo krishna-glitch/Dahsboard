@@ -77,7 +77,6 @@ const RedoxMetrics = React.memo(function RedoxMetrics({ metrics, selectedSites =
               {displaySites.map(sc => {
                 const item = (m.breakdown?.avgRedox || [])?.find?.(x => x.site === sc);
                 const val = item && item.avg !== null ? `${item.avg.toFixed(0)} mV` : 'No Data';
-                const count = item ? ` (${item.count})` : '';
                 return (
                   <div key={`avg-${sc}`} style={{ display: 'grid', gap: 2, fontSize: '0.9rem', color: 'var(--text-primary)' }}>
                     <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline' }}>
