@@ -1,18 +1,19 @@
-import React, { useState, useEffect, useCallback, useMemo, useRef, lazy, Suspense } from 'react';
+import React, { useState, useEffect, useCallback, useMemo, lazy, Suspense } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import { useNavigate } from 'react-router-dom';
 
 // Modern components
 import MetricCard from '../components/modern/MetricCard';
-const DataTable = lazy(() => import('../components/modern/DataTable'));
+const TanStackDataTable = lazy(() => import('../components/modern/TanStackDataTable'));
 import EmptyState from '../components/modern/EmptyState';
 import SidebarFilters from '../components/filters/SidebarFilters';
 import ExportButton from '../components/ExportButton';
 import { useToast } from '../components/modern/toastUtils';
 import useWaterQualityQuery from '../hooks/useWaterQualityQuery';
+import { useWaterQualityMetrics } from '../hooks/useWaterQualityMetrics';
+import { useWaterQualityChartData } from '../hooks/useWaterQualityChartData';
 const WaterQualityChartRouter = lazy(() => import('../components/water/WaterQualityChartRouter'));
 import WaterQualityChartControls from '../components/water/WaterQualityChartControls';
-import { log } from '../utils/log';
 
 // Error boundaries and performance monitoring
 import DataLoadingErrorBoundary from '../components/boundaries/DataLoadingErrorBoundary';
@@ -54,23 +55,55 @@ const PARAMETER_CONFIG = {
 const ModernWaterQuality = () => {
   const navigate = useNavigate();
   const [searchParams, setSearchParams] = useSearchParams();
+  const toast = useToast();
 
-  // Component State
-  const [selectedSites, setSelectedSites] = useState(() => searchParams.get('sites')?.split(',') || ['S1', 'S2', 'S3']);
-  const [timeRange, setTimeRange] = useState(() => searchParams.get('time_range') || 'Custom Range');
+  // Validate and sanitize URL parameters
+  const validateSites = (sitesParam) => {
+    if (!sitesParam) return ['S1', 'S2', 'S3'];
+    const validatedSites = sitesParam.split(',')
+      .map(s => s.trim().toUpperCase())
+      .filter(s => /^[A-Z0-9_]{1,10}$/.test(s))
+      .slice(0, 10); // Limit to 10 sites max
+    return validatedSites.length > 0 ? validatedSites : ['S1', 'S2', 'S3'];
+  };
+
+  const validateTimeRange = (timeRangeParam) => {
+    const validRanges = ['Last 24 Hours', 'Last 7 Days', 'Last 30 Days', 'Last 90 Days', 'Custom Range'];
+    return validRanges.includes(timeRangeParam) ? timeRangeParam : 'Custom Range';
+  };
+
+  const validateChartType = (chartTypeParam) => {
+    const validTypes = ['line', 'scatter', 'bar'];
+    return validTypes.includes(chartTypeParam) ? chartTypeParam : 'line';
+  };
+
+  const validateParameter = (paramParam) => {
+    const validParams = ['temperature_c', 'conductivity_us_cm', 'water_level_m', 'dissolved_oxygen_mg_l'];
+    return validParams.includes(paramParam) ? paramParam : 'temperature_c';
+  };
+
+  const validateCompareMode = (modeParam) => {
+    const validModes = ['off', 'overlay', 'side-by-side'];
+    return validModes.includes(modeParam) ? modeParam : 'off';
+  };
+
+  // Component State with validation
+  const [selectedSites, setSelectedSites] = useState(() => validateSites(searchParams.get('sites')));
+  const [timeRange, setTimeRange] = useState(() => validateTimeRange(searchParams.get('time_range')));
   const [startDate, setStartDate] = useState('2024-05-01');
   const [endDate, setEndDate] = useState('2024-05-31');
   const [filtersCollapsed, setFiltersCollapsed] = useState(false);
   const [activeView, setActiveView] = useState('overview');
-  const [chartType, setChartType] = useState(() => searchParams.get('chartType') || 'line');
-  const [selectedParameter, setSelectedParameter] = useState(() => searchParams.get('param') || 'temperature_c');
-  const [compareMode, setCompareMode] = useState(() => searchParams.get('mode') || 'off');
-  const [compareParameter, setCompareParameter] = useState(() => searchParams.get('cmp') || 'conductivity_us_cm');
+  const [chartType, setChartType] = useState(() => validateChartType(searchParams.get('chartType')));
+  const [selectedParameter, setSelectedParameter] = useState(() => validateParameter(searchParams.get('param')));
+  const [compareMode, setCompareMode] = useState(() => validateCompareMode(searchParams.get('mode')));
+  const [compareParameter, setCompareParameter] = useState(() => validateParameter(searchParams.get('cmp')));
   const [maxDateAvailable, setMaxDateAvailable] = useState('');
   const [minDateAvailable, setMinDateAvailable] = useState('');
 
-  // State -> URL Synchronization
+  // Consolidated effect for URL synchronization and metadata updates
   useEffect(() => {
+    // State -> URL Synchronization (batched update)
     const params = new URLSearchParams();
     params.set('sites', selectedSites.join(','));
     params.set('time_range', timeRange);
@@ -79,7 +112,22 @@ const ModernWaterQuality = () => {
     params.set('mode', compareMode);
     params.set('chartType', chartType);
     setSearchParams(params, { replace: true });
-  }, [selectedSites, timeRange, selectedParameter, compareParameter, compareMode, chartType]);
+
+    // Update available date range from metadata (batched update)
+    if (metadata?.date_range) {
+      const formatDate = (dateString) => {
+        if (!dateString) return '';
+        const date = new Date(dateString);
+        return date.toISOString().split('T')[0];
+      };
+      const start = metadata.date_range.start ? formatDate(metadata.date_range.start) : '';
+      const end = metadata.date_range.end ? formatDate(metadata.date_range.end) : '';
+
+      // Batch state updates to prevent multiple re-renders
+      if (start && start !== minDateAvailable) setMinDateAvailable(start);
+      if (end && end !== maxDateAvailable) setMaxDateAvailable(end);
+    }
+  }, [selectedSites, timeRange, selectedParameter, compareParameter, compareMode, chartType, metadata, minDateAvailable, maxDateAvailable, setSearchParams]);
 
   // Data Fetching via React Query
   const { data, metadata, loading, error, refetch, isFetching } = useWaterQualityQuery({
@@ -91,19 +139,6 @@ const ModernWaterQuality = () => {
     compareMode,
     compareParameter,
   });
-
-  // Update available date range from metadata
-  useEffect(() => {
-    const formatDate = (dateString) => {
-      if (!dateString) return '';
-      const date = new Date(dateString);
-      return date.toISOString().split('T')[0];
-    };
-    const start = metadata?.date_range?.start ? formatDate(metadata.date_range.start) : '';
-    const end = metadata?.date_range?.end ? formatDate(metadata.date_range.end) : '';
-    if (start) setMinDateAvailable(start);
-    if (end) setMaxDateAvailable(end);
-  }, [metadata]);
 
   const tableColumns = useMemo(() => {
     const base = [
@@ -119,78 +154,11 @@ const ModernWaterQuality = () => {
     return base.filter(col => hasKey(col.key));
   }, [data]);
 
-  const metrics = useMemo(() => {
-    if (!data.length) return { totalRecords: 0, sitesCount: 0, perSiteAvgTemperature: 0, perSiteAvgConductivity: 0, perSiteAvgWaterLevel: 0, completeness: 0 };
+  // Use custom hook for metrics calculations
+  const metrics = useWaterQualityMetrics(data);
 
-    const bySite = new Map();
-    for (const row of data) {
-      if (!row || !row.site_code) continue;
-      if (!bySite.has(row.site_code)) bySite.set(row.site_code, { t: [], c: [], w: [] });
-      const b = bySite.get(row.site_code);
-      if (row.temperature_c != null) b.t.push(Number(row.temperature_c));
-      if (row.conductivity_us_cm != null) b.c.push(Number(row.conductivity_us_cm));
-      if (row.water_level_m != null) b.w.push(Number(row.water_level_m));
-    }
-
-    const siteMeans = { t: [], c: [], w: [], breakdown: { t: [], c: [], w: [] } };
-    for (const [site, vals] of bySite.entries()) {
-      if (vals.t.length) { const m = vals.t.reduce((a, v) => a + v, 0) / (vals.t.length || 1); siteMeans.t.push(m); siteMeans.breakdown.t.push({ site, mean: m }); }
-      if (vals.c.length) { const m = vals.c.reduce((a, v) => a + v, 0) / (vals.c.length || 1); siteMeans.c.push(m); siteMeans.breakdown.c.push({ site, mean: m }); }
-      if (vals.w.length) { const m = vals.w.reduce((a, v) => a + v, 0) / (vals.w.length || 1); siteMeans.w.push(m); siteMeans.breakdown.w.push({ site, mean: m }); }
-    }
-
-    const mean = arr => arr.length ? arr.reduce((a, v) => a + v, 0) / arr.length : 0;
-    const nonNullCounts = { t: 0, c: 0, w: 0 };
-    for (const row of data) {
-      if (row.temperature_c != null) nonNullCounts.t++;
-      if (row.conductivity_us_cm != null) nonNullCounts.c++;
-      if (row.water_level_m != null) nonNullCounts.w++;
-    }
-    const completeness = Math.round(((nonNullCounts.t + nonNullCounts.c + nonNullCounts.w) / (data.length * 3)) * 100);
-
-    return { totalRecords: data.length, sitesCount: bySite.size, perSiteAvgTemperature: mean(siteMeans.t), perSiteAvgConductivity: mean(siteMeans.c), perSiteAvgWaterLevel: mean(siteMeans.w), completeness, breakdown: siteMeans.breakdown };
-  }, [data]);
-
-  const chartData = useMemo(() => {
-    if (!data.length) return [];
-    const largeDataset = data.length > 10000;
-    const useWebGL = chartType !== 'bar' && largeDataset;
-    const bySite = {};
-    const colors = ['#1f77b4', '#ff7f0e', '#2ca02c', '#d62728', '#9467bd'];
-
-    for (const d of data) {
-      const site = d.site_code;
-      const x = d.measurement_timestamp;
-      const y = d[selectedParameter];
-      if (y == null) continue;
-      if (!bySite[site]) {
-        bySite[site] = { x: [], y: [], name: `Site ${site}`, type: chartType === 'bar' ? 'bar' : (useWebGL ? 'scattergl' : 'scatter') };
-      }
-      bySite[site].x.push(x);
-      bySite[site].y.push(y);
-    }
-
-    const tracesPrimary = Object.values(bySite).map((t, index) => ({ ...t, mode: chartType === 'line' ? 'lines' : 'markers', line: chartType !== 'bar' ? { width: largeDataset ? 1 : 2, color: colors[index % colors.length] } : undefined, marker: chartType !== 'bar' ? { size: largeDataset ? 3 : 6, color: colors[index % colors.length] } : undefined, hoverinfo: 'x+y+name', connectgaps: false, simplify: true }));
-
-    if (compareMode === 'overlay' && compareParameter && compareParameter !== selectedParameter) {
-      const cmpBySite = {};
-      for (const d of data) {
-        const site = d.site_code;
-        const x = d.measurement_timestamp;
-        const y = d[compareParameter];
-        if (y == null) continue;
-        if (!cmpBySite[site]) {
-          cmpBySite[site] = { x: [], y: [], name: `Site ${site} (${compareParameter})`, type: (useWebGL ? 'scattergl' : 'scatter') };
-        }
-        cmpBySite[site].x.push(x);
-        cmpBySite[site].y.push(y);
-      }
-      const tracesSecondary = Object.values(cmpBySite).map((t) => ({ ...t, mode: chartType === 'line' ? 'lines' : 'markers', yaxis: 'y2', line: chartType === 'line' ? { color: '#a78bfa', width: largeDataset ? 1 : 2, dash: 'dot' } : undefined, marker: chartType !== 'bar' ? { size: largeDataset ? 3 : 5, color: '#a78bfa' } : undefined }));
-      return [...tracesPrimary, ...tracesSecondary];
-    }
-
-    return tracesPrimary;
-  }, [data, selectedParameter, chartType, compareMode, compareParameter]);
+  // Use custom hook for chart data processing
+  const chartData = useWaterQualityChartData(data, selectedParameter, chartType, compareMode, compareParameter);
 
   const [alertShapes, setAlertShapes] = useState([]);
   useEffect(() => {
@@ -316,7 +284,7 @@ const ModernWaterQuality = () => {
 
             {activeView === 'details' && (
               <Suspense fallback={<div>Loading table…</div>}>
-                <DataTable data={data} columns={tableColumns} title="Water Quality Data Analysis" loading={isFetching} exportFilename={`water_quality_${selectedSites.join('_')}_${timeRange.toLowerCase().replace(/\s+/g, '_')}`} searchable={true} sortable={true} paginated={true} pageSize={50} className="compact water-quality-table" />
+                <TanStackDataTable data={data} columns={tableColumns} title="Water Quality Data Analysis" loading={isFetching} exportFilename={`water_quality_${selectedSites.join('_')}_${timeRange.toLowerCase().replace(/\s+/g, '_')}`} searchable={true} sortable={true} paginated={true} pageSize={50} className="compact water-quality-table" />
               </Suspense>
             )}
           </>

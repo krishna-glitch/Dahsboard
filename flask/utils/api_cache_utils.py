@@ -129,12 +129,15 @@ def generate_api_cache_key(endpoint_name: str, **kwargs) -> str:
     resolution = norm_res
     max_depths = request.args.get('max_depths', '')
 
-    # ESSENTIAL: Include only the 6 essential parameters that affect data results
-    # Simplified from 19 parameters to reduce complexity while maintaining functionality
+    # CRITICAL FIX: Include only essential parameters that affect server-side data results
+    # Exclude UI-only parameters to reduce cache fragmentation
     parameters = request.args.get('parameters', '')  # Selected water quality parameters
     no_downsample = request.args.get('no_downsample', 'false')  # Performance option
+    data_quality = request.args.get('data_quality', '')  # Data quality filter
+    alert_level = request.args.get('alert_level', '')  # Alert level filter
 
     # Exclude chunk_size/offset from key to reduce fragmentation
+    # Exclude UI-only parameters: selectedParameter, compareMode, compareParameter
 
     # Include any additional parameters
     extra_params = {}
@@ -142,8 +145,8 @@ def generate_api_cache_key(endpoint_name: str, **kwargs) -> str:
         if value is not None:
             extra_params[key] = str(value)
     
-    # Create cache key components - simplified to 6 essential parameters
-    # This reduces complexity while maintaining correct cache differentiation
+    # Create cache key components - optimized for cache hit ratio
+    # Only include parameters that affect server-side data processing
     key_data = {
         'endpoint': endpoint_name,
         'sites': sites_key,
@@ -151,9 +154,11 @@ def generate_api_cache_key(endpoint_name: str, **kwargs) -> str:
         'start_date': start_date,
         'end_date': end_date,
         'performance_mode': performance_mode,
-        # Essential filter parameters only
+        # Essential server-side filter parameters only
         'parameters': parameters,
         'no_downsample': no_downsample,
+        'data_quality': data_quality,
+        'alert_level': alert_level,
         **extra_params
     }
     

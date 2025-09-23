@@ -55,22 +55,20 @@ export function useWaterQualityQuery({
     return params;
   };
 
-  // Create unique query key
+  // Create optimized query key - Only include server-side parameters
   const queryKey = [
     'water-quality',
     {
-      sites: selectedSites,
+      sites: selectedSites.sort().join(','), // Consistent ordering
       timeRange,
-      startDate,
-      endDate,
+      startDate: timeRange === 'Custom Range' ? startDate : null,
+      endDate: timeRange === 'Custom Range' ? endDate : null,
       useAdvancedFilters,
       selectedParameters,
       valueRanges,
       dataQualityFilter,
       alertsFilter,
-      selectedParameter,
-      compareMode,
-      compareParameter,
+      // Removed UI-only parameters: selectedParameter, compareMode, compareParameter
     },
   ];
 
@@ -149,8 +147,8 @@ export function useWaterQualityQuery({
       }
     },
     enabled: enabled && Array.isArray(selectedSites) && selectedSites.length > 0,
-    staleTime: 2 * 60 * 1000, // 2 minutes
-    gcTime: 10 * 60 * 1000, // 10 minutes
+    staleTime: 30 * 60 * 1000, // 30 minutes - Match Redis TTL
+    gcTime: 60 * 60 * 1000, // 60 minutes - Extended garbage collection
     refetchOnWindowFocus: false,
     refetchOnMount: 'always',
     retry: 1,

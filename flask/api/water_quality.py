@@ -1,7 +1,8 @@
-from flask import Blueprint, jsonify, request
+from flask import Blueprint, jsonify, request, make_response
 from flask_login import login_required
 import logging
 import time
+import hashlib
 from datetime import datetime, timedelta, timezone
 import pandas as pd
 
@@ -296,8 +297,22 @@ def get_water_quality_data():
             }
         }
 
+        # Generate ETag based on data fingerprint for optimal client caching
+        data_fingerprint = f"{len(df)}-{selected_sites}-{time_range}"
+        if not df.empty and 'measurement_timestamp' in df.columns:
+            data_fingerprint += f"-{df['measurement_timestamp'].min()}-{df['measurement_timestamp'].max()}"
+
+        etag = hashlib.md5(data_fingerprint.encode()).hexdigest()[:16]
+
         logger.info(f"[WATER QUALITY] SUCCESS: Loaded {len(df)} records in {loading_time_ms:.1f}ms")
-        return structured_data, 200
+
+        # Create response with proper cache headers
+        response = make_response(structured_data, 200)
+        response.headers['ETag'] = f'"{etag}"'
+        response.headers['Cache-Control'] = 'public, max-age=1800'  # 30 minutes
+        response.headers['Vary'] = 'Authorization'  # Vary by user session
+
+        return response
 
     except Exception as e:
         loading_time_ms = (time.time() - start_time) * 1000
