@@ -135,11 +135,20 @@ def get_water_quality_data():
             logger.info(f"[WATER QUALITY] Using custom date range: {start_date} to {end_date}")
         else:
             days_back = config_service.get_days_back_for_range(time_range)
-            end_date = datetime.now()
+            # Get the actual date range of the available data
+            date_range = core_data_service.get_water_quality_date_range(sites=selected_sites)
+            latest_date_str = date_range.get('latest')
+            
+            if latest_date_str:
+                end_date = pd.to_datetime(latest_date_str)
+            else:
+                # Fallback to now() if no data is found at all
+                end_date = datetime.now()
+
             start_date = end_date - timedelta(days=days_back)
             
             # Log the dynamic date range being used
-            logger.info(f"[DYNAMIC RANGE] Using current date range: {start_date} to {end_date} (days_back: {days_back})")
+            logger.info(f"[DYNAMIC RANGE] Using date range: {start_date} to {end_date} (days_back: {days_back}) based on latest data point: {latest_date_str}")
 
         # Calculate days back for performance optimization
         days_back = (end_date - start_date).days if start_date and end_date else 30
