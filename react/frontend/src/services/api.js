@@ -1,5 +1,6 @@
 import axios from 'axios';
 import { normalizeParams, canonicalKeyFromParams } from '../utils/normalize';
+import { registerCache, DEFAULT_TTL } from '../utils/cacheManager';
 
 // API base URL
 // IMPORTANT: For cookie-based auth to persist across refresh, point dev to the real API origin
@@ -30,6 +31,9 @@ if (DEBUG_API) {
 
 // Request deduplication cache to prevent multiple identical requests
 const pendingRequests = new Map();
+
+// Register pending requests cache with short TTL (requests should not be pending long)
+registerCache('pendingRequests', pendingRequests, DEFAULT_TTL.SHORT, 50);
 
 // Create axios instance with default config
 const apiClient = axios.create({
@@ -184,6 +188,7 @@ export const fetchData = async (endpoint, method = 'GET', body = null, params = 
   // Store in pending requests if deduplication enabled
   if (requestKey) {
     if (DEBUG_API) console.log('🔥 [API DEBUG] Storing request in pending:', requestKey);
+    // Cache size management is handled automatically by the cache manager
     pendingRequests.set(requestKey, requestPromise);
     
     // Clean up after request completes (success or failure)

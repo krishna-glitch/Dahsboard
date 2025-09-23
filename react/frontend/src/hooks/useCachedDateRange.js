@@ -1,8 +1,17 @@
 import { useState, useEffect, useRef } from 'react';
 import { getRedoxDateRange } from '../services/api';
+import {
+  registerCache,
+  createCacheEntry,
+  isExpired,
+  DEFAULT_TTL
+} from '../utils/cacheManager';
 
 // Simple cache for date ranges by sites combination
 const dateRangeCache = new Map();
+
+// Register cache with TTL management
+registerCache('dateRangeCache', dateRangeCache, DEFAULT_TTL.MEDIUM, 20);
 
 // Generate cache key from sites array
 const getCacheKey = (sites) => {
@@ -34,15 +43,20 @@ export const useCachedDateRange = (selectedSites) => {
         return;
       }
 
-      // Check cache first
+      // Check cache first with TTL validation
       if (dateRangeCache.has(cacheKey)) {
         const cached = dateRangeCache.get(cacheKey);
-        if (mounted) {
-          setDateRange(cached);
-          setLoading(false);
-          setError(null);
+        if (!isExpired(cached, DEFAULT_TTL.MEDIUM)) {
+          if (mounted) {
+            setDateRange(cached.data);
+            setLoading(false);
+            setError(null);
+          }
+          return;
+        } else {
+          // Remove expired entry
+          dateRangeCache.delete(cacheKey);
         }
-        return;
       }
 
       // Cancel previous request if still running
@@ -63,12 +77,12 @@ export const useCachedDateRange = (selectedSites) => {
 
         const result = {
           earliest_date: response?.earliest_date,
-          latest_date: response?.latest_date,
-          timestamp: Date.now() // For cache invalidation if needed
+          latest_date: response?.latest_date
         };
 
-        // Cache the result
-        dateRangeCache.set(cacheKey, result);
+        // Cache the result with TTL management
+        const cacheEntry = createCacheEntry(result);
+        dateRangeCache.set(cacheKey, cacheEntry);
 
         setDateRange(result);
         setLoading(false);

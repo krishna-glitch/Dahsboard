@@ -18,6 +18,10 @@ import { TutorialProvider } from './contexts/TutorialContext.jsx';
 // Initialize performance monitoring
 import './utils/performanceMonitor';
 
+// Initialize cache management system
+import { initializeCacheSystem } from './utils/cacheInitializer';
+initializeCacheSystem();
+
 ReactDOM.createRoot(document.getElementById('root')).render(
   // <React.StrictMode> - Temporarily disabled to fix infinite re-render issues
     <BrowserRouter>

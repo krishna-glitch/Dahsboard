@@ -29,7 +29,7 @@ export function useWaterQualityQuery({
     const params = {
       sites: selectedSites,
       time_range: timeRange,
-      no_downsample: true,
+      no_downsample: true, // Always fetch the full dataset as requested
       ...(timeRange === 'Custom Range' && startDate && endDate 
         ? { start_date: startDate, end_date: endDate } 
         : {}
@@ -111,7 +111,7 @@ export function useWaterQualityQuery({
         } else {
           toast.showWarning(
             `No water quality records found for sites ${selectedSites.join(', ')}`,
-            { 
+            {
               title: 'No Data Available',
               duration: 4000,
               dedupeKey: `wq-nodata|${selectedSites.join(',')}|${timeRange}`,
@@ -119,36 +119,46 @@ export function useWaterQualityQuery({
           );
         }
 
-        return data;
+        return {
+          data: data,
+          metadata: response?.metadata || {},
+        };
       } catch (error) {
-        log.error('[WQ Query] Data fetch error:', error);
+        // Check if the error is due to a cancelled request
+        const isCancellation = error.name === 'AbortError' || error.name === 'DOMException' || error.message.includes('cancelled');
         
-        const errorMessage = error?.message || String(error);
-        toast.showError(
-          `Failed to load water quality data: ${errorMessage}`,
-          {
-            title: 'Water Quality Data Failed',
-            actions: [{
-              id: 'retry',
-              label: 'Retry',
-              action: () => query.refetch(),
-            }],
-          }
-        );
+        if (isCancellation) {
+          log.debug('[WQ Query] Request cancelled intentionally.');
+        } else {
+          log.error('[WQ Query] Data fetch error:', error);
+          const errorMessage = error?.message || String(error);
+          toast.showError(
+            `Failed to load water quality data: ${errorMessage}`,
+            {
+              title: 'Water Quality Data Failed',
+              actions: [{
+                id: 'retry',
+                label: 'Retry',
+                action: () => query.refetch(),
+              }],
+            }
+          );
+        }
         
-        throw error;
+        throw error; // Always re-throw so react-query can handle the query state
       }
     },
     enabled: enabled && Array.isArray(selectedSites) && selectedSites.length > 0,
-    staleTime: 2 * 60 * 1000, // 2 minutes - data becomes stale after 2 minutes
-    gcTime: 10 * 60 * 1000, // 10 minutes - cache for 10 minutes
+    staleTime: 2 * 60 * 1000, // 2 minutes
+    gcTime: 10 * 60 * 1000, // 10 minutes
     refetchOnWindowFocus: false,
-    refetchOnMount: 'always', // Always fetch fresh data on mount
+    refetchOnMount: 'always',
     retry: 1,
   });
 
   return {
-    data: query.data || [],
+    data: query.data?.data || [],
+    metadata: query.data?.metadata || {},
     loading: query.isLoading,
     error: query.error?.message || null,
     refetch: query.refetch,

@@ -780,6 +780,35 @@ class CoreDataService(IDataService):
         logger.info(f"Executing mv_processed_eh rolling mean for site_code={site_code}")
         return self.db.execute_query(query, params)
 
+    def get_water_quality_date_range(self, sites: List[str] = None) -> Dict[str, Optional[str]]:
+        """Return earliest and latest water quality timestamps for optional site filter."""
+        try:
+            query = """
+            SELECT 
+                MIN(wq.measurement_timestamp) AS earliest,
+                MAX(wq.measurement_timestamp) AS latest
+            FROM impact.water_quality wq
+            """
+            params = {}
+            if sites and len(sites) > 0:
+                query += " JOIN impact.site s ON wq.site_id = s.site_id WHERE s.code IN :sites"
+                params['sites'] = sites
+            
+            result = self.db.execute_query(query, params)
+            if result.empty:
+                return { 'earliest': None, 'latest': None }
+            
+            earliest = result['earliest'].iloc[0]
+            latest = result['latest'].iloc[0]
+            
+            earliest_str = pd.to_datetime(earliest).isoformat() if pd.notna(earliest) else None
+            latest_str = pd.to_datetime(latest).isoformat() if pd.notna(latest) else None
+            
+            return { 'earliest': earliest_str, 'latest': latest_str }
+        except Exception as e:
+            logger.error(f"Failed to get water quality date range: {e}")
+            return { 'earliest': None, 'latest': None }
+
     def get_redox_date_range(self, sites: List[str] = None) -> Dict[str, Optional[str]]:
         """Return earliest and latest processed redox timestamps (from MV) for optional site filter."""
         try:
