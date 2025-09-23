@@ -222,8 +222,8 @@ class AdvancedFilterService:
         
         return filtered_df, {
             'time_range': time_range,
-            'start_date': filter_start.isoformat(),
-            'end_date': filter_end.isoformat(),
+            'start_date': start_date.isoformat(),
+            'end_date': end_date.isoformat(),
             'records_in_range': len(filtered_df)
         }
     
