@@ -23,6 +23,7 @@ import { getAlertsData } from '../services/api';
 
 // Import modern layout styles
 import '../styles/modern-layout.css';
+import styles from '../styles/ModernWaterQuality.module.css';
 
 // Static parameter configuration - moved outside component to prevent recreation
 const PARAMETER_CONFIG = {
@@ -78,7 +79,7 @@ const ModernWaterQuality = () => {
     params.set('mode', compareMode);
     params.set('chartType', chartType);
     setSearchParams(params, { replace: true });
-  }, [selectedSites, timeRange, selectedParameter, compareParameter, compareMode, chartType, setSearchParams]);
+  }, [selectedSites, timeRange, selectedParameter, compareParameter, compareMode, chartType]);
 
   // Data Fetching via React Query
   const { data, metadata, loading, error, refetch, isFetching } = useWaterQualityQuery({
@@ -93,8 +94,13 @@ const ModernWaterQuality = () => {
 
   // Update available date range from metadata
   useEffect(() => {
-    const start = metadata?.date_range?.start ? String(metadata.date_range.start).slice(0, 10) : '';
-    const end = metadata?.date_range?.end ? String(metadata.date_range.end).slice(0, 10) : '';
+    const formatDate = (dateString) => {
+      if (!dateString) return '';
+      const date = new Date(dateString);
+      return date.toISOString().split('T')[0];
+    };
+    const start = metadata?.date_range?.start ? formatDate(metadata.date_range.start) : '';
+    const end = metadata?.date_range?.end ? formatDate(metadata.date_range.end) : '';
     if (start) setMinDateAvailable(start);
     if (end) setMaxDateAvailable(end);
   }, [metadata]);
@@ -128,9 +134,9 @@ const ModernWaterQuality = () => {
 
     const siteMeans = { t: [], c: [], w: [], breakdown: { t: [], c: [], w: [] } };
     for (const [site, vals] of bySite.entries()) {
-      if (vals.t.length) { const m = vals.t.reduce((a, v) => a + v, 0) / vals.t.length; siteMeans.t.push(m); siteMeans.breakdown.t.push({ site, mean: m }); }
-      if (vals.c.length) { const m = vals.c.reduce((a, v) => a + v, 0) / vals.c.length; siteMeans.c.push(m); siteMeans.breakdown.c.push({ site, mean: m }); }
-      if (vals.w.length) { const m = vals.w.reduce((a, v) => a + v, 0) / vals.w.length; siteMeans.w.push(m); siteMeans.breakdown.w.push({ site, mean: m }); }
+      if (vals.t.length) { const m = vals.t.reduce((a, v) => a + v, 0) / (vals.t.length || 1); siteMeans.t.push(m); siteMeans.breakdown.t.push({ site, mean: m }); }
+      if (vals.c.length) { const m = vals.c.reduce((a, v) => a + v, 0) / (vals.c.length || 1); siteMeans.c.push(m); siteMeans.breakdown.c.push({ site, mean: m }); }
+      if (vals.w.length) { const m = vals.w.reduce((a, v) => a + v, 0) / (vals.w.length || 1); siteMeans.w.push(m); siteMeans.breakdown.w.push({ site, mean: m }); }
     }
 
     const mean = arr => arr.length ? arr.reduce((a, v) => a + v, 0) / arr.length : 0;
@@ -221,7 +227,7 @@ const ModernWaterQuality = () => {
           <button className="btn btn-outline-secondary btn-sm" onClick={handleRefresh} disabled={isFetching} title={isFetching ? 'Refreshing data...' : 'Refresh data'}>
             <i className={`bi ${isFetching ? 'bi-arrow-repeat' : 'bi-arrow-clockwise'} me-1`}></i> Refresh
           </button>
-          <ExportButton data={data} filename={`water_quality_${selectedSites.join('_')}_${timeRange.toLowerCase().replace(/\s+/g, '_')}`} chartElementId="water-quality-chart" availableFormats={['csv', 'json', 'png', 'pdf']} variant="outline-success" size="sm" disabled={data.length === 0} />
+          <ExportButton data={data} filename={`water_quality_${selectedSites.join('_')}_${timeRange.toLowerCase().replace(/\s+/g, '_')}`} chartElementId="water-quality-chart" availableFormats={['csv', 'json', 'png', 'pdf']} variant="outline-success" size="sm" disabled={data.length === 0} activeView={activeView} />
         </div>
       </div>
 
@@ -239,10 +245,55 @@ const ModernWaterQuality = () => {
             {activeView !== "details" && (
               <DataLoadingErrorBoundary componentName="Water Quality Metrics" onRetry={refetch}>
                 <div className="metrics-grid">
-                  <MetricCard title="Total Measurements" value={metrics.totalRecords.toLocaleString()} icon="database" context={`Data from ${metrics.sitesCount} monitoring sites`} />
-                  <MetricCard title="Avg Temperature" value={metrics.perSiteAvgTemperature.toFixed(1)} unit="°C" icon="thermometer-half" status={metrics.perSiteAvgTemperature > 20 ? 'warning' : 'good'} context={`Equal-weight mean across ${metrics.sitesCount} sites`} flippable backContent={<div>Per-site means...</div>} />
-                  <MetricCard title="Avg Conductivity" value={metrics.perSiteAvgConductivity.toFixed(0)} unit="μS/cm" icon="lightning" status={metrics.perSiteAvgConductivity > 3000 ? 'warning' : 'good'} context={`Equal-weight mean across ${metrics.sitesCount} sites`} flippable backContent={<div>Per-site means...</div>} />
-                  <MetricCard title="Avg Water Level" value={metrics.perSiteAvgWaterLevel.toFixed(2)} unit="m" icon="droplet-half" status={'good'} context={`Equal-weight mean across ${metrics.sitesCount} sites`} flippable backContent={<div>Per-site means...</div>} />
+                  <MetricCard key="total-measurements" title="Total Measurements" value={metrics.totalRecords.toLocaleString()} icon="database" context={`Data from ${metrics.sitesCount} monitoring sites`} />
+                  <MetricCard key="avg-temperature" title="Avg Temperature" value={metrics.perSiteAvgTemperature.toFixed(1)} unit="°C" icon="thermometer-half" status={metrics.perSiteAvgTemperature > 20 ? 'warning' : 'good'} context={`Equal-weight mean across ${metrics.sitesCount} sites`} flippable backContent={
+                    <div className={styles.flipContent}>
+                      <h5 className={styles.flipTitle}>Per-Site Avg. Temperature</h5>
+                      <ul className={styles.flipList}>
+                        {metrics.breakdown.t.map(item => (
+                          <li key={item.site} className={styles.flipRow}>
+                            <span className={styles.flipSite}>{item.site}</span>
+                            <span className={styles.flipValue}>
+                              {item.mean.toFixed(1)}
+                              <span className={styles.flipUnit}>°C</span>
+                            </span>
+                          </li>
+                        ))}
+                      </ul>
+                    </div>
+                  } />
+                  <MetricCard key="avg-conductivity" title="Avg Conductivity" value={metrics.perSiteAvgConductivity.toFixed(0)} unit="μS/cm" icon="lightning" status={metrics.perSiteAvgConductivity > 3000 ? 'warning' : 'good'} context={`Equal-weight mean across ${metrics.sitesCount} sites`} flippable backContent={
+                    <div className={styles.flipContent}>
+                      <h5 className={styles.flipTitle}>Per-Site Avg. Conductivity</h5>
+                      <ul className={styles.flipList}>
+                        {metrics.breakdown.c.map(item => (
+                          <li key={item.site} className={styles.flipRow}>
+                            <span className={styles.flipSite}>{item.site}</span>
+                            <span className={styles.flipValue}>
+                              {item.mean.toFixed(0)}
+                              <span className={styles.flipUnit}>μS/cm</span>
+                            </span>
+                          </li>
+                        ))}
+                      </ul>
+                    </div>
+                  } />
+                  <MetricCard key="avg-water-level" title="Avg Water Level" value={metrics.perSiteAvgWaterLevel.toFixed(2)} unit="m" icon="droplet-half" status={'good'} context={`Equal-weight mean across ${metrics.sitesCount} sites`} flippable backContent={
+                    <div className={styles.flipContent}>
+                      <h5 className={styles.flipTitle}>Per-Site Avg. Water Level</h5>
+                      <ul className={styles.flipList}>
+                        {metrics.breakdown.w.map(item => (
+                          <li key={item.site} className={styles.flipRow}>
+                            <span className={styles.flipSite}>{item.site}</span>
+                            <span className={styles.flipValue}>
+                              {item.mean.toFixed(2)}
+                              <span className={styles.flipUnit}>m</span>
+                            </span>
+                          </li>
+                        ))}
+                      </ul>
+                    </div>
+                  } />
                 </div>
               </DataLoadingErrorBoundary>
             )}

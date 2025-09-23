@@ -104,21 +104,22 @@ def create_app():
         return jsonify({'error': 'Internal Server Error', 'message': 'An unexpected error occurred on the server.'}), 500
 
     # User loader callback
-    from services.user_management import user_manager
+    from services.new_user_management import NewUserManager
+    from auth_database import AuthSessionLocal
     from services.auth_models import User  # Import centralized User class
+
+    user_manager = NewUserManager()
 
     @login_manager.user_loader
     def load_user(user_id):
+        db = AuthSessionLocal()
         try:
-            user_data = user_manager.get_user_by_username(user_id)
-            if user_data and user_data.get('is_active', True):
-                return User(user_data['username'])
-            # If user missing (e.g., after a restart), try reloading from disk happened automatically in user_manager
-            # As a safe fallback, keep unauthenticated
+            user = user_manager.get_user_by_username(db, user_id)
+            if user:
+                return User(user.username)
             return None
-        except Exception as e:
-            logger.warning(f"User loader failed for id={user_id}: {e}")
-            return None
+        finally:
+            db.close()
 
     # Configure Flask server with secure settings
     server_config = get_server_config()

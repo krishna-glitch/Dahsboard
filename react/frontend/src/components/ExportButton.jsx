@@ -29,6 +29,7 @@ const ExportButton = ({
   size = 'sm',
   disabled = false,
   className = '',
+  activeView = 'overview',
   
   // Export options
   availableFormats = ['csv', 'json', 'png', 'pdf'],
@@ -45,7 +46,7 @@ const ExportButton = ({
 
   // Determine what can be exported based on props
   const canExportData = data && Array.isArray(data) && data.length > 0;
-  const canExportChart = chartElementId && document.getElementById(chartElementId);
+  const canExportChart = chartElementId && document.getElementById(chartElementId) && activeView !== 'details';
   const canExportInsights = insights && typeof insights === 'object';
 
   const isDisabled = disabled || (!canExportData && !canExportChart && !canExportInsights);

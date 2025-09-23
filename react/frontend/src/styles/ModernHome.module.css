@@ -1,0 +1,20 @@
+.latestRecord {
+  display: grid;
+  gap: 4px;
+}
+
+.latestRecordRow {
+  display: flex;
+  justify-content: space-between;
+  gap: 8px;
+  font-size: 0.9rem;
+}
+
+.latestRecordSite {
+  color: #334155;
+  font-weight: 600;
+}
+
+.latestRecordDate {
+  color: #64748b;
+}

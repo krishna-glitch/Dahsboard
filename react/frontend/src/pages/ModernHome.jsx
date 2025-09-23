@@ -5,6 +5,7 @@ import '../styles/modern-layout.css';
 import TutorialHint from '../components/modern/TutorialHint';
 import { useTutorial } from '../contexts/TutorialContext.jsx';
 import '../styles/landing-pages.css';
+import styles from '../styles/ModernHome.module.css';
 import { getHomeData } from '../services/api';
 import { safeStorage } from '../utils/safeStorage';
 
@@ -27,75 +28,16 @@ const ModernHome = () => {
   const [meta, setMeta] = useState({ last_updated: null });
   const [latestBySite, setLatestBySite] = useState([]);
 
-  useEffect(() => {
+  const fetchData = useCallback(async () => {
     let alive = true;
-    // Seed UI from cached data for instant paint
-    try {
-      const cached = safeStorage.getJSON('home:data:v1');
-      if (cached && typeof cached === 'object') {
-        const maxStaleMs = 5 * 60 * 1000; // 5 minutes
-        if (cached.savedAt && (Date.now() - cached.savedAt) <= maxStaleMs) {
-          setStats(cached.stats || {});
-          setMeta(cached.meta || {});
-          setLatestBySite(Array.isArray(cached.latestBySite) ? cached.latestBySite : []);
-        }
-      }
-    } catch (_e) {}
-    
-    // Auto-fetch fresh data on page load for immediate KPI display
-    (async () => {
-      try {
-        setLoading(true);
-        setError(null);
-        const res = await getHomeData();
-        if (!alive) return;
-        const s = res?.dashboard_data?.dashboard_stats || {};
-        const latest = Array.isArray(res?.dashboard_data?.latest_per_site) ? res.dashboard_data.latest_per_site : [];
-        // active_alerts not provided by API yet; default to 0
-        setStats({
-          active_sites: Number.isFinite(s.active_sites) ? s.active_sites : 0,
-          total_sites: Number.isFinite(s.total_sites) ? s.total_sites : 0,
-          recent_measurements: Number.isFinite(s.recent_measurements) ? s.recent_measurements : 0,
-          data_quality: Number.isFinite(s.data_quality) ? s.data_quality : null,
-          active_alerts: 0,
-          data_current_through: s.data_current_through || null,
-        });
-        const newMeta = { last_updated: res?.metadata?.last_updated || null };
-        setMeta(newMeta);
-        setLatestBySite(latest);
-        // Cache for next visit/login
-        try {
-          safeStorage.setJSON('home:data:v1', {
-            savedAt: Date.now(),
-            stats: {
-              active_sites: Number.isFinite(s.active_sites) ? s.active_sites : 0,
-              total_sites: Number.isFinite(s.total_sites) ? s.total_sites : 0,
-              recent_measurements: Number.isFinite(s.recent_measurements) ? s.recent_measurements : 0,
-              data_quality: Number.isFinite(s.data_quality) ? s.data_quality : null,
-              active_alerts: 0,
-              data_current_through: s.data_current_through || null,
-            },
-            meta: newMeta,
-            latestBySite: latest,
-          });
-        } catch (_e) {}
-      } catch (e) {
-        if (!alive) return;
-        setError(String(e?.message || e));
-      } finally {
-        if (alive) setLoading(false);
-      }
-    })();
-    return () => { alive = false; };
-  }, []);
-
-  const handleRefresh = useCallback(async () => {
     try {
       setLoading(true);
       setError(null);
       const res = await getHomeData();
+      if (!alive) return;
       const s = res?.dashboard_data?.dashboard_stats || {};
       const latest = Array.isArray(res?.dashboard_data?.latest_per_site) ? res.dashboard_data.latest_per_site : [];
+      // active_alerts not provided by API yet; default to 0
       setStats({
         active_sites: Number.isFinite(s.active_sites) ? s.active_sites : 0,
         total_sites: Number.isFinite(s.total_sites) ? s.total_sites : 0,
@@ -107,7 +49,7 @@ const ModernHome = () => {
       const newMeta = { last_updated: res?.metadata?.last_updated || null };
       setMeta(newMeta);
       setLatestBySite(latest);
-      // update cache
+      // Cache for next visit/login
       try {
         safeStorage.setJSON('home:data:v1', {
           savedAt: Date.now(),
@@ -122,13 +64,42 @@ const ModernHome = () => {
           meta: newMeta,
           latestBySite: latest,
         });
-      } catch (_) {}
+      } catch (_e) {}
     } catch (e) {
-      setError(String(e?.message || e));
-    } finally {
-      setLoading(false);
+        if (!alive) return;
+        console.error("Error fetching home data:", e);
+        setError("An error occurred while fetching data. Please try again later.");
+      } finally {
+      if (alive) setLoading(false);
     }
+    return () => { alive = false; };
   }, []);
+
+  useEffect(() => {
+    // Seed UI from cached data for instant paint
+    try {
+      const cached = safeStorage.getJSON('home:data:v1');
+      if (cached && typeof cached === 'object') {
+        const maxStaleMs = 5 * 60 * 1000; // 5 minutes
+        if (cached.savedAt && (Date.now() - cached.savedAt) <= maxStaleMs) {
+          setStats(cached.stats || {});
+          setMeta(cached.meta || {});
+          setLatestBySite(Array.isArray(cached.latestBySite) ? cached.latestBySite : []);
+        }
+      }
+    } catch (_e) {}
+    
+    // Auto-fetch fresh data on page load for immediate KPI display
+    fetchData();
+
+    const intervalId = setInterval(fetchData, 5 * 60 * 1000); // Refetch every 5 minutes
+
+    return () => clearInterval(intervalId);
+  }, [fetchData]);
+
+  const handleRefresh = useCallback(() => {
+    fetchData();
+  }, [fetchData]);
   return (
     <div className="modern-dashboard-home landing-page">
       {/* Header Section */}
@@ -219,11 +190,11 @@ const ModernHome = () => {
             icon="calendar-week"
             status="good"
             value={(
-              <div style={{ display: 'grid', gap: 4 }}>
+              <div className={styles.latestRecord}>
                 {(latestBySite || []).filter(r => r.last_water_quality).slice(0, 4).map((r, idx) => (
-                  <div key={`${r.site_code || idx}`} style={{ display: 'flex', justifyContent: 'space-between', gap: 8, fontSize: '0.9rem' }}>
-                    <span style={{ color: '#334155', fontWeight: 600 }}>{r.site_code || '-'}</span>
-                    <span style={{ color: '#64748b' }}>{String(r.last_water_quality).slice(0,10)}</span>
+                  <div key={`${r.site_code || idx}`} className={styles.latestRecordRow}>
+                    <span className={styles.latestRecordSite}>{r.site_code || '-'}</span>
+                    <span className={styles.latestRecordDate}>{String(r.last_water_quality).slice(0,10)}</span>
                   </div>
                 ))}
               </div>
@@ -235,11 +206,11 @@ const ModernHome = () => {
             icon="calendar-week"
             status="good"
             value={(
-              <div style={{ display: 'grid', gap: 4 }}>
+              <div className={styles.latestRecord}>
                 {(latestBySite || []).filter(r => r.last_redox).slice(0, 4).map((r, idx) => (
-                  <div key={`${r.site_code || idx}`} style={{ display: 'flex', justifyContent: 'space-between', gap: 8, fontSize: '0.9rem' }}>
-                    <span style={{ color: '#334155', fontWeight: 600 }}>{r.site_code || '-'}</span>
-                    <span style={{ color: '#64748b' }}>{String(r.last_redox).slice(0,10)}</span>
+                  <div key={`${r.site_code || idx}`} className={styles.latestRecordRow}>
+                    <span className={styles.latestRecordSite}>{r.site_code || '-'}</span>
+                    <span className={styles.latestRecordDate}>{String(r.last_redox).slice(0,10)}</span>
                   </div>
                 ))}
               </div>

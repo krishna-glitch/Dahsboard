@@ -1,0 +1,53 @@
+.flipContent {
+  padding: 12px 10px 8px 10px;
+  display: grid;
+  gap: 8px;
+  overflow-y: auto;
+  max-height: 150px;
+  scrollbar-width: none; /* Firefox */
+  -ms-overflow-style: none;  /* IE and Edge */
+}
+
+.flipContent::-webkit-scrollbar {
+  width: 0;
+  height: 0;
+}
+
+.flipTitle {
+  font-size: 0.9rem;
+  font-weight: 600;
+  color: var(--text-primary);
+  margin: 0 0 2px 0;
+}
+
+.flipList {
+  display: grid;
+  gap: 6px;
+  list-style: none;
+  padding: 0;
+  margin: 0;
+}
+
+.flipRow {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  font-size: 0.92rem;
+  color: var(--text-primary);
+}
+
+.flipSite {
+  font-weight: 600;
+  color: #334155;
+}
+
+.flipValue {
+  color: #0f172a;
+  font-weight: 700;
+}
+
+.flipUnit {
+  margin-left: 4px;
+  font-size: 0.8rem;
+  color: var(--text-secondary);
+}
