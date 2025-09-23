@@ -78,14 +78,6 @@ function setupDevelopmentTools() {
   }, 2 * 60 * 1000); // Every 2 minutes in development
 }
 
-/**
- * Cleanup cache system on application shutdown
- */
-export function shutdownCacheSystem() {
-  console.log('🛑 [CACHE_SYSTEM] Shutting down cache management...');
-  performGlobalCleanup();
-  console.log('✅ [CACHE_SYSTEM] Cache system shutdown complete');
-}
 
 /**
  * Start periodic cache validation against backend
