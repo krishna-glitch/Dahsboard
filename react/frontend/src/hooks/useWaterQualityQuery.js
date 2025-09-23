@@ -20,6 +20,7 @@ export function useWaterQualityQuery({
   selectedParameter,
   compareMode,
   compareParameter,
+  no_downsample = false, // Default to false to allow downsampling
   enabled = true,
 }) {
   const toast = useToast();
@@ -29,7 +30,7 @@ export function useWaterQualityQuery({
     const params = {
       sites: selectedSites,
       time_range: timeRange,
-      no_downsample: true,
+      no_downsample: no_downsample,
       ...(timeRange === 'Custom Range' && startDate && endDate 
         ? { start_date: startDate, end_date: endDate } 
         : {}
@@ -71,6 +72,7 @@ export function useWaterQualityQuery({
       selectedParameter,
       compareMode,
       compareParameter,
+      no_downsample,
     },
   ];
 
@@ -111,7 +113,7 @@ export function useWaterQualityQuery({
         } else {
           toast.showWarning(
             `No water quality records found for sites ${selectedSites.join(', ')}`,
-            { 
+            {
               title: 'No Data Available',
               duration: 4000,
               dedupeKey: `wq-nodata|${selectedSites.join(',')}|${timeRange}`,
@@ -119,7 +121,10 @@ export function useWaterQualityQuery({
           );
         }
 
-        return data;
+        return {
+          data: data,
+          metadata: response?.metadata || {},
+        };
       } catch (error) {
         log.error('[WQ Query] Data fetch error:', error);
         
@@ -148,7 +153,8 @@ export function useWaterQualityQuery({
   });
 
   return {
-    data: query.data || [],
+    data: query.data?.data || [],
+    metadata: query.data?.metadata || {},
     loading: query.isLoading,
     error: query.error?.message || null,
     refetch: query.refetch,
