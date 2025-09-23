@@ -41,7 +41,7 @@ class ParameterRange:
 @dataclass
 class AdvancedFilterConfig:
     """Complete advanced filter configuration"""
-    # Basic filters
+    # Basic filters (used by other services, not this one)
     sites: List[str] = None
     time_range: str = "Last 30 Days"
     start_date: Optional[datetime] = None
@@ -68,7 +68,8 @@ class AdvancedFilterConfig:
 
 class AdvancedFilterService:
     """
-    Service providing advanced filtering capabilities for water quality data
+    Service providing advanced, post-processing filtering capabilities for water quality data.
+    It assumes that primary filtering (sites, time range) has already been applied at the database level.
     """
     
     def __init__(self):
@@ -96,14 +97,7 @@ class AdvancedFilterService:
                              df: pd.DataFrame, 
                              filter_config: AdvancedFilterConfig) -> Tuple[pd.DataFrame, Dict[str, Any]]:
         """
-        Apply comprehensive advanced filters to water quality data
-        
-        Args:
-            df: Input DataFrame with water quality data
-            filter_config: Advanced filter configuration
-            
-        Returns:
-            Tuple of (filtered_df, filter_stats)
+        Apply comprehensive advanced filters to a DataFrame that has already been fetched.
         """
         if df.empty:
             return df, self._empty_filter_stats()
@@ -117,46 +111,34 @@ class AdvancedFilterService:
         logger.info(f"[ADVANCED FILTER] Starting with {original_count} records")
         
         try:
-            # 1. Site filtering
-            if filter_config.sites:
-                current_df, step_stats = self._apply_site_filter(current_df, filter_config.sites)
-                filter_steps.append({'step': 'site_filter', 'remaining': len(current_df), **step_stats})
-            
-            # 2. Time range filtering
-            current_df, step_stats = self._apply_time_filter(
-                current_df, 
-                filter_config.time_range,
-                filter_config.start_date,
-                filter_config.end_date
-            )
-            filter_steps.append({'step': 'time_filter', 'remaining': len(current_df), **step_stats})
-            
-            # 3. Parameter filtering (only include records with selected parameters)
+            # Site and Time filtering are now handled by the database query before this service is called.
+
+            # 1. Parameter filtering (only include records with selected parameters)
             if filter_config.parameters:
                 current_df, step_stats = self._apply_parameter_filter(current_df, filter_config.parameters)
                 filter_steps.append({'step': 'parameter_filter', 'remaining': len(current_df), **step_stats})
             
-            # 4. Parameter range filtering
+            # 2. Parameter range filtering
             if filter_config.parameter_ranges:
                 current_df, step_stats = self._apply_parameter_range_filters(current_df, filter_config.parameter_ranges)
                 filter_steps.append({'step': 'range_filter', 'remaining': len(current_df), **step_stats})
             
-            # 5. Data quality filtering
+            # 3. Data quality filtering
             if filter_config.data_quality != DataQuality.ALL:
                 current_df, step_stats = self._apply_data_quality_filter(current_df, filter_config.data_quality)
                 filter_steps.append({'step': 'quality_filter', 'remaining': len(current_df), **step_stats})
             
-            # 6. Alert level filtering
+            # 4. Alert level filtering
             if filter_config.alert_level != AlertLevel.ALL:
                 current_df, step_stats = self._apply_alert_filter(current_df, filter_config.alert_level)
                 filter_steps.append({'step': 'alert_filter', 'remaining': len(current_df), **step_stats})
             
-            # 7. Outlier filtering
+            # 5. Outlier filtering
             if filter_config.exclude_outliers:
                 current_df, step_stats = self._apply_outlier_filter(current_df, filter_config.outlier_threshold)
                 filter_steps.append({'step': 'outlier_filter', 'remaining': len(current_df), **step_stats})
             
-            # 8. Data completeness filtering
+            # 6. Data completeness filtering
             if filter_config.min_data_completeness > 0:
                 current_df, step_stats = self._apply_completeness_filter(current_df, filter_config.min_data_completeness)
                 filter_steps.append({'step': 'completeness_filter', 'remaining': len(current_df), **step_stats})
@@ -183,55 +165,6 @@ class AdvancedFilterService:
         except Exception as e:
             logger.error(f"[ADVANCED FILTER] Error applying filters: {e}", exc_info=True)
             return df, self._error_filter_stats(str(e))
-    
-    def _apply_site_filter(self, df: pd.DataFrame, sites: List[str]) -> Tuple[pd.DataFrame, Dict[str, Any]]:
-        """Apply site filtering"""
-        if not sites or 'site_code' not in df.columns:
-            return df, {'sites_requested': sites, 'sites_found': []}
-        
-        original_sites = set(df['site_code'].unique()) if 'site_code' in df.columns else set()
-        filtered_df = df[df['site_code'].isin(sites)]
-        final_sites = set(filtered_df['site_code'].unique()) if len(filtered_df) > 0 else set()
-        
-        return filtered_df, {
-            'sites_requested': sites,
-            'sites_found': list(final_sites),
-            'sites_missing': list(set(sites) - final_sites)
-        }
-    
-    def _apply_time_filter(self, 
-                          df: pd.DataFrame, 
-                          time_range: str, 
-                          start_date: Optional[datetime], 
-                          end_date: Optional[datetime]) -> Tuple[pd.DataFrame, Dict[str, Any]]:
-        """Apply time range filtering"""
-        if 'measurement_timestamp' not in df.columns:
-            return df, {'time_filter': 'no_timestamp_column'}
-        
-        # Convert timestamp column to datetime if needed
-        if not pd.api.types.is_datetime64_any_dtype(df['measurement_timestamp']):
-            df['measurement_timestamp'] = pd.to_datetime(df['measurement_timestamp'], errors='coerce')
-
-        # Ensure the timestamp column is timezone-aware (in UTC) for safe comparison
-        if df['measurement_timestamp'].dt.tz is None:
-            df['measurement_timestamp'] = df['measurement_timestamp'].dt.tz_localize('UTC')
-        else:
-            df['measurement_timestamp'] = df['measurement_timestamp'].dt.tz_convert('UTC')
-        
-        # Determine date range
-        if not start_date or not end_date:
-            return df, {'time_filter': 'no_date_range_provided'}
-
-        # Apply time filter
-        time_mask = (df['measurement_timestamp'] >= start_date) & (df['measurement_timestamp'] <= end_date)
-        filtered_df = df[time_mask]
-        
-        return filtered_df, {
-            'time_range': time_range,
-            'start_date': start_date.isoformat(),
-            'end_date': end_date.isoformat(),
-            'records_in_range': len(filtered_df)
-        }
     
     def _apply_parameter_filter(self, df: pd.DataFrame, parameters: List[str]) -> Tuple[pd.DataFrame, Dict[str, Any]]:
         """Filter to include only records with data for selected parameters"""
@@ -308,13 +241,9 @@ class AdvancedFilterService:
     
     def _apply_data_quality_filter(self, df: pd.DataFrame, quality_level: DataQuality) -> Tuple[pd.DataFrame, Dict[str, Any]]:
         """Apply data quality filtering"""
-        # For now, implement basic quality filtering
-        # In production, this would use actual data quality indicators
-        
         quality_stats = {'quality_level': quality_level.value}
         
         if quality_level == DataQuality.HIGH:
-            # Keep only records with high completeness across key parameters
             key_params = ['temperature_c', 'conductivity_us_cm', 'water_level_m']
             available_key_params = [p for p in key_params if p in df.columns]
             
@@ -327,12 +256,10 @@ class AdvancedFilterService:
                 quality_stats['filter_criteria'] = 'no_key_parameters_available'
                 
         elif quality_level == DataQuality.VALIDATED:
-            # For now, assume all data is validated (no actual validation flags in dataset)
             filtered_df = df
             quality_stats['filter_criteria'] = 'all_data_assumed_validated'
             
         elif quality_level == DataQuality.FLAGGED:
-            # Return only records that would be flagged (outliers, missing data, etc.)
             filtered_df = self._identify_flagged_data(df)
             quality_stats['filter_criteria'] = 'flagged_data_only'
             
@@ -344,21 +271,17 @@ class AdvancedFilterService:
     
     def _apply_alert_filter(self, df: pd.DataFrame, alert_level: AlertLevel) -> Tuple[pd.DataFrame, Dict[str, Any]]:
         """Apply alert-based filtering"""
-        # For now, implement basic alert filtering based on parameter thresholds
         alert_stats = {'alert_level': alert_level.value}
         
         if alert_level == AlertLevel.NO_ALERTS:
-            # Keep only records without alert conditions
             filtered_df = self._filter_no_alerts(df)
             alert_stats['filter_criteria'] = 'no_alert_conditions'
             
         elif alert_level == AlertLevel.WITH_ALERTS:
-            # Keep only records with alert conditions
             filtered_df = self._filter_with_alerts(df)
             alert_stats['filter_criteria'] = 'with_alert_conditions'
             
         elif alert_level == AlertLevel.CRITICAL_ONLY:
-            # Keep only records with critical alert conditions
             filtered_df = self._filter_critical_alerts(df)
             alert_stats['filter_criteria'] = 'critical_alerts_only'
             
@@ -381,20 +304,13 @@ class AdvancedFilterService:
         
         for param in numeric_params:
             if param in df.columns and df[param].notna().sum() > 10:
-                # Calculate Z-scores
                 param_data = df[param].dropna()
                 z_scores = abs((param_data - param_data.mean()) / param_data.std())
-                
-                # Identify outliers in this parameter
                 param_outliers = z_scores > threshold
                 param_outlier_indices = param_data[param_outliers].index
-                
-                # Update global outlier mask
                 outlier_mask.loc[param_outlier_indices] = True
-                
                 param_outlier_counts[param] = int(param_outliers.sum())
         
-        # Remove outliers
         filtered_df = df[~outlier_mask]
         
         outlier_stats.update({
@@ -411,10 +327,7 @@ class AdvancedFilterService:
         if not key_params:
             return df, {'min_completeness': min_completeness, 'key_parameters': []}
         
-        # Calculate completeness for each record
         completeness_scores = df[key_params].notna().sum(axis=1) / len(key_params)
-        
-        # Filter based on minimum completeness
         completeness_mask = completeness_scores >= min_completeness
         filtered_df = df[completeness_mask]
         
@@ -427,66 +340,40 @@ class AdvancedFilterService:
     
     def _identify_flagged_data(self, df: pd.DataFrame) -> pd.DataFrame:
         """Identify data that should be flagged for quality issues"""
-        # Simple implementation - identify records with potential issues
         flag_mask = pd.Series([False] * len(df))
-        
-        # Flag records with extreme values
         for param, config in self.parameter_definitions.items():
             if param in df.columns:
-                param_mask = (
-                    (df[param] < config['valid_min']) | 
-                    (df[param] > config['valid_max'])
-                )
+                param_mask = ( (df[param] < config['valid_min']) | (df[param] > config['valid_max']) )
                 flag_mask |= param_mask
-        
         return df[flag_mask]
     
     def _filter_no_alerts(self, df: pd.DataFrame) -> pd.DataFrame:
         """Filter to records without alert conditions"""
-        # Simple implementation - keep records within optimal ranges
         alert_mask = pd.Series([False] * len(df))
-        
         for param, config in self.parameter_definitions.items():
             if param in df.columns:
-                # Flag as alert if outside optimal range
-                param_mask = (
-                    (df[param] < config['optimal_min']) | 
-                    (df[param] > config['optimal_max'])
-                )
+                param_mask = ( (df[param] < config['optimal_min']) | (df[param] > config['optimal_max']) )
                 alert_mask |= param_mask
-        
-        return df[~alert_mask]  # Return records WITHOUT alerts
+        return df[~alert_mask]
     
     def _filter_with_alerts(self, df: pd.DataFrame) -> pd.DataFrame:
         """Filter to records with alert conditions"""
         alert_mask = pd.Series([False] * len(df))
-        
         for param, config in self.parameter_definitions.items():
             if param in df.columns:
-                param_mask = (
-                    (df[param] < config['optimal_min']) | 
-                    (df[param] > config['optimal_max'])
-                )
+                param_mask = ( (df[param] < config['optimal_min']) | (df[param] > config['optimal_max']) )
                 alert_mask |= param_mask
-        
-        return df[alert_mask]  # Return records WITH alerts
+        return df[alert_mask]
     
     def _filter_critical_alerts(self, df: pd.DataFrame) -> pd.DataFrame:
         """Filter to records with critical alert conditions"""
         critical_mask = pd.Series([False] * len(df))
-        
         for param, config in self.parameter_definitions.items():
             if param in df.columns:
-                # Critical alerts are closer to valid limits
                 critical_min = config['valid_min'] + (config['optimal_min'] - config['valid_min']) * 0.2
                 critical_max = config['valid_max'] - (config['valid_max'] - config['optimal_max']) * 0.2
-                
-                param_mask = (
-                    (df[param] < critical_min) | 
-                    (df[param] > critical_max)
-                )
+                param_mask = ( (df[param] < critical_min) | (df[param] > critical_max) )
                 critical_mask |= param_mask
-        
         return df[critical_mask]
     
     def _get_applied_filters_summary(self, config: AdvancedFilterConfig) -> Dict[str, Any]:
@@ -528,32 +415,22 @@ class AdvancedFilterService:
     def parse_request_filters(self, request_args: dict) -> AdvancedFilterConfig:
         """
         Parse advanced filter parameters from Flask request
-        
-        Args:
-            request_args: Flask request.args dictionary
-            
-        Returns:
-            AdvancedFilterConfig object
         """
         try:
-            # Parse basic filters using centralized function
             from utils.request_parsing import parse_sites_parameter
             from flask import current_app
             
-            # Create a mock request context to use the centralized parser
             with current_app.test_request_context(query_string=dict(request_args)):
                 sites = parse_sites_parameter(['S1', 'S2', 'S3'])
             time_range = request_args.get('time_range', 'Last 30 Days')
             start_date = self._parse_date(request_args.get('start_date'))
             end_date = self._parse_date(request_args.get('end_date'))
             
-            # Parse advanced filters
             parameters = self._parse_parameters(request_args)
             parameter_ranges = self._parse_parameter_ranges(request_args)
             data_quality = DataQuality(request_args.get('data_quality', 'all'))
             alert_level = AlertLevel(request_args.get('alert_level', 'all'))
             
-            # Parse additional options
             exclude_outliers = request_args.get('exclude_outliers', 'false').lower() == 'true'
             outlier_threshold = float(request_args.get('outlier_threshold', 3.0))
             min_data_completeness = float(request_args.get('min_completeness', 0.0))
@@ -575,8 +452,6 @@ class AdvancedFilterService:
         except Exception as e:
             logger.error(f"Error parsing request filters: {e}")
             return AdvancedFilterConfig()  # Return default config
-    
-    # Removed _parse_sites method - now using centralized parse_sites_parameter from utils.request_parsing
     
     def _parse_parameters(self, request_args: dict) -> List[str]:
         """Parse parameter selection from request"""
@@ -615,7 +490,6 @@ class AdvancedFilterService:
             return None
         
         try:
-            # Import flexible date parsing utility
             from utils.date_parsing import parse_flexible_date
             return parse_flexible_date(date_str)
         except Exception as e:
