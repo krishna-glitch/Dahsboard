@@ -141,6 +141,10 @@ def get_water_quality_data():
             # Log the dynamic date range being used
             logger.info(f"[DYNAMIC RANGE] Using current date range: {start_date} to {end_date} (days_back: {days_back})")
 
+        # Update filter_config with the calculated dates so it's respected by the service
+        filter_config.start_date = start_date
+        filter_config.end_date = end_date
+
         # Calculate days back for performance optimization
         days_back = (end_date - start_date).days if start_date and end_date else 30
 

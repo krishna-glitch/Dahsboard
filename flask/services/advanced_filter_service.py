@@ -213,25 +213,11 @@ class AdvancedFilterService:
             df['measurement_timestamp'] = pd.to_datetime(df['measurement_timestamp'], errors='coerce')
         
         # Determine date range
-        if time_range in ('Custom Range', 'custom') and start_date and end_date:
-            filter_start = start_date
-            filter_end = end_date
-        else:
-            days_back_map = {
-                'Last 7 Days': 7,
-                'Last 30 Days': 30,
-                'Last 90 Days': 90,
-                'Last 6 Months': 180,
-                'Last 1 Year': 365,
-                'Last 2 Years': 730,
-            }
-            days_back = days_back_map.get(time_range, 30)
-            # FIXED: Use database's actual data range (data ends 2024-05-31) instead of current date
-            filter_end = datetime(2024, 5, 31, 23, 59, 59)
-            filter_start = filter_end - timedelta(days=days_back)
-        
+        if not start_date or not end_date:
+            return df, {'time_filter': 'no_date_range_provided'}
+
         # Apply time filter
-        time_mask = (df['measurement_timestamp'] >= filter_start) & (df['measurement_timestamp'] <= filter_end)
+        time_mask = (df['measurement_timestamp'] >= start_date) & (df['measurement_timestamp'] <= end_date)
         filtered_df = df[time_mask]
         
         return filtered_df, {
