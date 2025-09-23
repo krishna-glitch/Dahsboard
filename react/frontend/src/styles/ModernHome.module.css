@@ -46,13 +46,6 @@
   margin-left: auto;
 }
 
-:global(.tutorial-hint-container) {
-  margin-bottom: var(--spacing-component-sm);
-}
-
-:global(.tutorial-hint-full-width) {
-  grid-column: 1 / -1;
-}
 
 :global(.nav-arrow-icon) {
   margin-left: var(--spacing-component-sm);

@@ -3,7 +3,7 @@
  * Validates frontend cache entries against backend cache health and provides synchronization
  */
 
-import { api } from './api';
+import api from './api';
 import {
   getCacheStatistics,
   performGlobalCleanup,

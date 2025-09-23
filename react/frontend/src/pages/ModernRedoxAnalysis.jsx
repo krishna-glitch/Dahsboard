@@ -6,8 +6,6 @@ import SidebarFilters from '../components/filters/SidebarFilters';
 import ExportButton from '../components/ExportButton';
 import SimpleLoadingBar from '../components/modern/SimpleLoadingBar';
 import { useToast } from '../components/modern/toastUtils';
-import TutorialHint from '../components/modern/TutorialHint';
-import { useTutorial } from '../hooks/useTutorial.js';
 
 // Services
 import {
@@ -335,7 +333,6 @@ const ModernRedoxAnalysis = () => {
   }, [loadArrowModule]);
 
   const toast = useToast();
-  const tutorial = useTutorial();
 
   // Load server-driven visualization config
   useEffect(() => {
@@ -1817,7 +1814,7 @@ const ModernRedoxAnalysis = () => {
     },
     onRetry: fetchData,
     onShowSample: () => {
-      toast.showInfo('Sample data tutorial feature will be available in a future update.', {
+      toast.showInfo('Sample data feature will be available in a future update.', {
         title: 'Feature Coming Soon',
         duration: 4000,
       });
@@ -1942,15 +1939,7 @@ const ModernRedoxAnalysis = () => {
       <SidebarFilters
         collapsed={filtersCollapsed}
         onToggleCollapse={handleFiltersToggle}
-        top={
-          tutorial.enabled ? (
-            <div style={{ padding: '0.75rem 1rem' }}>
-              <TutorialHint id="redox-filters" title="Filters">
-                Choose sites and a date range, then click Apply. Custom ranges are limited to the available data window.
-              </TutorialHint>
-            </div>
-          ) : null
-        }
+        top={null}
         selectedSites={selectedSites}
         onSiteChange={handleSiteChange}
         timeRange={timeRange}
@@ -2020,13 +2009,6 @@ const ModernRedoxAnalysis = () => {
                         </span>
                       ))}
                     </p>
-                  )}
-                  {tutorial.enabled && (
-                    <div style={{ marginTop: 8 }}>
-                      <TutorialHint id="redox-chart-controls" title="Chart Controls">
-                        Use View to switch between Time Series, Depth Profile, Zones, and Heatmap. In Time Series, the Y1/Y2 toggle swaps Depth and Redox axes.
-                      </TutorialHint>
-                    </div>
                   )}
                 </div>
                 <div className="chart-controls">

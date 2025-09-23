@@ -2,8 +2,6 @@ import React, { useMemo } from 'react';
 import { Link } from 'react-router-dom';
 import MetricCard from '../components/modern/MetricCard';
 import '../styles/modern-layout.css';
-import TutorialHint from '../components/modern/TutorialHint';
-import { useTutorial } from '../contexts/TutorialContext.jsx';
 import { useAuth } from '../contexts/authUtils';
 import '../styles/landing-pages.css';
 import styles from '../styles/ModernHome.module.css';
@@ -14,7 +12,6 @@ import { useHomeQuery } from '../hooks/useHomeQuery';
  * Uses CSS Grid layout and design system tokens
  */
 const ModernHome = () => {
-  const tutorial = useTutorial();
   const { user } = useAuth();
   const { data, isLoading, error, refetch } = useHomeQuery();
 
@@ -133,13 +130,6 @@ const ModernHome = () => {
           </div>
         )}
         {/* Quick Stats Grid */}
-        {tutorial.enabled && (
-          <div className="tutorial-hint-container">
-            <TutorialHint id="home-metrics" title="At a Glance">
-              These cards summarize key stats like Active Sites and Data Quality.
-            </TutorialHint>
-          </div>
-        )}
         <div className="metrics-grid">
           {isLoading && stats.active_sites === null ? (
             <>
@@ -200,13 +190,6 @@ const ModernHome = () => {
 
         {/* Navigation Cards Grid */}
         <div className="navigation-grid">
-          {tutorial.enabled && (
-            <div className="tutorial-hint-full-width">
-              <TutorialHint id="home-navigation" title="Navigate">
-                Jump to analysis pages: Water Quality, Redox, Site Comparison, and more.
-              </TutorialHint>
-            </div>
-          )}
           <div className="nav-card component-fade-in">
             <div className="nav-card-header">
               <div className="nav-card-icon data-quality">
