@@ -211,6 +211,12 @@ class AdvancedFilterService:
         # Convert timestamp column to datetime if needed
         if not pd.api.types.is_datetime64_any_dtype(df['measurement_timestamp']):
             df['measurement_timestamp'] = pd.to_datetime(df['measurement_timestamp'], errors='coerce')
+
+        # Ensure the timestamp column is timezone-aware (in UTC) for safe comparison
+        if df['measurement_timestamp'].dt.tz is None:
+            df['measurement_timestamp'] = df['measurement_timestamp'].dt.tz_localize('UTC')
+        else:
+            df['measurement_timestamp'] = df['measurement_timestamp'].dt.tz_convert('UTC')
         
         # Determine date range
         if not start_date or not end_date:
