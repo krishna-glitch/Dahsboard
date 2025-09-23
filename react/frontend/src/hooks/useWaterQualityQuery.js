@@ -20,7 +20,6 @@ export function useWaterQualityQuery({
   selectedParameter,
   compareMode,
   compareParameter,
-  no_downsample = false, // Default to false to allow downsampling
   enabled = true,
 }) {
   const toast = useToast();
@@ -30,7 +29,7 @@ export function useWaterQualityQuery({
     const params = {
       sites: selectedSites,
       time_range: timeRange,
-      no_downsample: no_downsample,
+      no_downsample: true, // Always fetch the full dataset as requested
       ...(timeRange === 'Custom Range' && startDate && endDate 
         ? { start_date: startDate, end_date: endDate } 
         : {}
@@ -72,7 +71,6 @@ export function useWaterQualityQuery({
       selectedParameter,
       compareMode,
       compareParameter,
-      no_downsample,
     },
   ];
 
