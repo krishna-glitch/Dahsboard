@@ -1,4 +1,5 @@
 import React from 'react';
+import { WATER_QUALITY_PARAMETERS, CHART_TYPES } from '../../constants/appConstants';
 
 const WaterQualityChartControls = ({
   selectedParameter,
@@ -18,9 +19,11 @@ const WaterQualityChartControls = ({
         className="filter-input"
         style={{ marginRight: 'var(--spacing-component-sm)' }}
       >
-        <option value="temperature_c">Temperature</option>
-        <option value="conductivity_us_cm">Conductivity</option>
-        <option value="water_level_m">Water Level</option>
+        {WATER_QUALITY_PARAMETERS.map(param => (
+          <option key={param.value} value={param.value}>
+            {param.label}
+          </option>
+        ))}
       </select>
 
       <select
@@ -28,8 +31,11 @@ const WaterQualityChartControls = ({
         onChange={(e) => setChartType(e.target.value)}
         className="filter-input"
       >
-        <option value="line">Line Chart</option>
-        <option value="scatter">Scatter Plot</option>
+        {CHART_TYPES.filter(type => ['line', 'scatter', 'bar'].includes(type.value)).map(type => (
+          <option key={type.value} value={type.value}>
+            {type.label}
+          </option>
+        ))}
       </select>
 
       <select
@@ -49,9 +55,11 @@ const WaterQualityChartControls = ({
           className="filter-input"
           style={{ marginLeft: 'var(--spacing-component-sm)' }}
         >
-          <option value="temperature_c">Temperature</option>
-          <option value="conductivity_us_cm">Conductivity</option>
-          <option value="water_level_m">Water Level</option>
+          {WATER_QUALITY_PARAMETERS.map(param => (
+            <option key={param.value} value={param.value}>
+              {param.label}
+            </option>
+          ))}
         </select>
       )}
     </div>

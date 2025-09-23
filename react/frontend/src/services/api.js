@@ -435,9 +435,9 @@ export const getAuthHealth = async (signal = null) => {
 };
 
 export const getWaterQualityData = async (params, signal = null) => {
-  // Allow duplicates for water quality to ensure fresh data on filter changes
+  // Use request deduplication to prevent infinite loops while allowing fresh data on filter changes
   // Wire through abort signal so callers can cancel in-flight requests
-  const res = await fetchData('water_quality/data', 'GET', null, params, signal, true);
+  const res = await fetchData('water_quality/data', 'GET', null, params, signal, false);
   // Normalize possible tuple-like responses and shapes
   const body = Array.isArray(res) ? (res[0] || {}) : (res || {});
   const rows = Array.isArray(body.water_quality_data) ? body.water_quality_data

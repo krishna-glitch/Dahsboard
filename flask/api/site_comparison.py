@@ -19,7 +19,7 @@ except ImportError:
 from utils.data_processing import normalize_timezone
 from services.core_data_service import core_data_service, DataQuery
 from services.consolidated_cache_service import cached
-from utils.api_cache_utils import cached_api_response
+from utils.redis_api_cache_utils import redis_cached_api_response
 from services.config_service import config_service
 from utils.optimized_serializer import serialize_dataframe_optimized
 
@@ -264,7 +264,7 @@ def _apply_concurrent_time_window_analysis(df: pd.DataFrame, window_hours: int, 
 @site_comparison_bp.route('/data', methods=['GET'])
 # @login_required  # Temporarily disabled for testing
 @enterprise_performance(data_type='site_comparison')
-@cached_api_response(ttl=600)  # Site-aware caching that preserves filtering
+@redis_cached_api_response(ttl=600)  # Redis site-aware caching that preserves filtering
 def get_site_comparison_data():
     logger.info("Received request for site comparison data API.")
     try:

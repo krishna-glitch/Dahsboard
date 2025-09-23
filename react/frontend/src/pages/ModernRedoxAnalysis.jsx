@@ -4,6 +4,7 @@ import React, { useState, useEffect, useCallback, useMemo, useRef, useReducer, S
 import EmptyState from '../components/modern/EmptyState';
 import SidebarFilters from '../components/filters/SidebarFilters';
 import ExportButton from '../components/ExportButton';
+import SimpleLoadingBar from '../components/modern/SimpleLoadingBar';
 import { useToast } from '../components/modern/toastUtils';
 import TutorialHint from '../components/modern/TutorialHint';
 import { useTutorial } from '../hooks/useTutorial.js';
@@ -1965,6 +1966,21 @@ const ModernRedoxAnalysis = () => {
       />
 
       <div className="main-content">
+        <SimpleLoadingBar
+          isVisible={fetchState.loading}
+          message={`Loading redox data for ${selectedSites.length} site${selectedSites.length !== 1 ? 's' : ''}...`}
+          stage="processing"
+          compact={false}
+          progress={fetchState.loadProgress?.mode === 'chunk' && fetchState.loadProgress?.perSite ?
+            Math.round((Object.values(fetchState.loadProgress.perSite).reduce((sum, site) => sum + (site.loaded || 0), 0) /
+            Object.values(fetchState.loadProgress.perSite).reduce((sum, site) => sum + (site.total || 1), 0)) * 100) : null}
+          current={fetchState.data?.length || null}
+          total={fetchState.loadProgress?.mode === 'chunk' && fetchState.loadProgress?.perSite ?
+            Object.values(fetchState.loadProgress.perSite).reduce((sum, site) => sum + (site.total || 0), 0) : null}
+          showPercentage={fetchState.loadProgress?.mode === 'chunk'}
+          showCounts={fetchState.data?.length > 0 || (fetchState.loadProgress?.mode === 'chunk')}
+        />
+
         {fetchState.loading ? (
           <RedoxProgress
             loadProgress={fetchState.loadProgress}

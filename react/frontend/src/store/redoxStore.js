@@ -4,9 +4,9 @@ import { createWithEqualityFn } from 'zustand/traditional';
 export const useRedoxStore = createWithEqualityFn((set) => ({
   // Filters and view state
   selectedSites: ['S1', 'S2'],
-  timeRange: 'Last 30 Days',
-  startDate: '',
-  endDate: '',
+  timeRange: 'Custom Range',
+  startDate: '2024-05-01',
+  endDate: '2024-05-31',
   // Default to raw cadence (no downsampling)
   maxFidelity: true,
   selectedView: 'timeseries', // timeseries | snapshot | rolling | details

@@ -43,36 +43,40 @@ def get_alerts_data():
         actual_start_date = None
         actual_end_date = None
         
+        # Use dynamic database date service
+        from services.database_date_service import database_date_service
+        db_latest_date = database_date_service.get_database_latest_date()
+
         # Handle comprehensive time range options
         if time_range == 'Last 24 Hours' or time_range == 'Today':
             days_back = 1
-            actual_start_date = datetime(2024, 5, 31, 23, 59, 59) - timedelta(days=1)
+            actual_start_date = db_latest_date - timedelta(days=1)
         elif time_range == 'Last 7 Days':
             days_back = 7
-            actual_start_date = datetime(2024, 5, 31, 23, 59, 59) - timedelta(days=7)
+            actual_start_date = db_latest_date - timedelta(days=7)
         elif time_range == 'Last 30 Days':
             days_back = 30
-            actual_start_date = datetime(2024, 5, 31, 23, 59, 59) - timedelta(days=30)
+            actual_start_date = db_latest_date - timedelta(days=30)
         elif time_range == 'Last 90 Days':
             days_back = 90
-            actual_start_date = datetime(2024, 5, 31, 23, 59, 59) - timedelta(days=90)
+            actual_start_date = db_latest_date - timedelta(days=90)
         elif time_range == 'Last 6 Months':
             days_back = 180
-            actual_start_date = datetime(2024, 5, 31, 23, 59, 59) - timedelta(days=180)
+            actual_start_date = db_latest_date - timedelta(days=180)
         elif time_range == 'Last Year':
             days_back = 365
-            actual_start_date = datetime(2024, 5, 31, 23, 59, 59) - timedelta(days=365)
+            actual_start_date = db_latest_date - timedelta(days=365)
         elif time_range == 'Custom Range' and start_date and end_date:
             days_back = (end_date - start_date).days
             actual_start_date = start_date
             actual_end_date = end_date
         else:
             # Default fallback
-            actual_start_date = datetime(2024, 5, 31, 23, 59, 59) - timedelta(days=days_back)
+            actual_start_date = db_latest_date - timedelta(days=days_back)
         
         if actual_end_date is None:
-            # FIXED: Use database's actual data range (data ends 2024-05-31) instead of current date
-            actual_end_date = datetime(2024, 5, 31, 23, 59, 59)
+            # Use dynamic database date
+            actual_end_date = db_latest_date
             
         logger.info(f"Using date range: {actual_start_date} to {actual_end_date} ({days_back} days)")
 

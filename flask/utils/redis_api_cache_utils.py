@@ -1,13 +1,13 @@
 """
-API Cache Utilities - Site-Aware Caching for API endpoints
-Creates proper cache keys that include site parameters to prevent filtering issues
+Redis API Cache Utilities - Enhanced cache utilities with Redis support
+Drop-in replacement for api_cache_utils.py with Redis backend
 """
 
 import hashlib
 import json
 from functools import wraps
 from flask import request
-from services.consolidated_cache_service import cache_service
+from services.hybrid_cache_service import hybrid_cache_service
 from utils.data_compressor import compressor
 from utils.smart_compression import smart_compressor
 from flask import Response as FlaskResponse
@@ -36,6 +36,7 @@ def _validate_and_normalize_params(params: dict) -> dict:
     return validated
 
 def _normalize_sites_arg() -> str:
+    """Normalize sites argument for consistent cache keys"""
     sites_param = request.args.get('sites', '')
     if sites_param:
         try:
@@ -50,6 +51,7 @@ def _normalize_sites_arg() -> str:
     return 'default'
 
 def _normalize_range_and_resolution():
+    """Normalize time range and resolution parameters"""
     tr = (request.args.get('time_range') or '').lower()
     mapping = {
         'last 24 hours': '1d', '1d': '1d', '24h': '1d',
@@ -66,9 +68,10 @@ def _normalize_range_and_resolution():
     norm_res = resolution or (res_map.get(norm_range, 'raw'))
     return norm_range, norm_res
 
-def generate_api_cache_key(endpoint_name: str, **kwargs) -> str:
+def generate_redis_api_cache_key(endpoint_name: str, **kwargs) -> str:
     """
-    Generate cache key for API endpoints that includes site filtering and computed date ranges
+    Generate cache key for API endpoints with Redis optimization
+    Enhanced with computed date ranges for proper time period handling
     """
     # Get site parameter - handle both individual site and multi-site requests
     sites_key = _normalize_sites_arg()
@@ -99,10 +102,10 @@ def generate_api_cache_key(endpoint_name: str, **kwargs) -> str:
         elif norm_range == '90d':
             computed_end_date = current_time
             computed_start_date = computed_end_date - timedelta(days=90)
-        elif norm_range in ['180d', '6m']:
+        elif norm_range == '180d':
             computed_end_date = current_time
             computed_start_date = computed_end_date - timedelta(days=180)
-        elif norm_range in ['365d', '1y']:
+        elif norm_range == '365d':
             computed_end_date = current_time
             computed_start_date = computed_end_date - timedelta(days=365)
         else:
@@ -141,7 +144,7 @@ def generate_api_cache_key(endpoint_name: str, **kwargs) -> str:
     for key, value in kwargs.items():
         if value is not None:
             extra_params[key] = str(value)
-    
+
     # Create cache key components - simplified to 6 essential parameters
     # This reduces complexity while maintaining correct cache differentiation
     key_data = {
@@ -156,22 +159,24 @@ def generate_api_cache_key(endpoint_name: str, **kwargs) -> str:
         'no_downsample': no_downsample,
         **extra_params
     }
-    
+
     # Validate and sanitize parameters
     key_data = _validate_and_normalize_params(key_data)
 
-    # Generate deterministic hash with better collision resistance
+    # Generate deterministic hash with better distribution for Redis
     key_json = json.dumps(key_data, sort_keys=True)
     key_hash = hashlib.sha256(key_json.encode()).hexdigest()[:20]  # Increased to 20 chars (~1T possibilities)
-    
+
     # Handle custom time ranges properly by including actual dates in cache key
     if norm_range == 'custom' and start_date and end_date:
         # For custom ranges, include actual dates to prevent cache collisions
         date_component = f"custom_{start_date}_{end_date}"
     else:
         date_component = norm_range
-    
+
+    # Create Redis-optimized cache key (shorter, more efficient)
     cache_key = f"{endpoint_name}:{sites_key}:{date_component}:{key_hash}"
+
     # Log cache key metrics for monitoring
     _log_cache_key_metrics(cache_key, key_data)
 
@@ -180,69 +185,52 @@ def generate_api_cache_key(endpoint_name: str, **kwargs) -> str:
 
     return cache_key
 
-def get_compatible_cached_data(base_cache_key: str, requested_fidelity: str):
+def get_compatible_redis_cached_data(base_cache_key: str, requested_fidelity: str):
     """
-    Check for compatible cached data using fidelity hierarchy.
-    For standard fidelity requests, check if max fidelity data exists.
+    Check for compatible cached data using fidelity hierarchy with Redis
     """
     if requested_fidelity == 'std':
         # Try to find max fidelity version of the same data
         max_fidelity_key = base_cache_key.replace(':std:', ':max:')
         if max_fidelity_key != base_cache_key:
-            compressed_data = cache_service.get(max_fidelity_key)
-            if compressed_data:
-                try:
-                    # Try smart decompression first, fallback to legacy
-                    if hasattr(compressed_data, 'method'):
-                        cached_data = smart_compressor.decompress_json(compressed_data)
-                    else:
-                        cached_data = compressor.decompress_json(compressed_data)
-                    logger.cache_operation("hit", max_fidelity_key, "max fidelity for std request")
-                    return cached_data, 'max_for_std'
-                except Exception as e:
-                    logger.warning(f"Failed to decompress cache data for {max_fidelity_key}: {e}")
-    
+            cached_data = hybrid_cache_service.get(max_fidelity_key)
+            if cached_data:
+                logger.cache_operation("hit", max_fidelity_key, "max fidelity for std request")
+                return cached_data, 'max_for_std'
+
     # Check for exact match
-    compressed_data = cache_service.get(base_cache_key)
-    if compressed_data:
-        try:
-            # Try smart decompression first, fallback to legacy
-            if hasattr(compressed_data, 'method'):
-                cached_data = smart_compressor.decompress_json(compressed_data)
-            else:
-                cached_data = compressor.decompress_json(compressed_data)
-            return cached_data, 'exact'
-        except Exception as e:
-            logger.warning(f"Failed to decompress cache data for {base_cache_key}: {e}")
-    
+    cached_data = hybrid_cache_service.get(base_cache_key)
+    if cached_data:
+        return cached_data, 'exact'
+
     return None, None
 
-def cached_api_response(ttl: int = 900):
+def redis_cached_api_response(ttl: int = 1800):  # Default 30 minutes for Redis
     """
-    Decorator for caching API responses with proper site-aware keys
+    Redis-enhanced decorator for caching API responses
+    Provides advanced caching with Redis persistence and smart compression
     """
     def decorator(func):
         @wraps(func)
         def wrapper(*args, **kwargs):
             # Generate proper cache key
             endpoint_name = func.__name__
-            cache_key = generate_api_cache_key(endpoint_name)
-            
+            cache_key = generate_redis_api_cache_key(endpoint_name)
+
             # Get current fidelity level for hierarchical checking
             max_fidelity = request.args.get('max_fidelity', '').lower() in ('1', 'true', 'yes', 'on', 't')
             requested_fidelity = 'max' if max_fidelity else 'std'
-            
+
             # Try hierarchical cache lookup
-            cached_result, cache_type = get_compatible_cached_data(cache_key, requested_fidelity)
+            cached_result, cache_type = get_compatible_redis_cached_data(cache_key, requested_fidelity)
             if cached_result is not None:
                 if cache_type == 'max_for_std':
                     logger.cache_operation("hit", cache_key, f"max fidelity for {endpoint_name}")
-                    # TODO: Apply server-side filtering here if needed for data size optimization
                     return cached_result
                 else:
                     logger.cache_operation("hit", cache_key, endpoint_name)
                     return cached_result
-            
+
             # Execute function
             logger.cache_operation("miss", cache_key, endpoint_name)
             result = func(*args, **kwargs)
@@ -271,82 +259,41 @@ def cached_api_response(ttl: int = 900):
                 logger.debug(f"Cache bypass: Non-JSON response for {endpoint_name}")
                 return result
 
-            # Cache the JSON payload with smart compression
+            # Cache the JSON payload with Redis
             try:
-                # Determine data type for smart compression
-                data_type = _determine_data_type(endpoint_name, json_payload)
-                
-                # Use smart compression
-                compression_result = smart_compressor.compress_json(json_payload, data_type)
-                cache_service.set(cache_key, compression_result, ttl)
+                success = hybrid_cache_service.set(cache_key, json_payload, ttl)
 
-                logger.cache_operation("store", cache_key,
-                                     f"{endpoint_name} (smart, {data_type}, {ttl}s, {compression_result.compression_ratio:.1f}x)")
+                if success:
+                    cache_mode = hybrid_cache_service.get_cache_mode()
+                    logger.cache_operation("store", cache_key, f"{endpoint_name} ({cache_mode}, {ttl}s)")
+                else:
+                    logger.cache_operation("error", cache_key, f"Store failed for {endpoint_name}")
+
             except Exception as e:
-                # Fallback to legacy compression
-                logger.warning(f"Smart compression failed for {endpoint_name}, using legacy: {e}")
-                try:
-                    compressed_result = compressor.compress_json(json_payload)
-                    cache_service.set(cache_key, compressed_result, ttl)
-                    original_size = len(json.dumps(json_payload).encode())
-                    compressed_size = len(compressed_result)
-                    compression_ratio = original_size / compressed_size if compressed_size > 0 else 1
-                    logger.cache_operation("store", cache_key,
-                                         f"{endpoint_name} (legacy, {ttl}s, {compression_ratio:.1f}x)")
-                except Exception as e2:
-                    # Final fallback to uncompressed
-                    logger.warning(f"All compression failed for {endpoint_name}: {e2}")
-                    cache_service.set(cache_key, json_payload, ttl)
-                    logger.cache_operation("store", cache_key, f"{endpoint_name} (uncompressed, {ttl}s)")
+                logger.cache_operation("error", cache_key, f"Cache failed for {endpoint_name}: {e}")
 
             return result
-        
+
         return wrapper
     return decorator
 
-def _determine_data_type(endpoint_name: str, data: dict) -> str:
+def invalidate_redis_api_cache(endpoint_name: str = None, sites: list = None):
     """
-    Determine data type for optimal compression strategy
-    
-    Args:
-        endpoint_name: Name of the API endpoint
-        data: Response data to analyze
-        
-    Returns:
-        Data type string for compression optimization
+    Invalidate cached API responses in Redis
     """
-    # Endpoint-based heuristics
-    if 'water_quality' in endpoint_name or 'redox' in endpoint_name:
-        # Check if it looks like time series data
-        if isinstance(data, dict):
-            # Look for common time series data patterns
-            if 'water_quality_data' in data or 'redox_data' in data or 'data' in data:
-                sample_data = data.get('water_quality_data') or data.get('redox_data') or data.get('data')
-                if isinstance(sample_data, list) and len(sample_data) > 0:
-                    first_record = sample_data[0]
-                    if isinstance(first_record, dict) and any(key in first_record for key in 
-                        ['measurement_timestamp', 'timestamp', 'datetime']):
-                        return 'time_series'
-    
-    if 'site_comparison' in endpoint_name:
-        return 'spatial'
-    
-    if 'performance' in endpoint_name or 'stats' in endpoint_name:
-        return 'general'
-    
-    # Data structure-based heuristics
-    if isinstance(data, dict):
-        # Check for time series indicators
-        time_indicators = ['timestamp', 'datetime', 'measurement_timestamp', 'time']
-        if any(indicator in str(data).lower() for indicator in time_indicators):
-            return 'time_series'
-        
-        # Check for spatial indicators  
-        spatial_indicators = ['lat', 'lon', 'latitude', 'longitude', 'coordinates', 'location']
-        if any(indicator in str(data).lower() for indicator in spatial_indicators):
-            return 'spatial'
-    
-    return 'general'
+    if endpoint_name is None:
+        # Clear all API cache entries
+        logger.cache_operation("clear", None, "all API cache entries")
+        hybrid_cache_service.clear_pattern("*_data:*")
+    else:
+        # Clear specific endpoint cache
+        pattern = f"{endpoint_name}:*"
+        if sites:
+            sites_key = ','.join(sorted(sites))
+            pattern = f"{endpoint_name}:{sites_key}:*"
+
+        logger.cache_operation("clear", pattern, f"endpoint {endpoint_name}")
+        hybrid_cache_service.clear_pattern(pattern)
 
 def _log_cache_key_metrics(cache_key: str, key_data: dict):
     """Log cache key statistics for monitoring"""
@@ -368,20 +315,16 @@ def _log_cache_key_metrics(cache_key: str, key_data: dict):
     except Exception as e:
         logger.error(f"❌ Error logging cache key metrics: {e}")
 
-def invalidate_api_cache(endpoint_name: str = None, sites: list = None):
-    """
-    Invalidate cached API responses
-    """
-    if endpoint_name is None:
-        # Clear all API cache entries
-        logger.cache_operation("clear", None, "all API cache entries")
-        cache_service.clear_pattern("*_data:*")
-    else:
-        # Clear specific endpoint cache
-        pattern = f"{endpoint_name}:*"
-        if sites:
-            sites_key = ','.join(sorted(sites))
-            pattern = f"{endpoint_name}:{sites_key}:*"
+def get_redis_cache_stats() -> dict:
+    """Get Redis cache statistics"""
+    return hybrid_cache_service.get_detailed_stats()
 
-        logger.cache_operation("clear", pattern, f"endpoint {endpoint_name}")
-        cache_service.clear_pattern(pattern)
+def test_redis_connection() -> dict:
+    """Test Redis connection status"""
+    return hybrid_cache_service.ping()
+
+# Backward compatibility - these functions can be used as drop-in replacements
+generate_api_cache_key = generate_redis_api_cache_key
+get_compatible_cached_data = get_compatible_redis_cached_data
+cached_api_response = redis_cached_api_response
+invalidate_api_cache = invalidate_redis_api_cache

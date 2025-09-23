@@ -4,6 +4,7 @@ import { useSearchParams } from 'react-router-dom';
 import MetricCard from '../components/modern/MetricCard';
 import EmptyState from '../components/modern/EmptyState';
 import ExportButton from '../components/ExportButton';
+import SimpleLoadingBar from '../components/modern/SimpleLoadingBar';
 import { useToast } from '../components/modern/toastUtils';
 import PerSiteCharts from '../components/comparison/PerSiteCharts';
 import { getSiteComparisonData, getAvailableSites, getWaterQualityData, getRedoxAnalysisData } from '../services/api';
@@ -25,9 +26,9 @@ const ModernSiteComparison = () => {
   const [availableSites, setAvailableSites] = useState([]);
   const [selectedSites, setSelectedSites] = useState(['S1', 'S2', 'S3']);
   const [selectedMetric, setSelectedMetric] = useState('conductivity');
-  const [timeRange, setTimeRange] = useState('7d');
-  const [customStartDate, setCustomStartDate] = useState('');
-  const [customEndDate, setCustomEndDate] = useState('');
+  const [timeRange, setTimeRange] = useState('Custom Range');
+  const [customStartDate, setCustomStartDate] = useState('2024-05-01');
+  const [customEndDate, setCustomEndDate] = useState('2024-05-31');
   const [sortKey, setSortKey] = useState('currentValue'); // or 'change24h'
   const [sortDir, setSortDir] = useState('desc'); // 'asc' or 'desc'
   // Removed Group By: always show exactly the selected sites
@@ -592,10 +593,17 @@ const ModernSiteComparison = () => {
           </div>
         </div>
         <div className="main-content">
-          <EmptyState
-            type="loading"
-            title="Loading Site Comparison"
-            description="Fetching site data and comparison metrics..."
+          <SimpleLoadingBar
+            isVisible={loading || sitesLoading}
+            message={sitesLoading ? "Loading available sites..." :
+              `Loading ${selectedMetric} data for ${selectedSites.length} site${selectedSites.length !== 1 ? 's' : ''}...`}
+            stage={sitesLoading ? "initializing" : "loading"}
+            compact={false}
+            progress={null} // Show indeterminate for site comparison
+            current={comparisonData?.length || null}
+            total={null}
+            showPercentage={false}
+            showCounts={comparisonData?.length > 0 && !loading}
           />
         </div>
       </div>

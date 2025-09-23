@@ -6,7 +6,7 @@ import { useToast } from '../components/modern/toastUtils';
 import { log } from '../utils/log';
 import usePersistentCache from './usePersistentCache';
 
-const CACHE_STORAGE_KEY = 'wq_cache_v1';
+const CACHE_STORAGE_KEY = 'wq_cache_v2'; // Incremented to invalidate old cache
 const CACHE_TTL_MS = 10 * 60 * 1000;
 const PERSISTENT_CACHE_TTL_MS = 24 * 60 * 60 * 1000; // 24 hours for persistent cache
 const CACHE_MAX_CHARS = 3000000;
@@ -26,7 +26,7 @@ export function useWaterQualityData({
   compareParameter,
 }) {
   const [data, setData] = useState([]);
-  const [loading, setLoading] = useState(false);
+  const [loading, setLoading] = useState(true);  // Start with loading true to prevent "no data" flash
   const [error, setError] = useState(null);
   const [meta, setMeta] = useState(null);
   
@@ -37,6 +37,7 @@ export function useWaterQualityData({
   const lastFetchKeyRef = useRef(null);
   const abortRef = useRef(null);
   const mountedRef = useRef(true);
+  const lastFetchTimeRef = useRef(0);
   const toast = useToast();
 
   useEffect(() => () => { mountedRef.current = false; try { abortRef.current?.abort(); } catch { /* ignore */ } }, []);
@@ -73,6 +74,9 @@ export function useWaterQualityData({
     });
   }, [useAdvancedFilters, selectedParameters, valueRanges, dataQualityFilter, alertsFilter, selectedParameter, compareMode, compareParameter]);
 
+  // Fix: Define dataMode or default to a sensible value
+  const useChunks = false; // Set to false to avoid chunked loading issues
+
   const refetch = useCallback(async () => {
     log.debug('[WQ Hook] refetch called with:', {
       selectedSites,
@@ -87,6 +91,14 @@ export function useWaterQualityData({
       if (mountedRef.current) { setData([]); setLoading(false); setError(null); }
       return;
     }
+
+    // Prevent rapid repeated calls (debouncing)
+    const now = Date.now();
+    if (now - lastFetchTimeRef.current < 250) {
+      log.debug('[WQ Hook] Skipping fetch due to rate limiting');
+      return;
+    }
+    lastFetchTimeRef.current = now;
     // Abort previous
     try { abortRef.current?.abort(); } catch { /* ignore */ }
     const controller = new AbortController();
@@ -102,40 +114,55 @@ export function useWaterQualityData({
       const fetchKey = [selectedSites.join(','), cacheRangeKey].join('|');
 
       log.debug('[WQ Hook] Fetch key:', fetchKey);
+      log.debug('[WQ Hook] Time range details:', { timeRange, startDate, endDate, rangeKey });
 
       // Multi-layer cache read: in-memory first, then persistent
       let cachedAggregate = [];
       let cacheHit = false;
       const missing = [];
-      
-      if (featureFlags.wqCacheEnabled) {
+
+      // Add cache bypass for debugging - check if URL has ?nocache=1
+      const bypassCache = typeof window !== 'undefined' &&
+                         window.location?.search?.includes('nocache=1');
+
+      // Set loading true at start of fetch attempt
+      if (mountedRef.current) setLoading(true);
+
+      if (featureFlags.wqCacheEnabled && !bypassCache) {
         for (const s of selectedSites) {
           const k = `${s}|${cacheRangeKey}`;
           let found = false;
-          
+          log.debug(`[WQ Cache] Looking for cache key: ${k}`);
+
           // Layer 1: In-memory cache (fastest)
           if (cacheRef.current) {
             const c = cacheRef.current.get(k);
             if (c && Array.isArray(c.data) && (Date.now() - (c.ts || 0) < CACHE_TTL_MS)) {
-              cachedAggregate = cachedAggregate.concat(c.data);
+              // Filter cached data to ensure it's only for this specific site
+              const siteFilteredData = c.data.filter(row => row?.site_code === s);
+              cachedAggregate = cachedAggregate.concat(siteFilteredData);
               found = true;
-              log.debug(`[WQ Cache] In-memory hit for ${s}`);
+              log.debug(`[WQ Cache] In-memory hit for ${s} with key ${k} (${siteFilteredData.length} rows)`);
+            } else {
+              log.debug(`[WQ Cache] In-memory miss for ${s} with key ${k}`);
             }
           }
-          
+
           // Layer 2: Persistent cache (slower but cross-session)
           if (!found && persistentCache.isReady) {
             try {
               const persistentData = await persistentCache.get(k);
               if (persistentData && Array.isArray(persistentData.data)) {
-                cachedAggregate = cachedAggregate.concat(persistentData.data);
+                // Filter cached data to ensure it's only for this specific site
+                const siteFilteredData = persistentData.data.filter(row => row?.site_code === s);
+                cachedAggregate = cachedAggregate.concat(siteFilteredData);
                 found = true;
-                log.debug(`[WQ Cache] Persistent hit for ${s}`);
-                
+                log.debug(`[WQ Cache] Persistent hit for ${s} (${siteFilteredData.length} rows)`);
+
                 // Promote to in-memory cache
                 if (cacheRef.current) {
                   cacheRef.current.set(k, {
-                    data: persistentData.data,
+                    data: siteFilteredData, // Store filtered data
                     ts: Date.now(),
                     meta: persistentData.meta
                   });
@@ -145,60 +172,108 @@ export function useWaterQualityData({
               log.warn(`[WQ Cache] Persistent cache error for ${s}:`, error);
             }
           }
-          
+
           if (!found) {
             missing.push(s);
           }
         }
         cacheHit = cachedAggregate.length > 0 && missing.length === 0;
       }
-      if (cachedAggregate.length > 0 && mountedRef.current) setData(cachedAggregate);
-      if (missing.length > 0 && cachedAggregate.length === 0 && mountedRef.current) setLoading(true);
 
+      // Only set data if we have a complete cache hit or if we're starting fresh
+      if (cacheHit && cachedAggregate.length > 0 && mountedRef.current) {
+        setData(cachedAggregate);
+        log.debug(`[WQ Cache] Complete cache hit: ${cachedAggregate.length} total rows for sites: ${selectedSites.join(',')}`);
+
+        // For complete cache hit, set metadata and return early - no API call needed
+        if (mountedRef.current) {
+          setLoading(false);
+          setError(null);
+          setMeta({
+            cache: {
+              enabled: featureFlags.wqCacheEnabled,
+              hit: true,
+              ttlMs: CACHE_TTL_MS,
+            }
+          });
+          lastFetchKeyRef.current = fetchKey;
+        }
+
+        // Show cache hit notification
+        toast.showSuccess(
+          `Loaded ${cachedAggregate.length.toLocaleString()} cached records for sites ${selectedSites.join(', ')}`,
+          {
+            title: '⚡ Cache Hit',
+            duration: 3000,
+            dedupeKey: `wq-cache-hit|${selectedSites.join(',')}|${timeRange}`
+          }
+        );
+
+        log.info('[WQ Hook] Using cached data:', {
+          recordCount: cachedAggregate.length,
+          sites: selectedSites,
+          timeRange: timeRange,
+          cacheKey: `${selectedSites[0]}|${cacheRangeKey}`,
+          source: 'cache'
+        });
+        return; // Exit early - no need to fetch from API
+      } else if (missing.length > 0) {
+        // We have missing sites, need to fetch from API
+        log.debug(`[WQ Cache] Cache miss for sites: ${missing.join(',')}`);
+      }
+
+      // Only reach here if we have a cache miss - need to fetch from API
       // Single request supports multiple sites; use params builder
       const params = buildParams();
-      log.debug('[WQ Hook] API params:', params);
-      
-      // Chunked loading up to 200k to avoid truncation
-      const CHUNK_SIZE = 100000;
-      // Show progressive loading toast for chunked fetch
-      const loadingToastId = toast.showLoading('Loading water quality records…', {
-        title: 'Loading Water Quality',
-        dedupeKey: 'wq-chunk-loading'
-      });
       let rows = [];
       let dateRange = null;
-      let offset = 0;
-      while (true) {
-        const res = await getWaterQualityData({ ...params, chunk_size: CHUNK_SIZE, offset }, controller.signal);
-        log.debug('[WQ Hook] API response chunk:', { 
-          hasData: !!res?.water_quality_data || !!res?.data,
-          dataLength: (res?.water_quality_data || res?.data || []).length,
-          meta: res?.metadata
+
+      if (useChunks) {
+        const CHUNK_SIZE = 200000;
+        params.no_downsample = true;
+        log.debug('[WQ Hook] API params (raw):', params);
+
+        const loadingToastId = toast.showLoading('Loading water quality records…', {
+          title: 'Loading Water Quality',
+          dedupeKey: 'wq-chunk-loading'
         });
-        const chunk = res?.water_quality_data || res?.data || [];
-        rows = rows.concat(chunk);
-        // Update progress
-        try {
-          toast.updateToast(loadingToastId, {
-            type: 'loading',
-            title: 'Loading Water Quality',
-            message: `Loaded ${rows.length.toLocaleString()} records…`,
-            duration: 10000
-          });
-        } catch { /* ignore */ }
-        // Capture date_range from the first successful response
-        if (!dateRange && res?.metadata?.date_range && (res?.metadata?.date_range.start || res?.metadata?.date_range.end)) {
-          dateRange = {
-            start: res.metadata.date_range.start,
-            end: res.metadata.date_range.end,
-          };
+
+        let offset = 0;
+        while (true) {
+          const res = await getWaterQualityData({ ...params, chunk_size: CHUNK_SIZE, offset }, controller.signal);
+          const chunk = res?.water_quality_data || res?.data || [];
+          rows = rows.concat(chunk);
+
+          try {
+            toast.updateToast(loadingToastId, {
+              type: 'loading',
+              title: 'Loading Water Quality',
+              message: `Loaded ${rows.length.toLocaleString()} records…`,
+              duration: 10000
+            });
+          } catch { /* ignore */ }
+
+          if (!dateRange && res?.metadata?.date_range && (res?.metadata?.date_range.start || res?.metadata?.date_range.end)) {
+            dateRange = {
+              start: res.metadata.date_range.start,
+              end: res.metadata.date_range.end,
+            };
+          }
+
+          const info = res?.metadata?.chunk_info || {};
+          if (!info.has_more || chunk.length === 0) break;
+          offset = (info.offset || 0) + (info.chunk_size || CHUNK_SIZE);
+          if (offset >= 400000) break;
         }
-        const info = res?.metadata?.chunk_info || {};
-        if (!info.has_more || chunk.length === 0) break;
-        offset = (info.offset || 0) + (info.chunk_size || CHUNK_SIZE);
-        if (offset >= 200000) break; // guard against excess
+      } else {
+        log.debug('[WQ Hook] API params (summary):', params);
+        const res = await getWaterQualityData(params, controller.signal);
+        rows = res?.water_quality_data || res?.data || [];
+        if (res?.metadata?.date_range) {
+          dateRange = res.metadata.date_range;
+        }
       }
+
       const metadata = dateRange ? { date_range: dateRange } : null;
 
       // Populate multi-layer cache by site (only when enabled)
@@ -346,13 +421,10 @@ export function useWaterQualityData({
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [Array.isArray(selectedSites) ? selectedSites.join(',') : '', timeRange, startDate, endDate, shapeSig]);
 
-  useEffect(() => {
-    if (!Array.isArray(selectedSites) || selectedSites.length === 0) return;
-    refetch();
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [Array.isArray(selectedSites) ? selectedSites.join(',') : '', timeRange, startDate, endDate, shapeSig]);
+  // Fix: Stable refetch reference to prevent infinite loops
+  const stableRefetch = useCallback(() => refetch(), [refetch]);
 
-  return useMemo(() => ({ data, loading, error, meta, refetch }), [data, loading, error, meta, refetch]);
+  return useMemo(() => ({ data, loading, error, meta, refetch: stableRefetch }), [data, loading, error, meta, stableRefetch]);
 }
 
 export default useWaterQualityData;

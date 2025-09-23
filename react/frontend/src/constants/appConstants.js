@@ -71,11 +71,11 @@ export const DATA_TYPES = [
   { value: 'redox', label: 'Redox Only' }
 ];
 
-// Water Quality Parameter Configuration
+// Water Quality Parameter Configuration - Must match Flask settings.py
 export const WATER_QUALITY_PARAMETERS = [
-  { value: 'water_level_m', label: 'Water Level (m)', unit: 'm' },
-  { value: 'temperature_c', label: 'Temperature (°C)', unit: '°C' },
-  { value: 'conductivity_us_cm', label: 'Conductivity (μS/cm)', unit: 'μS/cm' }
+  { value: 'water_level_m', label: 'Water Level', unit: 'm', icon: 'droplet-half' },
+  { value: 'temperature_c', label: 'Temperature', unit: '°C', icon: 'thermometer-half' },
+  { value: 'conductivity_us_cm', label: 'Conductivity', unit: 'μS/cm', icon: 'lightning' }
 ];
 
 // Redox Parameter Configuration

@@ -4,7 +4,7 @@ from flask_cors import CORS
 from flask_login import LoginManager, UserMixin, login_user, logout_user, login_required, current_user
 
 from config import get_server_config
-from config.advanced_logging_config import initialize_advanced_logging, get_advanced_logger
+from config.improved_logging_config import configure_app_logging, get_smart_logger, LogCategory
 from utils.request_response_logger import setup_flask_request_logging
 from utils.orjson_provider import OrjsonProvider, ORJSON_AVAILABLE
  
@@ -23,16 +23,9 @@ try:  # pragma: no cover
 except Exception:  # pragma: no cover
     _BR_AVAILABLE = False
 
-# Initialize Advanced Comprehensive Logging System
-logging_config = initialize_advanced_logging(
-    log_level='DEBUG',
-    enable_console=True,
-    enable_file=True,
-    enable_json=True,
-    enable_performance=True
-)
-
-logger = get_advanced_logger(__name__)
+# Configure improved logging system
+configure_app_logging()
+logger = get_smart_logger(__name__, LogCategory.API)
 
 # Import advanced performance integration
 from utils.advanced_performance_integration_simple import init_performance_optimization

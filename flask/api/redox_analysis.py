@@ -5,7 +5,8 @@ import pandas as pd
 
 from services.core_data_service import core_data_service, DataQuery
 from utils.optimized_serializer import serialize_dataframe_optimized
-from utils.api_cache_utils import cached_api_response
+# Redis-enhanced caching - falls back to memory if Redis unavailable
+from utils.redis_api_cache_utils import redis_cached_api_response
 
 # Import comprehensive performance optimization
 from utils.advanced_performance_integration_simple import enterprise_performance
@@ -104,7 +105,7 @@ def _intelligent_downsample_redox(df: pd.DataFrame, target_size: int = 5000) -> 
 @redox_analysis_bp.route('/data', methods=['GET'])
 # @login_required  # Temporarily disabled for testing
 @enterprise_performance(data_type='redox_analysis')
-@cached_api_response(ttl=43200)  # Site-aware caching that preserves filtering - 12 hours
+@redis_cached_api_response(ttl=43200)  # Redis cache preserves filtering - 12 hours
 def get_redox_analysis_data():
     start_time = time.time()
     logger.info(f"[REDOX DEBUG] API data loading triggered.")
@@ -140,8 +141,9 @@ def get_redox_analysis_data():
             logger.info(f"[CUSTOM RANGE] Using user-specified: {start_date} to {end_date}")
         else:
             days_back = config_service.get_days_back_for_range(time_range)
-            # FIXED: Use database's actual data range (data ends 2024-05-31) instead of current date
-            end_date = datetime(2024, 5, 31, 23, 59, 59)
+            # Use dynamic database date service
+            from services.database_date_service import database_date_service
+            end_date = database_date_service.get_database_latest_date()
             start_date = end_date - timedelta(days=days_back)
             
             # Log the dynamic date range being used
@@ -328,7 +330,7 @@ def get_redox_date_range():
 # New endpoints backed by mv_processed_eh
 @redox_analysis_bp.route('/processed/time_series', methods=['GET'])
 @enterprise_performance(data_type='redox_processed_time_series')
-@cached_api_response(ttl=43200)  # 12 hours for better monthly reuse
+@redis_cached_api_response(ttl=43200)  # Redis cache for 12 hours for better monthly reuse
 def processed_time_series():
     """Dual-axis time series from mv_processed_eh.
 
@@ -583,7 +585,7 @@ def processed_time_series():
 
 @redox_analysis_bp.route('/processed/depth_snapshot', methods=['GET'])
 @enterprise_performance(data_type='redox_processed_depth_snapshot')
-@cached_api_response(ttl=43200)  # 12 hours for better monthly reuse
+@redis_cached_api_response(ttl=43200)  # Redis cache for 12 hours for better monthly reuse
 def processed_depth_snapshot():
     """Depth profile snapshot (Eh vs Depth) from mv_processed_eh.
 
@@ -613,7 +615,7 @@ def processed_depth_snapshot():
 
 @redox_analysis_bp.route('/processed/rolling_mean', methods=['GET'])
 @enterprise_performance(data_type='redox_processed_rolling_mean')
-@cached_api_response(ttl=43200)  # 12 hours for better monthly reuse
+@redis_cached_api_response(ttl=43200)  # Redis cache for 12 hours for better monthly reuse
 def processed_rolling_mean():
     """High-performance rolling mean using dedicated Polars/Pandas service.
     

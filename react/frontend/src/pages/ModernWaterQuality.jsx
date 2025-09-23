@@ -5,13 +5,14 @@ import Plot from '../components/PlotlyLite';
 
 // Modern components
 import MetricCard from '../components/modern/MetricCard';
-const DataTable = lazy(() => import('../components/modern/DataTable'));
+const TanStackDataTable = lazy(() => import('../components/modern/TanStackDataTable'));
 import EmptyState from '../components/modern/EmptyState';
 import SidebarFilters from '../components/filters/SidebarFilters';
 import ExportButton from '../components/ExportButton';
-// import ProgressiveLoadingBar from '../components/modern/ProgressiveLoadingBar';
+import SimpleLoadingBar from '../components/modern/SimpleLoadingBar';
+import PresetSelector from '../components/modern/PresetSelector';
 import { useToast } from '../components/modern/toastUtils';
-import useWaterQualityData from '../hooks/useWaterQualityData';
+import { useWaterQualityDataWithMonthlyCache } from '../hooks/useWaterQualityDataWithMonthlyCache';
 import usePredictiveLoader from '../hooks/usePredictiveLoader';
 const WaterQualityChartRouter = lazy(() => import('../components/water/WaterQualityChartRouter'));
 import WaterQualityChartControls from '../components/water/WaterQualityChartControls';
@@ -33,27 +34,20 @@ import '../styles/modern-layout.css';
 
 // Local storage helpers removed
 
-// Static parameter configuration - moved outside component to prevent recreation
-const PARAMETER_CONFIG = {
-  temperature_c: {
-    label: 'Temperature',
-    unit: '°C',
-    icon: 'thermometer-half',
-    color: '#ff6b35'
-  },
-  conductivity_us_cm: {
-    label: 'Conductivity', 
-    unit: 'μS/cm',
-    icon: 'lightning',
-    color: '#4ecdc4'
-  },
-  water_level_m: {
-    label: 'Water Level',
-    unit: 'm', 
-    icon: 'droplet-half',
-    color: '#45b7d1'
-  }
-};
+import { WATER_QUALITY_PARAMETERS } from '../constants/appConstants';
+
+// Convert WATER_QUALITY_PARAMETERS to PARAMETER_CONFIG format
+const PARAMETER_CONFIG = WATER_QUALITY_PARAMETERS.reduce((config, param) => {
+  config[param.value] = {
+    label: param.label,
+    unit: param.unit,
+    icon: param.icon,
+    color: param.value === 'temperature_c' ? '#ff6b35' :
+           param.value === 'conductivity_us_cm' ? '#4ecdc4' :
+           param.value === 'water_level_m' ? '#45b7d1' : '#6c757d'
+  };
+  return config;
+}, {});
 
 /**
  * Modern Water Quality Dashboard
@@ -70,15 +64,17 @@ const ModernWaterQuality = () => {
   
   // State management
   const [error, setError] = useState(null);
-  const [selectedSites, setSelectedSites] = useState(['S1', 'S2', 'S3']);
-  const [timeRange, setTimeRange] = useState('Custom Range');
+  const [selectedSites, setSelectedSites] = useState(['S1', 'S2', 'S3']); // Default sites
+  const [timeRange, setTimeRange] = useState('Custom Range'); // Use custom range with specific available dates
   const [filtersCollapsed, setFiltersCollapsed] = useState(false);
+  const [showPresetSelector, setShowPresetSelector] = useState(false);
   const [activeView, setActiveView] = useState('overview'); // overview, details
   const [chartType, setChartType] = useState('line'); // line, scatter, bar
   const [selectedParameter, setSelectedParameter] = useState('temperature_c'); // primary parameter
   const [compareMode, setCompareMode] = useState('off'); // off, overlay, split
   const [compareParameter, setCompareParameter] = useState('conductivity_us_cm'); // secondary parameter
-  // Default to the known data window to ensure results on first load
+  // Date range - let hook determine from timeRange initially
+  // Set default dates to available data range (database contains data through 2024-05-31)
   const [startDate, setStartDate] = useState('2024-05-01');
   const [endDate, setEndDate] = useState('2024-05-31');
   const [maxDateAvailable, setMaxDateAvailable] = useState('');
@@ -122,8 +118,8 @@ const ModernWaterQuality = () => {
     if (next !== current) setSearchParams(params, { replace: true });
   }, [selectedSites, timeRange, selectedParameter, compareParameter, compareMode, setSearchParams, searchParams]);
   
-  // Data via extracted hook (replaces legacy progressive loader)
-  const { data, loading, error: hookError, meta, refetch } = useWaterQualityData({
+  // Data via monthly cache hook for optimal performance
+  const { data, loading, error: hookError, meta, cacheStats, refetch } = useWaterQualityDataWithMonthlyCache({
     selectedSites,
     timeRange,
     startDate,
@@ -148,13 +144,34 @@ const ModernWaterQuality = () => {
     }
   }, [data.length, loading, selectedSites, timeRange, selectedParameter, compareMode, predictiveLoader]);
   
-  // Track actual server data window for UI hints
+  // Track actual server data window for UI hints and set defaults
   useEffect(() => {
     const start = meta?.date_range?.start ? String(meta.date_range.start).slice(0, 10) : '';
     const end = meta?.date_range?.end ? String(meta.date_range.end).slice(0, 10) : '';
     if (start) setMinDateAvailable(start);
     if (end) setMaxDateAvailable(end);
-  }, [meta]);
+
+    // Set default date range if not already set
+    if (start && end && !startDate && !endDate) {
+      setStartDate(start);
+      setEndDate(end);
+    }
+  }, [meta, startDate, endDate]);
+
+  // Update available sites based on actual data, but keep current selection
+  useEffect(() => {
+    if (data && data.length > 0) {
+      const availableSites = [...new Set(data.map(row => row.site_code).filter(Boolean))].sort();
+      // If current selection has sites that don't exist in data, update to available ones
+      if (selectedSites.length > 0) {
+        const validSites = selectedSites.filter(site => availableSites.includes(site));
+        if (validSites.length === 0 && availableSites.length > 0) {
+          // Current selection is invalid, use first few available sites
+          setSelectedSites(availableSites.slice(0, Math.min(3, availableSites.length)));
+        }
+      }
+    }
+  }, [data, selectedSites]);
 
   // Legacy progressive loader removed; hook manages loading and data
   
@@ -170,7 +187,6 @@ const ModernWaterQuality = () => {
       { key: 'temperature_c', label: 'Temperature (°C)', format: (v) => (v ?? null) == null ? '-' : Number(v).toFixed(2) },
       { key: 'conductivity_us_cm', label: 'Conductivity (µS/cm)', format: (v) => (v ?? null) == null ? '-' : Number(v).toFixed(1) },
       { key: 'water_level_m', label: 'Water Level (m)', format: (v) => (v ?? null) == null ? '-' : Number(v).toFixed(3) },
-      { key: 'dissolved_oxygen_mg_l', label: 'Dissolved O₂ (mg/L)', format: (v) => (v ?? null) == null ? '-' : Number(v).toFixed(2) }
     ];
     if (!Array.isArray(data) || data.length === 0) return base.slice(0, 5); // minimal default
     const hasKey = (k) => data.some(row => row != null && row[k] != null);
@@ -441,7 +457,37 @@ const ModernWaterQuality = () => {
     setFiltersCollapsed(!filtersCollapsed);
   }, [filtersCollapsed]);
 
-  // Advanced filters and preset handlers removed with unified sidebar
+  // Preset handlers
+  const getCurrentSettings = useCallback(() => ({
+    selectedSites,
+    timeRange,
+    startDate,
+    endDate,
+    selectedParameter,
+    compareMode,
+    compareParameter,
+    chartType,
+    activeView,
+    filtersCollapsed
+  }), [selectedSites, timeRange, startDate, endDate, selectedParameter, compareMode, compareParameter, chartType, activeView, filtersCollapsed]);
+
+  const handleApplyPreset = useCallback((preset) => {
+    if (!preset || !preset.settings) return;
+
+    const settings = preset.settings;
+    if (settings.sites) setSelectedSites(settings.sites);
+    if (settings.timeRange) setTimeRange(settings.timeRange);
+    if (settings.startDate) setStartDate(settings.startDate);
+    if (settings.endDate) setEndDate(settings.endDate);
+    if (settings.selectedParameter) setSelectedParameter(settings.selectedParameter);
+    if (settings.compareMode) setCompareMode(settings.compareMode);
+    if (settings.compareParameter) setCompareParameter(settings.compareParameter);
+    if (settings.chartType) setChartType(settings.chartType);
+    if (settings.activeView) setActiveView(settings.activeView);
+    if (typeof settings.filtersCollapsed === 'boolean') setFiltersCollapsed(settings.filtersCollapsed);
+
+    toast.success(`Applied preset: ${preset.name}`);
+  }, [toast]);
 
   // Empty state context
   const emptyStateContext = {
@@ -450,7 +496,9 @@ const ModernWaterQuality = () => {
     onResetFilters: () => {
       updateFilters({
         selectedSites: ['S1', 'S2'],
-        timeRange: 'Last 30 Days'
+        timeRange: 'Custom Range',
+        startDate: '2024-05-01',
+        endDate: '2024-05-31'
       });
     },
     onSelectAllSites: () => {
@@ -525,6 +573,13 @@ const ModernWaterQuality = () => {
           >
             <i className={`bi ${loading ? 'bi-arrow-repeat' : 'bi-arrow-clockwise'} me-1`}></i> Refresh
           </button>
+          <button
+            className="btn btn-outline-primary btn-sm"
+            onClick={() => setShowPresetSelector(true)}
+            title="Manage presets"
+          >
+            <i className="bi bi-bookmark-star me-1"></i> Presets
+          </button>
           <ExportButton
             data={data}
             filename={`water_quality_${selectedSites.join('_')}_${timeRange.toLowerCase().replace(/\s+/g, '_')}`}
@@ -564,13 +619,22 @@ const ModernWaterQuality = () => {
 
       {/* Main Content */}
       <div className="main-content">
-        {loading ? (
-          <EmptyState
-            type="loading"
-            title="Loading Water Quality Data"
-            description="Analyzing measurements from your selected monitoring sites..."
-          />
-        ) : error ? (
+        <SimpleLoadingBar
+          isVisible={loading}
+          message={`Loading water quality data for ${selectedSites.length} site${selectedSites.length !== 1 ? 's' : ''}...`}
+          stage="loading"
+          compact={false}
+          progress={null} // Keep indeterminate during loading
+          current={data?.length || null}
+          total={null}
+          showPercentage={false}
+          showCounts={false}
+        />
+
+        {/* Debug logging for empty state */}
+        {console.log('[WQ Page] Render state:', { loading, error: !!error, dataLength: data?.length, hasData: data?.length > 0 })}
+
+        {loading ? null : error ? (
           <EmptyState
             type="error"
             context={{
@@ -582,7 +646,7 @@ const ModernWaterQuality = () => {
               })
             }}
           />
-        ) : data.length === 0 ? (
+        ) : (!data || data.length === 0) ? (
           <EmptyState
             type="no-water-quality-data"
             context={emptyStateContext}
@@ -754,7 +818,7 @@ const ModernWaterQuality = () => {
             {/* Details View */}
             {activeView === 'details' && (
               <Suspense fallback={<div style={{ padding: 12 }}>Loading table…</div>}>
-                <DataTable
+                <TanStackDataTable
                   data={data}
                   columns={tableColumns}
                   title="Water Quality Data Analysis"
@@ -773,6 +837,29 @@ const ModernWaterQuality = () => {
           </>
         )}
       </div>
+
+      {/* Preset Selector Modal */}
+      <PresetSelector
+        show={showPresetSelector}
+        onHide={() => setShowPresetSelector(false)}
+        currentSettings={getCurrentSettings()}
+        onApplyPreset={handleApplyPreset}
+        onSettingsChange={(key, value) => {
+          switch (key) {
+            case 'selectedSites': setSelectedSites(value); break;
+            case 'timeRange': setTimeRange(value); break;
+            case 'startDate': setStartDate(value); break;
+            case 'endDate': setEndDate(value); break;
+            case 'selectedParameter': setSelectedParameter(value); break;
+            case 'compareMode': setCompareMode(value); break;
+            case 'compareParameter': setCompareParameter(value); break;
+            case 'chartType': setChartType(value); break;
+            case 'activeView': setActiveView(value); break;
+            case 'filtersCollapsed': setFiltersCollapsed(value); break;
+            default: break;
+          }
+        }}
+      />
     </div>
   );
 };

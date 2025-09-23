@@ -6,7 +6,7 @@ import numpy as np
 from config.advanced_logging_config import get_advanced_logger
 from services.core_data_service import core_data_service, DataQuery
 from utils.request_parsing import parse_sites_parameter
-from utils.api_cache_utils import generate_api_cache_key
+from utils.redis_api_cache_utils import generate_redis_api_cache_key
 from services.consolidated_cache_service import cache_service
 from utils.data_compressor import compressor
 
@@ -163,7 +163,7 @@ def data_quality_summary():
         end_str = request.args.get('end_date')
         
         # Check cache first
-        cache_key = generate_api_cache_key('data_quality_summary', 
+        cache_key = generate_redis_api_cache_key('data_quality_summary', 
                                          data_type=data_type, 
                                          time_range=time_range, 
                                          cadence=cadence, 
@@ -180,11 +180,9 @@ def data_quality_summary():
         if end_str:
             end = datetime.fromisoformat(end_str.replace('Z','+00:00'))
         else:
-            # Use consistent end date like other APIs - data goes through 2024-05-31
-            if data_type == 'redox':
-                end = datetime(2024, 5, 31, 23, 59, 59)
-            else:
-                end = datetime(2024, 5, 31, 23, 59, 59)
+            # Use dynamic database date service
+            from services.database_date_service import database_date_service
+            end = database_date_service.get_database_latest_date()
         if start_str:
             start = datetime.fromisoformat(start_str.replace('Z','+00:00'))
         else:

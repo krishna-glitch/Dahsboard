@@ -1,6 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { TIME_RANGE_OPTIONS } from '../../constants/appConstants';
 import { getTimeRanges } from '../../services/api';
+import { getAllPresets, getDefaultPreset, setDefaultPreset } from '../../utils/presetManager';
 
 /**
  * Simple Filters Component
@@ -25,6 +26,8 @@ const SimpleFilters = ({
   const [localSites, setLocalSites] = useState(selectedSites);
   const [localTimeRange, setLocalTimeRange] = useState(timeRange);
   const [timeRanges, setTimeRanges] = useState(TIME_RANGE_OPTIONS);
+  const [allPresets, setAllPresets] = useState({});
+  const [defaultPresetId, setDefaultPresetId] = useState('quick-overview');
 
   const availableSites = [
     { value: 'S1', label: 'Site 1', available: true },
@@ -86,6 +89,17 @@ const SimpleFilters = ({
     setLocalTimeRange(timeRange);
   }, [timeRange]);
 
+  // Load presets
+  useEffect(() => {
+    const loadPresets = () => {
+      const presets = getAllPresets();
+      const defaultId = getDefaultPreset();
+      setAllPresets(presets);
+      setDefaultPresetId(defaultId);
+    };
+    loadPresets();
+  }, []);
+
   const handleSiteToggle = (siteValue) => {
     const newSites = localSites.includes(siteValue)
       ? localSites.filter(s => s !== siteValue)
@@ -110,6 +124,12 @@ const SimpleFilters = ({
   const hasChanges = () => {
     return JSON.stringify(localSites) !== JSON.stringify(selectedSites) ||
            localTimeRange !== timeRange;
+  };
+
+  const handleDefaultPresetChange = (presetId) => {
+    if (setDefaultPreset(presetId)) {
+      setDefaultPresetId(presetId);
+    }
   };
 
   if (collapsed) {
@@ -477,6 +497,46 @@ const SimpleFilters = ({
               })()}
             </div>
           )}
+        </div>
+
+        {/* Default Preset Section */}
+        <div style={{ marginBottom: '1.5rem' }}>
+          <label style={{
+            display: 'block',
+            fontSize: '0.875rem',
+            fontWeight: '600',
+            color: '#495057',
+            marginBottom: '0.75rem'
+          }}>
+            <i className="bi bi-bookmark-star me-1"></i> Default Preset
+          </label>
+          <select
+            value={defaultPresetId}
+            onChange={(e) => handleDefaultPresetChange(e.target.value)}
+            style={{
+              width: '100%',
+              padding: '0.625rem',
+              border: '1px solid #dee2e6',
+              borderRadius: '4px',
+              fontSize: '0.875rem',
+              backgroundColor: '#fff',
+              cursor: 'pointer'
+            }}
+          >
+            {Object.values(allPresets).map(preset => (
+              <option key={preset.id} value={preset.id}>
+                {preset.name}
+              </option>
+            ))}
+          </select>
+          <div style={{
+            marginTop: '0.5rem',
+            fontSize: '0.75rem',
+            color: '#6c757d',
+            lineHeight: '1.3'
+          }}>
+            This preset will be automatically applied when the page loads
+          </div>
         </div>
 
         {/* Apply Button */}
