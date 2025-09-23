@@ -108,24 +108,35 @@ def advanced_cached(ttl: int = 300,
     """Advanced caching decorator that now uses the Redis-backed service."""
     
     def decorator(func: Callable) -> Callable:
+        from flask import request  # Import request context
+
         @wraps(func)
         def wrapper(*args, **kwargs):
+            # Generate cache key
             if key_func:
                 cache_key = key_func(*args, **kwargs)
             else:
-                from utils.reliable_cache_keys import ReliableCacheKeyGenerator
-                args_hash = ReliableCacheKeyGenerator._serialize_args(args) if args else "noargs"
-                kwargs_hash = ReliableCacheKeyGenerator._serialize_dict(kwargs) if kwargs else "nokwargs"
-                cache_key = f"{func.__name__}:{args_hash[:8]}:{kwargs_hash[:8]}"
+                # Create a reliable cache key based on the request URL and query params
+                path = request.path
+                # Sort query params to ensure consistent key order
+                query_string = "&".join(f"{k}={v}" for k, v in sorted(request.args.items()))
+                cache_key = f"view:{path}?{query_string}"
             
+            # Try cache first
             cached_result = high_performance_cache.get(cache_key)
             if cached_result is not None:
                 return cached_result
             
+            # Execute function
+            start_time = time.time()
             result = func(*args, **kwargs)
+            execution_time = time.time() - start_time
+            
+            # Cache result
             high_performance_cache.set(cache_key, result, ttl)
+            
+            logger.debug(f"💾 Cached {func.__name__} result (key: {cache_key}, exec: {execution_time:.3f}s)")
             return result
-        return wrapper
     return decorator
 
 def cache_method_results(ttl: int = 300):
