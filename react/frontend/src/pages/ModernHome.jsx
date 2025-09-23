@@ -4,6 +4,7 @@ import MetricCard from '../components/modern/MetricCard';
 import '../styles/modern-layout.css';
 import TutorialHint from '../components/modern/TutorialHint';
 import { useTutorial } from '../contexts/TutorialContext.jsx';
+import { useAuth } from '../contexts/authUtils';
 import '../styles/landing-pages.css';
 import styles from '../styles/ModernHome.module.css';
 import { getHomeData } from '../services/api';
@@ -15,6 +16,7 @@ import { safeStorage } from '../utils/safeStorage';
  */
 const ModernHome = () => {
   const tutorial = useTutorial();
+  const { isAuthenticated, user } = useAuth();
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
   const [stats, setStats] = useState({
@@ -107,7 +109,7 @@ const ModernHome = () => {
         <div>
           <h1 className="dashboard-title landing-title">Environmental Monitoring Dashboard</h1>
           <p className="dashboard-subtitle landing-subtitle">
-            Monitor and analyze water quality data from multiple monitoring sites
+            {user?.username ? `Welcome back, ${user.username}` : 'Welcome'} • Monitor and analyze water quality data from multiple monitoring sites
           </p>
         </div>
       </div>

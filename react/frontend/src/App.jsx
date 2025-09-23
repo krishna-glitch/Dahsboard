@@ -236,7 +236,7 @@ function AppContent() {
             <Routes>
               <Route path="/login" element={<Login />} />
               <Route path="/support" element={<Support />} />
-              <Route path="/" element={<ModernHome />} />
+              <Route path="/" element={<ProtectedRoute><ModernHome /></ProtectedRoute>} />
               <Route path="/about" element={<ModernAbout />} />
               <Route path="/water-quality-enhanced" element={<ProtectedRoute><ModernWaterQuality /></ProtectedRoute>} />
               <Route path="/optimized-water-quality" element={<ProtectedRoute><ModernWaterQuality /></ProtectedRoute>} />
