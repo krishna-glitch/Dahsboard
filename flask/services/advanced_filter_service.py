@@ -120,7 +120,6 @@ class AdvancedFilterService:
             # 1. Site filtering
             if filter_config.sites:
                 current_df, step_stats = self._apply_site_filter(current_df, filter_config.sites)
-                logger.info(f"[ADVANCED FILTER] After site filter: {len(current_df)} records remaining")
                 filter_steps.append({'step': 'site_filter', 'remaining': len(current_df), **step_stats})
             
             # 2. Time range filtering
@@ -130,43 +129,36 @@ class AdvancedFilterService:
                 filter_config.start_date,
                 filter_config.end_date
             )
-            logger.info(f"[ADVANCED FILTER] After time filter: {len(current_df)} records remaining")
             filter_steps.append({'step': 'time_filter', 'remaining': len(current_df), **step_stats})
             
             # 3. Parameter filtering (only include records with selected parameters)
             if filter_config.parameters:
                 current_df, step_stats = self._apply_parameter_filter(current_df, filter_config.parameters)
-                logger.info(f"[ADVANCED FILTER] After parameter filter: {len(current_df)} records remaining")
                 filter_steps.append({'step': 'parameter_filter', 'remaining': len(current_df), **step_stats})
             
             # 4. Parameter range filtering
             if filter_config.parameter_ranges:
                 current_df, step_stats = self._apply_parameter_range_filters(current_df, filter_config.parameter_ranges)
-                logger.info(f"[ADVANCED FILTER] After range filter: {len(current_df)} records remaining")
                 filter_steps.append({'step': 'range_filter', 'remaining': len(current_df), **step_stats})
             
             # 5. Data quality filtering
             if filter_config.data_quality != DataQuality.ALL:
                 current_df, step_stats = self._apply_data_quality_filter(current_df, filter_config.data_quality)
-                logger.info(f"[ADVANCED FILTER] After quality filter: {len(current_df)} records remaining")
                 filter_steps.append({'step': 'quality_filter', 'remaining': len(current_df), **step_stats})
             
             # 6. Alert level filtering
             if filter_config.alert_level != AlertLevel.ALL:
                 current_df, step_stats = self._apply_alert_filter(current_df, filter_config.alert_level)
-                logger.info(f"[ADVANCED FILTER] After alert filter: {len(current_df)} records remaining")
                 filter_steps.append({'step': 'alert_filter', 'remaining': len(current_df), **step_stats})
             
             # 7. Outlier filtering
             if filter_config.exclude_outliers:
                 current_df, step_stats = self._apply_outlier_filter(current_df, filter_config.outlier_threshold)
-                logger.info(f"[ADVANCED FILTER] After outlier filter: {len(current_df)} records remaining")
                 filter_steps.append({'step': 'outlier_filter', 'remaining': len(current_df), **step_stats})
             
             # 8. Data completeness filtering
             if filter_config.min_data_completeness > 0:
                 current_df, step_stats = self._apply_completeness_filter(current_df, filter_config.min_data_completeness)
-                logger.info(f"[ADVANCED FILTER] After completeness filter: {len(current_df)} records remaining")
                 filter_steps.append({'step': 'completeness_filter', 'remaining': len(current_df), **step_stats})
             
             # Calculate final statistics

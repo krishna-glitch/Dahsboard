@@ -2,7 +2,7 @@ from flask import Blueprint, jsonify, request
 from flask_login import login_required
 import logging
 import time
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 import pandas as pd
 
 from services.core_data_service import core_data_service, DataQuery, DataType
@@ -135,7 +135,7 @@ def get_water_quality_data():
             logger.info(f"[WATER QUALITY] Using custom date range: {start_date} to {end_date}")
         else:
             days_back = config_service.get_days_back_for_range(time_range)
-            end_date = datetime.now()
+            end_date = datetime.now(timezone.utc)
             start_date = end_date - timedelta(days=days_back)
             
             # Log the dynamic date range being used
