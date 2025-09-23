@@ -1,13 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { getWaterQualityData } from '../services/api';
-import { loadCache, persistCache } from '../utils/cache';
-import { featureFlags } from '../config/featureFlags';
 import { useToast } from '../components/modern/toastUtils';
 import { log } from '../utils/log';
-
-const CACHE_STORAGE_KEY = 'wq_cache_v1';
-const CACHE_TTL_MS = 10 * 60 * 1000;
-const CACHE_MAX_CHARS = 3000000;
 
 export function useWaterQualityData({
   selectedSites,
@@ -27,8 +21,6 @@ export function useWaterQualityData({
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
   const [meta, setMeta] = useState(null);
-  // Initialize cache map conditionally based on feature flag
-  const cacheRef = useRef(featureFlags.wqCacheEnabled ? loadCache(CACHE_STORAGE_KEY, CACHE_TTL_MS) : new Map());
   const lastFetchKeyRef = useRef(null);
   const abortRef = useRef(null);
   const mountedRef = useRef(true);
@@ -87,43 +79,21 @@ export function useWaterQualityData({
     const controller = new AbortController();
     abortRef.current = controller;
     setError(null);
+    setLoading(true);
 
     try {
       const t0 = performance.now();
       const rangeKey = (timeRange === 'Custom Range' && startDate && endDate)
         ? `custom|${startDate}|${endDate}`
         : `range|${timeRange}`;
-      const cacheRangeKey = `${rangeKey}|${shapeSig}`;
-      const fetchKey = [selectedSites.join(','), cacheRangeKey].join('|');
+      const fetchKey = [selectedSites.join(','), rangeKey, shapeSig].join('|');
 
       log.debug('[WQ Hook] Fetch key:', fetchKey);
 
-      // Cache read
-      let cachedAggregate = [];
-      let cacheHit = false;
-      const missing = [];
-      if (featureFlags.wqCacheEnabled && cacheRef.current) {
-        for (const s of selectedSites) {
-          const k = `${s}|${cacheRangeKey}`;
-          const c = cacheRef.current.get(k);
-          if (c && Array.isArray(c.data) && (Date.now() - (c.ts || 0) < CACHE_TTL_MS)) {
-            cachedAggregate = cachedAggregate.concat(c.data);
-          } else {
-            missing.push(s);
-          }
-        }
-        cacheHit = cachedAggregate.length > 0 && missing.length === 0;
-      }
-      if (cachedAggregate.length > 0 && mountedRef.current) setData(cachedAggregate);
-      if (missing.length > 0 && cachedAggregate.length === 0 && mountedRef.current) setLoading(true);
-
-      // Single request supports multiple sites; use params builder
       const params = buildParams();
       log.debug('[WQ Hook] API params:', params);
       
-      // Chunked loading up to 200k to avoid truncation
       const CHUNK_SIZE = 100000;
-      // Show progressive loading toast for chunked fetch
       const loadingToastId = toast.showLoading('Loading water quality records…', {
         title: 'Loading Water Quality',
         dedupeKey: 'wq-chunk-loading'
@@ -140,7 +110,6 @@ export function useWaterQualityData({
         });
         const chunk = res?.water_quality_data || res?.data || [];
         rows = rows.concat(chunk);
-        // Update progress
         try {
           toast.updateToast(loadingToastId, {
             type: 'loading',
@@ -149,7 +118,6 @@ export function useWaterQualityData({
             duration: 10000
           });
         } catch {}
-        // Capture date_range from the first successful response
         if (!dateRange && res?.metadata?.date_range && (res?.metadata?.date_range.start || res?.metadata?.date_range.end)) {
           dateRange = {
             start: res.metadata.date_range.start,
@@ -163,49 +131,24 @@ export function useWaterQualityData({
       }
       const metadata = dateRange ? { date_range: dateRange } : null;
 
-      // Populate cache by site (only when enabled)
-      if (featureFlags.wqCacheEnabled) {
-        try {
-          const bySite = new Map();
-          for (const r of rows) {
-            const sc = r?.site_code; if (!sc) continue;
-            if (!bySite.has(sc)) bySite.set(sc, []);
-            bySite.get(sc).push(r);
-          }
-          const now = Date.now();
-          for (const [sc, list] of bySite.entries()) {
-            cacheRef.current.set(`${sc}|${cacheRangeKey}`, { ts: now, data: list });
-          }
-          persistCache(CACHE_STORAGE_KEY, cacheRef.current, CACHE_MAX_CHARS, CACHE_TTL_MS);
-        } catch {}
-      }
-
       if (mountedRef.current) {
         setData(rows);
         setLoading(false);
         setError(null);
         setMeta({
           ...(metadata || {}),
-          cache: {
-            enabled: featureFlags.wqCacheEnabled,
-            hit: cacheHit,
-            ttlMs: CACHE_TTL_MS,
-          }
         });
         lastFetchKeyRef.current = fetchKey;
 
-        // Add success/warning notifications
         const t1 = performance.now();
         const loadingTime = ((t1 - t0) / 1000).toFixed(2);
         const sitesText = selectedSites.join(', ');
         const recordsFormatted = rows.length.toLocaleString();
         
-        // Create date range info for toast
         const wStart = (startDate || '').slice(0, 10);
         const wEnd = (endDate || '').slice(0, 10);
         const windowSuffix = (wStart && wEnd) ? ` • Window: ${wStart} → ${wEnd}` : '';
 
-        // Remove loading toast before final result
         try { toast.removeToast(loadingToastId); } catch {}
         if (rows.length === 0) {
           toast.showWarning(
@@ -255,7 +198,6 @@ export function useWaterQualityData({
       }
     } catch (err) {
       if (!mountedRef.current) return;
-      // Ignore abort/cancelled requests to avoid noisy loops during range changes
       const isAbort = (err?.name === 'AbortError') || /Request\s*cancelled/i.test(err?.message || '') || err?.code === 'ERR_CANCELED';
       if (isAbort) {
         log.debug('[WQ Hook] Request aborted (ignored)');
@@ -268,7 +210,6 @@ export function useWaterQualityData({
       setError(errorMessage);
       setMeta(null);
       
-      // Show error toast
       toast.showError(
         `Failed to load water quality data: ${errorMessage}`,
         {

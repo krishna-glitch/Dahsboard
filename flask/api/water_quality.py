@@ -89,7 +89,7 @@ def _intelligent_downsample_water_quality(df: pd.DataFrame, target_size: int = 5
     return result_df
 
 @water_quality_bp.route('/data', methods=['GET'])
-# @login_required  # Temporarily disabled for testing
+@login_required
 @cached_api_response(ttl=1800)  # Site-aware caching that preserves filtering - 30 minutes
 def get_water_quality_data():
     """
@@ -135,8 +135,7 @@ def get_water_quality_data():
             logger.info(f"[WATER QUALITY] Using custom date range: {start_date} to {end_date}")
         else:
             days_back = config_service.get_days_back_for_range(time_range)
-            # FIXED: Use database's actual data range (data ends 2024-05-31) instead of current date
-            end_date = datetime(2024, 5, 31, 23, 59, 59)
+            end_date = datetime.now()
             start_date = end_date - timedelta(days=days_back)
             
             # Log the dynamic date range being used
@@ -314,7 +313,7 @@ def get_water_quality_data():
 
 
 @water_quality_bp.route('/sites', methods=['GET'])
-# @login_required  # Temporarily disabled for testing
+@login_required
 @cached_api_response(ttl=1800)  # Cache for 30 minutes as sites don't change frequently
 def get_available_sites():
     """Get all available monitoring sites"""
