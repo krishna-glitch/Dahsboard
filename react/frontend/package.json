@@ -40,8 +40,11 @@
     "react-bootstrap": "^2.10.10",
     "react-dom": "^19.1.1",
     "react-error-boundary": "^6.0.0",
+    "react-hook-form": "^7.63.0",
+    "react-hot-toast": "^2.6.0",
     "react-plotly.js": "^2.6.0",
     "react-router-dom": "^6.26.2",
+    "react-spinners": "^0.17.0",
     "zustand": "^4.3.8"
   },
   "devDependencies": {

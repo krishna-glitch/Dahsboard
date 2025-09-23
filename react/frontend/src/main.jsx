@@ -13,6 +13,7 @@ import './styles/dashboard.css' // 8. Dashboard-specific components
 import './styles/error-boundaries.css' // 9. Error boundary styles
 import './App.css'; // 10. App-specific overrides LAST
 import { BrowserRouter } from 'react-router-dom'; // Import BrowserRouter
+import { Toaster } from 'react-hot-toast'; // Toast provider
 
 // Initialize performance monitoring
 import './utils/performanceMonitor';
@@ -25,6 +26,19 @@ ReactDOM.createRoot(document.getElementById('root')).render(
   // <React.StrictMode> - Temporarily disabled to fix infinite re-render issues
     <BrowserRouter>
       <App />
+      <Toaster
+        position="top-right"
+        gutter={8}
+        containerStyle={{
+          top: 80, // Below header
+        }}
+        toastOptions={{
+          duration: 4000,
+          style: {
+            maxWidth: '400px',
+          },
+        }}
+      />
     </BrowserRouter>
   // </React.StrictMode>
 )

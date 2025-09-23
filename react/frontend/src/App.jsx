@@ -6,7 +6,7 @@ import { createSyncStoragePersister } from '@tanstack/query-sync-storage-persist
 import { AuthProvider } from './contexts/AuthContext';
 import { useAuth } from './contexts/authUtils';
 import { ErrorBoundary, ProtectedRoute } from './components';
-import { ToastProvider } from './components/modern/ToastNotification';
+// ToastProvider replaced with react-hot-toast Toaster in main.jsx
 const ModernHome = React.lazy(() => import('./pages/ModernHome'));
 const ModernAbout = React.lazy(() => import('./pages/ModernAbout'));
 const ModernWaterQuality = React.lazy(() => import('./pages/ModernWaterQuality'));
@@ -291,9 +291,7 @@ function App() {
   return (
     <QueryClientProvider client={queryClient}>
       <AuthProvider>
-        <ToastProvider maxToasts={5}>
-          <AppContent />
-        </ToastProvider>
+        <AppContent />
       </AuthProvider>
     </QueryClientProvider>
   );
