@@ -348,6 +348,139 @@ def get_cache_patterns():
             'details': str(e)
         }), 500
 
+@performance_bp.route('/cache/health', methods=['GET'])
+# @login_required  # Temporarily disabled for monitoring access
+def get_cache_health():
+    """
+    Comprehensive cache health monitoring endpoint
+    Returns health status, performance metrics, and recommendations
+    """
+    logger.info("🔍 [API] Received cache health monitoring request")
+
+    try:
+        # Get cache statistics
+        cache_stats = cache_service.get_detailed_stats()
+        prewarmer_stats = cache_prewarmer.get_prewarming_stats()
+
+        # Extract key metrics
+        perf_metrics = cache_stats.get('performance_metrics', {})
+        memory_metrics = cache_stats.get('memory_metrics', {})
+
+        # Calculate health scores
+        hit_rate = perf_metrics.get('hit_rate_percent', 0)
+        memory_usage_percent = memory_metrics.get('memory_usage_percent', 0)
+        error_rate = cache_stats.get('error_metrics', {}).get('error_rate', 0)
+
+        # Determine overall health status
+        health_status = 'healthy'
+        health_issues = []
+
+        if hit_rate < 70:
+            health_status = 'warning'
+            health_issues.append({
+                'type': 'low_hit_rate',
+                'severity': 'medium',
+                'message': f'Cache hit rate is {hit_rate:.1f}% (target: >70%)',
+                'recommendation': 'Consider cache warming or reviewing cache strategies'
+            })
+
+        if memory_usage_percent > 90:
+            health_status = 'critical' if health_status != 'critical' else health_status
+            health_issues.append({
+                'type': 'high_memory_usage',
+                'severity': 'high',
+                'message': f'Memory usage is {memory_usage_percent:.1f}% (critical: >90%)',
+                'recommendation': 'Increase memory limit or implement cache eviction'
+            })
+        elif memory_usage_percent > 75:
+            if health_status == 'healthy':
+                health_status = 'warning'
+            health_issues.append({
+                'type': 'elevated_memory_usage',
+                'severity': 'medium',
+                'message': f'Memory usage is {memory_usage_percent:.1f}% (warning: >75%)',
+                'recommendation': 'Monitor memory usage and consider optimization'
+            })
+
+        if error_rate > 5:
+            health_status = 'critical'
+            health_issues.append({
+                'type': 'high_error_rate',
+                'severity': 'high',
+                'message': f'Cache error rate is {error_rate:.1f}% (critical: >5%)',
+                'recommendation': 'Investigate cache errors and fix underlying issues'
+            })
+
+        # Check cache warming status
+        last_warming = prewarmer_stats.get('last_warming')
+        if not last_warming:
+            health_issues.append({
+                'type': 'no_cache_warming',
+                'severity': 'low',
+                'message': 'Cache has never been warmed',
+                'recommendation': 'Run initial cache warming for better performance'
+            })
+
+        # Build health response
+        health_response = {
+            'overall_status': health_status,
+            'health_score': max(0, 100 - (len(health_issues) * 15)),  # Decrease score per issue
+            'last_check': datetime.now().isoformat(),
+            'metrics': {
+                'hit_rate_percent': hit_rate,
+                'memory_usage_percent': memory_usage_percent,
+                'total_entries': perf_metrics.get('total_entries', 0),
+                'total_hits': perf_metrics.get('total_hits', 0),
+                'total_misses': perf_metrics.get('total_misses', 0),
+                'error_rate_percent': error_rate,
+                'memory_usage_mb': memory_metrics.get('memory_usage_mb', 0),
+                'memory_limit_mb': memory_metrics.get('memory_limit_mb', 1024)
+            },
+            'cache_warming': {
+                'status': 'active' if prewarmer_stats.get('is_currently_prewarming') else 'idle',
+                'last_warming': last_warming,
+                'cache_entries_created': prewarmer_stats.get('cache_entries_created', 0),
+                'errors_count': prewarmer_stats.get('errors_count', 0)
+            },
+            'issues': health_issues,
+            'recommendations': []
+        }
+
+        # Generate specific recommendations
+        if hit_rate > 90:
+            health_response['recommendations'].append({
+                'type': 'performance',
+                'message': 'Excellent cache performance! Consider documenting current configuration.'
+            })
+        elif hit_rate > 80:
+            health_response['recommendations'].append({
+                'type': 'optimization',
+                'message': 'Good cache performance. Monitor for any degradation patterns.'
+            })
+        else:
+            health_response['recommendations'].append({
+                'type': 'improvement',
+                'message': 'Cache hit rate could be improved. Review cache strategies and warming patterns.'
+            })
+
+        if memory_usage_percent < 50:
+            health_response['recommendations'].append({
+                'type': 'capacity',
+                'message': 'Memory usage is low. Consider increasing cache size for better performance.'
+            })
+
+        logger.info(f"🔍 [API] Cache health check complete: status={health_status}, score={health_response['health_score']}")
+        return jsonify(health_response), 200
+
+    except Exception as e:
+        logger.error(f"🔍 [API] Error in cache health check: {e}", exc_info=True)
+        return jsonify({
+            'error': 'Failed to retrieve cache health status',
+            'details': str(e),
+            'overall_status': 'error',
+            'health_score': 0
+        }), 500
+
 @performance_bp.route('/client-metrics', methods=['POST'])
 # @login_required  # Consider if you want to require login for metrics
 def receive_client_metrics():
