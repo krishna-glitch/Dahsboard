@@ -374,7 +374,6 @@ def get_available_sites():
         logger.error(f"[SITES] Traceback: {traceback.format_exc()}")
         
         return jsonify({
-            'sites': [],
             'error': 'Failed to load sites data',
             'details': str(e),
             'metadata': {
@@ -383,3 +382,16 @@ def get_available_sites():
                 'error_occurred': True
             }
         }), 500
+
+
+@water_quality_bp.route('/clear-cache', methods=['POST'])
+def clear_all_cache():
+    """Temporary endpoint to clear the entire Redis cache."""
+    from services.high_performance_cache_service import high_performance_cache
+    logger.info("Received request to clear all cache.")
+    try:
+        count = high_performance_cache.clear()
+        return jsonify({"status": "success", "cleared_keys": count})
+    except Exception as e:
+        logger.error(f"Failed to clear cache: {e}")
+        return jsonify({"status": "error", "message": str(e)}), 500
