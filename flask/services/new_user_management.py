@@ -1,6 +1,6 @@
 from sqlalchemy.orm import Session
-from ..auth_database import User
-from .new_auth_service import NewAuthService
+from auth_database import User
+from services.new_auth_service import NewAuthService
 
 class NewUserManager:
     def __init__(self):

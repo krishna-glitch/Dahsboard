@@ -1,4 +1,4 @@
-from flask import Blueprint, jsonify, request, session, Depends
+from flask import Blueprint, jsonify, request, session
 from datetime import datetime
 from flask_login import login_user, logout_user, current_user
 import logging
@@ -6,12 +6,12 @@ from sqlalchemy.orm import Session
 
 logger = logging.getLogger(__name__)
 
-from ..auth_database import AuthSessionLocal, User as AuthUser
-from ..services.new_auth_service import NewAuthService
-from ..services.new_user_management import NewUserManager
+from auth_database import AuthSessionLocal, User as AuthUser
+from services.new_auth_service import NewAuthService
+from services.new_user_management import NewUserManager
 
 # Import comprehensive performance optimization (for session management optimization)
-from ..utils.advanced_performance_integration_simple import enterprise_performance
+from utils.advanced_performance_integration_simple import enterprise_performance
 
 auth_bp = Blueprint('auth_bp', __name__)
 auth_service = NewAuthService()
@@ -26,8 +26,9 @@ def get_db():
         db.close()
 
 @auth_bp.route('/login', methods=['POST'])
-def login(db: Session = Depends(get_db)):
+def login():
     logger.info("Received request for login API.")
+    db = AuthSessionLocal()
     try:
         data = request.get_json()
         if not data:
@@ -55,10 +56,13 @@ def login(db: Session = Depends(get_db)):
     except Exception as e:
         logger.error(f"Error in login API: {e}", exc_info=True)
         return jsonify({'error': 'An unexpected error occurred during login', 'details': str(e)}), 500
+    finally:
+        db.close()
 
 @auth_bp.route('/register', methods=['POST'])
-def register(db: Session = Depends(get_db)):
+def register():
     logger.info("Received request for register API.")
+    db = AuthSessionLocal()
     try:
         data = request.get_json()
         if not data:
@@ -81,6 +85,8 @@ def register(db: Session = Depends(get_db)):
     except Exception as e:
         logger.error(f"Error in register API: {e}", exc_info=True)
         return jsonify({'error': 'An unexpected error occurred during registration', 'details': str(e)}), 500
+    finally:
+        db.close()
 
 
 @auth_bp.route('/logout', methods=['POST'])
@@ -98,8 +104,9 @@ def logout():
 
 @auth_bp.route('/status', methods=['GET'])
 @enterprise_performance(data_type='auth_status')
-def status(db: Session = Depends(get_db)):
+def status():
     logger.info("Received request for auth status API.")
+    db = AuthSessionLocal()
     try:
         # Single source of truth: Flask-Login authentication state
         authenticated = bool(getattr(current_user, 'is_authenticated', False))
@@ -117,6 +124,8 @@ def status(db: Session = Depends(get_db)):
     except Exception as e:
         logger.error(f"Error in auth status API: {e}", exc_info=True)
         return jsonify({'error': 'An unexpected error occurred during status check', 'details': str(e)}), 500
+    finally:
+        db.close()
 
 @auth_bp.route('/health', methods=['GET'])
 def health():
