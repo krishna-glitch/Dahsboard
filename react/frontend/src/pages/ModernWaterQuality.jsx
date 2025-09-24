@@ -13,6 +13,8 @@ import { useWaterQualityMetrics } from '../hooks/useWaterQualityMetrics';
 import { useWaterQualityChartData } from '../hooks/useWaterQualityChartData';
 const WaterQualityChartRouter = lazy(() => import('../components/water/WaterQualityChartRouter'));
 import WaterQualityChartControls from '../components/water/WaterQualityChartControls';
+import WaterQualityStatsPanel from '../components/water/WaterQualityStatsPanel';
+import useWaterQualityStats from '../hooks/useWaterQualityStats';
 import { WATER_QUALITY_PARAMETERS } from '../constants/appConstants';
 
 // Error boundaries and performance monitoring
@@ -241,6 +243,7 @@ const ModernWaterQuality = () => {
 
   // ---- Metrics & ChartData ----
   const metrics = useWaterQualityMetrics(rows);
+  const stats = useWaterQualityStats(rows);
   const chartData = useWaterQualityChartData(
     rows,
     selectedParameter,
@@ -439,6 +442,12 @@ const ModernWaterQuality = () => {
             <i className="bi bi-table me-1"></i> Details
           </button>
           <button
+            className={`btn ${activeView === 'stats' ? 'btn-primary' : 'btn-outline-primary'} btn-sm`}
+            onClick={() => setActiveView('stats')}
+          >
+            <i className="bi bi-clipboard-data me-1"></i> Stats
+          </button>
+          <button
             className="btn btn-outline-secondary btn-sm"
             onClick={handleRefresh}
             disabled={isFetching}
@@ -588,7 +597,11 @@ const ModernWaterQuality = () => {
               </DataLoadingErrorBoundary>
             )}
 
-            {activeView !== 'details' && (
+            {activeView === 'stats' && (
+              <WaterQualityStatsPanel stats={stats} parameterConfig={PARAMETER_CONFIG} />
+            )}
+
+            {activeView === 'overview' && (
               <div className="chart-container">
                 <div className="chart-controls">
                   <div className="chart-observation-count" aria-live="polite">
@@ -609,40 +622,38 @@ const ModernWaterQuality = () => {
                     setYAxisParameter={setYAxisParameter}
                   />
                 </div>
-                {activeView === 'overview' && (
-                  <ChartErrorBoundary
-                    chartType={`${comparisonView}-${chartType}-${selectedParameter}`}
-                    title={
-                      comparisonView === 'parameter'
-                        ? `${formatParameterLabel(selectedParameter, false)} vs ${formatParameterLabel(yAxisParameter, false)}`
-                        : `${PARAMETER_CONFIG[selectedParameter]?.label} Trends`
-                    }
-                    dataLength={comparisonView === 'parameter' ? parameterScatter.totalPoints : totalPoints}
-                    onRetry={refetch}
-                    onShowDataTable={() => setActiveView('details')}
-                  >
-                    <Suspense fallback={<div>Loading chart…</div>}>
-                      <WaterQualityChartRouter
-                        activeView={activeView}
-                        chartData={chartData}
-                        chartType={chartType}
-                        selectedParameter={selectedParameter}
-                        compareMode={compareMode}
-                        compareParameter={compareParameter}
-                        parameterConfig={PARAMETER_CONFIG}
-                        alertShapes={alertShapes}
-                        data={rows}
-                        summaryItems={chartSummaryItems}
-                        comparisonView={comparisonView}
-                        parameterScatterTraces={parameterScatter.traces}
-                        xAxisLabel={formatParameterLabel(selectedParameter, true)}
-                        yAxisLabel={formatParameterLabel(yAxisParameter, true)}
-                        onShowDataTable={() => setActiveView('details')}
-                        onRetry={refetch}
-                      />
-                    </Suspense>
-                  </ChartErrorBoundary>
-                )}
+                <ChartErrorBoundary
+                  chartType={`${comparisonView}-${chartType}-${selectedParameter}`}
+                  title={
+                    comparisonView === 'parameter'
+                      ? `${formatParameterLabel(selectedParameter, false)} vs ${formatParameterLabel(yAxisParameter, false)}`
+                      : `${PARAMETER_CONFIG[selectedParameter]?.label} Trends`
+                  }
+                  dataLength={comparisonView === 'parameter' ? parameterScatter.totalPoints : totalPoints}
+                  onRetry={refetch}
+                  onShowDataTable={() => setActiveView('details')}
+                >
+                  <Suspense fallback={<div>Loading chart…</div>}>
+                    <WaterQualityChartRouter
+                      activeView={activeView}
+                      chartData={chartData}
+                      chartType={chartType}
+                      selectedParameter={selectedParameter}
+                      compareMode={compareMode}
+                      compareParameter={compareParameter}
+                      parameterConfig={PARAMETER_CONFIG}
+                      alertShapes={alertShapes}
+                      data={rows}
+                      summaryItems={chartSummaryItems}
+                      comparisonView={comparisonView}
+                      parameterScatterTraces={parameterScatter.traces}
+                      xAxisLabel={formatParameterLabel(selectedParameter, true)}
+                      yAxisLabel={formatParameterLabel(yAxisParameter, true)}
+                      onShowDataTable={() => setActiveView('details')}
+                      onRetry={refetch}
+                    />
+                  </Suspense>
+                </ChartErrorBoundary>
                 <p className="chart-description">{chartDescriptionText}</p>
               </div>
             )}

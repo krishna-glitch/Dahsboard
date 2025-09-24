@@ -1,5 +1,6 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { Modal, Button, Form, Card, Row, Col, Badge, ButtonGroup } from 'react-bootstrap';
+import { useForm, SubmitHandler, Controller } from 'react-hook-form';
 import {
   getAllPresets,
   getDefaultPreset,
@@ -13,36 +14,63 @@ import {
   validatePresetSettings
 } from '../../utils/presetManager';
 import { useToast } from './toastUtils';
+import {
+  Preset,
+  PresetCategory,
+  PresetSelectorProps,
+  CreatePresetFormData,
+  ImportPresetFormData
+} from '../../types/forms';
+import {
+  createCreatePresetValidation,
+  createImportPresetValidation
+} from '../../utils/formValidation';
 
-const PresetSelector = ({
+// Form validation rules
+const createPresetRules = createCreatePresetValidation();
+const importPresetRules = createImportPresetValidation();
+
+const PresetSelector: React.FC<PresetSelectorProps> = ({
   show,
   onHide,
   currentSettings,
   onApplyPreset,
   onSettingsChange
 }) => {
-  const [presets, setPresets] = useState({});
-  const [categories, setCategories] = useState({});
-  const [defaultPresetId, setDefaultPresetId] = useState('quick-overview');
-  const [selectedPreset, setSelectedPreset] = useState(null);
-  const [showCreateModal, setShowCreateModal] = useState(false);
-  const [showImportModal, setShowImportModal] = useState(false);
-  const [activeCategory, setActiveCategory] = useState('system');
+  // State for presets data
+  const [presets, setPresets] = useState<Record<string, Preset>>({});
+  const [categories, setCategories] = useState<Record<string, PresetCategory>>({});
+  const [defaultPresetId, setDefaultPresetId] = useState<string>('quick-overview');
+  const [selectedPreset, setSelectedPreset] = useState<Preset | null>(null);
+  const [activeCategory, setActiveCategory] = useState<string>('system');
 
-  // Create preset form
-  const [newPresetName, setNewPresetName] = useState('');
-  const [newPresetDescription, setNewPresetDescription] = useState('');
-  const [validationErrors, setValidationErrors] = useState([]);
+  // Modal states
+  const [showCreateModal, setShowCreateModal] = useState<boolean>(false);
+  const [showImportModal, setShowImportModal] = useState<boolean>(false);
 
+  // Toast notifications
   const toast = useToast();
 
-  useEffect(() => {
-    if (show) {
-      loadPresets();
+  // Create Preset Form
+  const createForm = useForm<CreatePresetFormData>({
+    mode: 'onChange',
+    defaultValues: {
+      name: '',
+      description: ''
     }
-  }, [show]);
+  });
 
-  const loadPresets = () => {
+  // Import Preset Form
+  const importForm = useForm<ImportPresetFormData>({
+    mode: 'onChange',
+    defaultValues: {
+      file: undefined as any,
+      overwriteExisting: false
+    }
+  });
+
+  // Load presets data
+  const loadPresets = useCallback(() => {
     const allPresets = getAllPresets();
     const presetCategories = getPresetCategories();
     const defaultId = getDefaultPreset();
@@ -51,278 +79,319 @@ const PresetSelector = ({
     setCategories(presetCategories);
     setDefaultPresetId(defaultId);
     setSelectedPreset(allPresets[defaultId] || null);
-  };
+  }, []);
 
-  const handleApplyPreset = (preset) => {
+  // Load presets when modal opens
+  useEffect(() => {
+    if (show) {
+      loadPresets();
+    }
+  }, [show, loadPresets]);
+
+  // Apply preset handler
+  const handleApplyPreset = useCallback((preset: Preset) => {
     if (preset && onApplyPreset) {
       onApplyPreset(preset);
-      toast.success(`Applied preset: ${preset.name}`);
+      toast.showSuccess(`Applied preset: ${preset.name}`);
       onHide();
     }
-  };
+  }, [onApplyPreset, onHide, toast]);
 
-  const handleSetDefault = (presetId) => {
+  // Set default preset handler
+  const handleSetDefault = useCallback((presetId: string) => {
     if (setDefaultPreset(presetId)) {
       setDefaultPresetId(presetId);
-      toast.success(`Set "${presets[presetId].name}" as default preset`);
+      toast.showSuccess(`Set "${presets[presetId].name}" as default preset`);
     } else {
-      toast.error('Failed to set default preset');
+      toast.showError('Failed to set default preset');
     }
-  };
+  }, [presets, toast]);
 
-  const handleCreatePreset = () => {
-    // Validate form
-    if (!newPresetName.trim()) {
-      setValidationErrors(['Preset name is required']);
-      return;
-    }
-
-    // Validate current settings
-    const validation = validatePresetSettings(currentSettings);
-    if (!validation.isValid) {
-      setValidationErrors(validation.errors);
-      return;
-    }
-
-    // Create preset from current settings
-    const newPreset = createPresetFromSettings(
-      currentSettings,
-      newPresetName.trim(),
-      newPresetDescription.trim()
-    );
-
-    const saved = saveUserPreset(newPreset);
-    if (saved) {
-      toast.success(`Created preset: ${newPreset.name}`);
-      loadPresets();
-      setShowCreateModal(false);
-      setNewPresetName('');
-      setNewPresetDescription('');
-      setValidationErrors([]);
-    } else {
-      toast.error('Failed to create preset');
-    }
-  };
-
-  const handleDeletePreset = (presetId) => {
+  // Delete preset handler
+  const handleDeletePreset = useCallback((presetId: string) => {
     const preset = presets[presetId];
-    if (!preset || preset.category === 'system') {
-      toast.error('Cannot delete system presets');
+    if (!preset) return;
+
+    if (preset.category === 'system') {
+      toast.showWarning('System presets cannot be deleted');
       return;
     }
 
-    if (window.confirm(`Delete preset "${preset.name}"?`)) {
+    if (window.confirm(`Are you sure you want to delete "${preset.name}"?`)) {
       if (deleteUserPreset(presetId)) {
-        toast.success(`Deleted preset: ${preset.name}`);
+        toast.showSuccess(`Deleted preset: ${preset.name}`);
         loadPresets();
+
+        // Clear selection if deleted preset was selected
         if (selectedPreset?.id === presetId) {
           setSelectedPreset(null);
         }
       } else {
-        toast.error('Failed to delete preset');
+        toast.showError('Failed to delete preset');
       }
     }
-  };
+  }, [presets, selectedPreset, toast, loadPresets]);
 
-  const handleExportPreset = (preset) => {
-    if (exportPreset(preset)) {
-      toast.success(`Exported preset: ${preset.name}`);
-    } else {
-      toast.error('Failed to export preset');
+  // Export preset handler
+  const handleExportPreset = useCallback((preset: Preset) => {
+    try {
+      exportPreset(preset);
+      toast.showSuccess(`Exported preset: ${preset.name}`);
+    } catch (error) {
+      toast.showError(`Failed to export preset: ${error instanceof Error ? error.message : 'Unknown error'}`);
+    }
+  }, [toast]);
+
+  // Create preset form submission
+  const onCreateSubmit: SubmitHandler<CreatePresetFormData> = async (data) => {
+    try {
+      // Validate current settings
+      const validation = validatePresetSettings(currentSettings);
+      if (!validation.isValid) {
+        createForm.setError('root.settingsError', {
+          type: 'validation',
+          message: `Current settings are invalid: ${validation.errors.join(', ')}`
+        });
+        return;
+      }
+
+      // Check for duplicate names
+      const isDuplicate = Object.values(presets).some(preset => preset.name === data.name);
+      if (isDuplicate) {
+        createForm.setError('name', {
+          type: 'duplicate',
+          message: 'A preset with this name already exists'
+        });
+        return;
+      }
+
+      // Create preset from current settings
+      const newPreset = createPresetFromSettings(
+        currentSettings,
+        data.name.trim(),
+        data.description.trim()
+      );
+
+      const saved = saveUserPreset(newPreset);
+      if (saved) {
+        toast.showSuccess(`Created preset: ${newPreset.name}`);
+        loadPresets();
+        setShowCreateModal(false);
+        createForm.reset();
+      } else {
+        createForm.setError('root.saveError', {
+          type: 'server',
+          message: 'Failed to save preset'
+        });
+      }
+    } catch (error) {
+      createForm.setError('root.saveError', {
+        type: 'server',
+        message: error instanceof Error ? error.message : 'An unexpected error occurred'
+      });
     }
   };
 
-  const handleImportFile = (event) => {
-    const file = event.target.files[0];
-    if (!file) return;
+  // Import preset form submission
+  const onImportSubmit: SubmitHandler<ImportPresetFormData> = async (data) => {
+    try {
+      if (!data.file || data.file.length === 0) {
+        importForm.setError('file', { type: 'required', message: 'Please select a file' });
+        return;
+      }
 
-    importPreset(file)
-      .then(imported => {
-        toast.success(`Imported preset: ${imported.name}`);
+      const file = data.file[0];
+      const fileContent = await file.text();
+
+      let presetData;
+      try {
+        presetData = JSON.parse(fileContent);
+      } catch {
+        importForm.setError('file', {
+          type: 'validation',
+          message: 'Invalid JSON file format'
+        });
+        return;
+      }
+
+      const result = importPreset(presetData, data.overwriteExisting);
+      if (result.success) {
+        toast.showSuccess(`Imported preset: ${result.preset.name}`);
         loadPresets();
         setShowImportModal(false);
-      })
-      .catch(error => {
-        toast.error(`Import failed: ${error.message}`);
+        importForm.reset();
+      } else {
+        importForm.setError('root.importError', {
+          type: 'validation',
+          message: result.error || 'Failed to import preset'
+        });
+      }
+    } catch (error) {
+      importForm.setError('root.importError', {
+        type: 'server',
+        message: error instanceof Error ? error.message : 'An unexpected error occurred'
       });
+    }
   };
 
-  const categoryDisplayNames = {
-    system: 'System Presets',
-    analysis: 'Analysis Tools',
-    monitoring: 'Monitoring Views',
-    research: 'Research Studies',
-    user: 'My Presets',
-    other: 'Other'
-  };
-
-  const categoryOrder = ['system', 'analysis', 'monitoring', 'research', 'user', 'other'];
+  // Filter presets by active category
+  const filteredPresets = Object.values(presets).filter(
+    preset => preset.category === activeCategory
+  );
 
   return (
     <>
-      <Modal show={show} onHide={onHide} size="lg" centered>
+      {/* Main Preset Selector Modal */}
+      <Modal show={show} onHide={onHide} size="xl" centered>
         <Modal.Header closeButton>
           <Modal.Title>
             <i className="bi bi-bookmark-star me-2"></i>
             Preset Manager
           </Modal.Title>
         </Modal.Header>
-        <Modal.Body>
-          {/* Category Tabs */}
-          <div className="mb-3">
-            <ButtonGroup size="sm" className="w-100">
-              {categoryOrder.map(category => (
-                categories[category] && (
-                  <Button
-                    key={category}
-                    variant={activeCategory === category ? 'primary' : 'outline-primary'}
-                    onClick={() => setActiveCategory(category)}
-                    className="text-nowrap"
-                  >
-                    {categoryDisplayNames[category]}
-                    <Badge bg="secondary" className="ms-1">
-                      {categories[category].length}
-                    </Badge>
-                  </Button>
-                )
-              ))}
-            </ButtonGroup>
-          </div>
 
-          {/* Preset Grid */}
-          <div style={{ maxHeight: '400px', overflowY: 'auto' }}>
-            <Row className="g-2">
-              {categories[activeCategory]?.map(preset => (
-                <Col md={6} key={preset.id}>
-                  <Card
-                    className={`preset-card ${selectedPreset?.id === preset.id ? 'border-primary' : ''}`}
-                    style={{ cursor: 'pointer' }}
-                    onClick={() => setSelectedPreset(preset)}
+        <Modal.Body>
+          <Row>
+            {/* Category Tabs */}
+            <Col md={3}>
+              <div className="category-tabs">
+                <h6>Categories</h6>
+                <ButtonGroup vertical className="w-100">
+                  {Object.entries(categories).map(([categoryId, category]) => (
+                    <Button
+                      key={categoryId}
+                      variant={activeCategory === categoryId ? 'primary' : 'outline-secondary'}
+                      onClick={() => setActiveCategory(categoryId)}
+                      className="text-start"
+                    >
+                      <i className={`bi ${category.icon} me-2`}></i>
+                      {category.name}
+                      <Badge bg="secondary" className="ms-auto">
+                        {category.presets.length}
+                      </Badge>
+                    </Button>
+                  ))}
+                </ButtonGroup>
+              </div>
+            </Col>
+
+            {/* Preset List */}
+            <Col md={9}>
+              <div className="d-flex justify-content-between align-items-center mb-3">
+                <h6>
+                  {categories[activeCategory]?.name || 'Presets'}
+                  <Badge bg="info" className="ms-2">{filteredPresets.length}</Badge>
+                </h6>
+                <div>
+                  <Button
+                    variant="outline-primary"
+                    size="sm"
+                    onClick={() => setShowCreateModal(true)}
+                    className="me-2"
                   >
-                    <Card.Body className="p-3">
-                      <div className="d-flex align-items-start justify-content-between">
-                        <div className="flex-grow-1">
-                          <div className="d-flex align-items-center mb-1">
-                            <i className={`bi ${preset.icon || 'bi-bookmark'} me-2`}></i>
-                            <strong className="preset-name">{preset.name}</strong>
-                            {defaultPresetId === preset.id && (
-                              <Badge bg="success" className="ms-2">Default</Badge>
+                    <i className="bi bi-plus-circle me-1"></i>
+                    Create
+                  </Button>
+                  <Button
+                    variant="outline-secondary"
+                    size="sm"
+                    onClick={() => setShowImportModal(true)}
+                  >
+                    <i className="bi bi-upload me-1"></i>
+                    Import
+                  </Button>
+                </div>
+              </div>
+
+              <div className="preset-grid" style={{ maxHeight: '400px', overflowY: 'auto' }}>
+                {filteredPresets.length === 0 ? (
+                  <div className="text-center text-muted py-4">
+                    <i className="bi bi-bookmark display-4"></i>
+                    <p className="mt-2">No presets in this category</p>
+                  </div>
+                ) : (
+                  filteredPresets.map(preset => (
+                    <Card
+                      key={preset.id}
+                      className={`preset-card mb-2 ${selectedPreset?.id === preset.id ? 'border-primary' : ''}`}
+                      style={{ cursor: 'pointer' }}
+                      onClick={() => setSelectedPreset(preset)}
+                    >
+                      <Card.Body className="py-2">
+                        <div className="d-flex justify-content-between align-items-start">
+                          <div className="flex-grow-1">
+                            <div className="d-flex align-items-center">
+                              <strong>{preset.name}</strong>
+                              {preset.isDefault && (
+                                <Badge bg="success" className="ms-2" size="sm">Default</Badge>
+                              )}
+                              {preset.id === defaultPresetId && (
+                                <Badge bg="warning" className="ms-2" size="sm">System Default</Badge>
+                              )}
+                            </div>
+                            {preset.description && (
+                              <small className="text-muted d-block">{preset.description}</small>
                             )}
-                          </div>
-                          <small className="text-muted">{preset.description}</small>
-                          <div className="preset-details mt-2">
-                            <small className="text-secondary">
-                              Sites: {preset.settings.sites?.join(', ') || 'None'} •
-                              Range: {preset.settings.timeRange || 'N/A'} •
-                              Parameter: {preset.settings.selectedParameter || 'N/A'}
+                            <small className="text-muted">
+                              Modified: {new Date(preset.modified).toLocaleDateString()}
                             </small>
                           </div>
-                        </div>
-                        {preset.category === 'user' && (
                           <div className="preset-actions">
-                            <Button
-                              variant="outline-danger"
-                              size="sm"
-                              onClick={(e) => {
-                                e.stopPropagation();
-                                handleDeletePreset(preset.id);
-                              }}
-                            >
-                              <i className="bi bi-trash"></i>
-                            </Button>
+                            {preset.category !== 'system' && (
+                              <Button
+                                variant="outline-danger"
+                                size="sm"
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  handleDeletePreset(preset.id);
+                                }}
+                                title="Delete preset"
+                              >
+                                <i className="bi bi-trash"></i>
+                              </Button>
+                            )}
                           </div>
-                        )}
-                      </div>
-                    </Card.Body>
-                  </Card>
-                </Col>
-              ))}
-            </Row>
-          </div>
+                        </div>
+                      </Card.Body>
+                    </Card>
+                  ))
+                )}
+              </div>
+            </Col>
+          </Row>
 
-          {/* Selected Preset Details */}
+          {/* Selected Preset Actions */}
           {selectedPreset && (
-            <Card className="mt-3 bg-light">
-              <Card.Body>
-                <h6>
-                  <i className={`bi ${selectedPreset.icon || 'bi-bookmark'} me-2`}></i>
-                  {selectedPreset.name}
-                </h6>
-                <p className="mb-2">{selectedPreset.description}</p>
-                <div className="preset-settings">
-                  <Row>
-                    <Col md={6}>
-                      <strong>Sites:</strong> {selectedPreset.settings.sites?.join(', ') || 'None'}<br/>
-                      <strong>Time Range:</strong> {selectedPreset.settings.timeRange || 'N/A'}<br/>
-                      <strong>Parameter:</strong> {selectedPreset.settings.selectedParameter || 'N/A'}
-                    </Col>
-                    <Col md={6}>
-                      <strong>Compare Mode:</strong> {selectedPreset.settings.compareMode || 'Off'}<br/>
-                      <strong>Chart Type:</strong> {selectedPreset.settings.chartType || 'Line'}<br/>
-                      <strong>View:</strong> {selectedPreset.settings.activeView || 'Overview'}
-                    </Col>
-                  </Row>
-                </div>
-              </Card.Body>
-            </Card>
-          )}
-        </Modal.Body>
-        <Modal.Footer>
-          <div className="d-flex justify-content-between w-100">
-            <div>
-              <Button
-                variant="outline-secondary"
-                size="sm"
-                onClick={() => setShowCreateModal(true)}
-                className="me-2"
-              >
-                <i className="bi bi-plus-circle me-1"></i>
-                Create
-              </Button>
-              <Button
-                variant="outline-secondary"
-                size="sm"
-                onClick={() => setShowImportModal(true)}
-                className="me-2"
-              >
-                <i className="bi bi-upload me-1"></i>
-                Import
-              </Button>
-              {selectedPreset && (
+            <div className="mt-3 p-3 bg-light rounded">
+              <h6>Selected: {selectedPreset.name}</h6>
+              <div className="d-flex gap-2">
+                <Button
+                  variant="primary"
+                  onClick={() => handleApplyPreset(selectedPreset)}
+                >
+                  <i className="bi bi-check-circle me-1"></i>
+                  Apply Preset
+                </Button>
                 <Button
                   variant="outline-secondary"
-                  size="sm"
                   onClick={() => handleExportPreset(selectedPreset)}
                 >
                   <i className="bi bi-download me-1"></i>
                   Export
                 </Button>
-              )}
+                {selectedPreset.id !== defaultPresetId && (
+                  <Button
+                    variant="outline-warning"
+                    onClick={() => handleSetDefault(selectedPreset.id)}
+                  >
+                    <i className="bi bi-star me-1"></i>
+                    Set Default
+                  </Button>
+                )}
+              </div>
             </div>
-            <div>
-              {selectedPreset && selectedPreset.id !== defaultPresetId && (
-                <Button
-                  variant="outline-primary"
-                  size="sm"
-                  onClick={() => handleSetDefault(selectedPreset.id)}
-                  className="me-2"
-                >
-                  Set Default
-                </Button>
-              )}
-              <Button variant="secondary" onClick={onHide} className="me-2">
-                Cancel
-              </Button>
-              <Button
-                variant="primary"
-                onClick={() => handleApplyPreset(selectedPreset)}
-                disabled={!selectedPreset}
-              >
-                Apply Preset
-              </Button>
-            </div>
-          </div>
-        </Modal.Footer>
+          )}
+        </Modal.Body>
       </Modal>
 
       {/* Create Preset Modal */}
@@ -330,52 +399,83 @@ const PresetSelector = ({
         <Modal.Header closeButton>
           <Modal.Title>Create New Preset</Modal.Title>
         </Modal.Header>
-        <Modal.Body>
-          {validationErrors.length > 0 && (
-            <div className="alert alert-danger">
-              <ul className="mb-0">
-                {validationErrors.map((error, index) => (
-                  <li key={index}>{error}</li>
-                ))}
-              </ul>
-            </div>
-          )}
-          <Form>
-            <Form.Group className="mb-3">
-              <Form.Label>Preset Name *</Form.Label>
-              <Form.Control
+
+        <form onSubmit={createForm.handleSubmit(onCreateSubmit)} noValidate>
+          <Modal.Body>
+            {/* Server Errors */}
+            {(createForm.formState.errors.root?.settingsError || createForm.formState.errors.root?.saveError) && (
+              <div className="alert alert-danger" role="alert">
+                <i className="bi bi-exclamation-triangle me-2"></i>
+                {createForm.formState.errors.root?.settingsError?.message ||
+                 createForm.formState.errors.root?.saveError?.message}
+              </div>
+            )}
+
+            {/* Name Field */}
+            <div className="mb-3">
+              <label htmlFor="preset-name" className="form-label">
+                Preset Name <span className="text-danger">*</span>
+              </label>
+              <input
+                {...createForm.register('name', createPresetRules.name)}
                 type="text"
-                value={newPresetName}
-                onChange={(e) => setNewPresetName(e.target.value)}
+                id="preset-name"
+                className={`form-control ${createForm.formState.errors.name ? 'is-invalid' : ''}`}
                 placeholder="Enter preset name"
               />
-            </Form.Group>
-            <Form.Group className="mb-3">
-              <Form.Label>Description</Form.Label>
-              <Form.Control
-                as="textarea"
-                rows={2}
-                value={newPresetDescription}
-                onChange={(e) => setNewPresetDescription(e.target.value)}
+              {createForm.formState.errors.name && (
+                <div className="invalid-feedback">
+                  {createForm.formState.errors.name.message}
+                </div>
+              )}
+            </div>
+
+            {/* Description Field */}
+            <div className="mb-3">
+              <label htmlFor="preset-description" className="form-label">Description</label>
+              <textarea
+                {...createForm.register('description', createPresetRules.description)}
+                id="preset-description"
+                className={`form-control ${createForm.formState.errors.description ? 'is-invalid' : ''}`}
+                rows={3}
                 placeholder="Optional description"
               />
-            </Form.Group>
-            <div className="alert alert-info">
-              <small>
-                This preset will save your current filter settings:
-                sites, time range, parameters, and view options.
-              </small>
+              {createForm.formState.errors.description && (
+                <div className="invalid-feedback">
+                  {createForm.formState.errors.description.message}
+                </div>
+              )}
             </div>
-          </Form>
-        </Modal.Body>
-        <Modal.Footer>
-          <Button variant="secondary" onClick={() => setShowCreateModal(false)}>
-            Cancel
-          </Button>
-          <Button variant="primary" onClick={handleCreatePreset}>
-            Create Preset
-          </Button>
-        </Modal.Footer>
+
+            <div className="alert alert-info">
+              <i className="bi bi-info-circle me-2"></i>
+              The preset will be created from your current dashboard settings.
+            </div>
+          </Modal.Body>
+
+          <Modal.Footer>
+            <Button variant="secondary" onClick={() => setShowCreateModal(false)}>
+              Cancel
+            </Button>
+            <Button
+              type="submit"
+              variant="primary"
+              disabled={createForm.formState.isSubmitting || !createForm.formState.isValid}
+            >
+              {createForm.formState.isSubmitting ? (
+                <>
+                  <span className="spinner-border spinner-border-sm me-2"></span>
+                  Creating...
+                </>
+              ) : (
+                <>
+                  <i className="bi bi-plus-circle me-1"></i>
+                  Create Preset
+                </>
+              )}
+            </Button>
+          </Modal.Footer>
+        </form>
       </Modal>
 
       {/* Import Preset Modal */}
@@ -383,26 +483,85 @@ const PresetSelector = ({
         <Modal.Header closeButton>
           <Modal.Title>Import Preset</Modal.Title>
         </Modal.Header>
-        <Modal.Body>
-          <Form>
-            <Form.Group>
-              <Form.Label>Select Preset File</Form.Label>
-              <Form.Control
+
+        <form onSubmit={importForm.handleSubmit(onImportSubmit)} noValidate>
+          <Modal.Body>
+            {/* Server Errors */}
+            {importForm.formState.errors.root?.importError && (
+              <div className="alert alert-danger" role="alert">
+                <i className="bi bi-exclamation-triangle me-2"></i>
+                {importForm.formState.errors.root.importError.message}
+              </div>
+            )}
+
+            {/* File Field */}
+            <div className="mb-3">
+              <label htmlFor="import-file" className="form-label">
+                Select Preset File <span className="text-danger">*</span>
+              </label>
+              <input
+                {...importForm.register('file', importPresetRules.file)}
                 type="file"
+                id="import-file"
+                className={`form-control ${importForm.formState.errors.file ? 'is-invalid' : ''}`}
                 accept=".json"
-                onChange={handleImportFile}
               />
-              <Form.Text className="text-muted">
-                Select a JSON file exported from this application.
-              </Form.Text>
-            </Form.Group>
-          </Form>
-        </Modal.Body>
-        <Modal.Footer>
-          <Button variant="secondary" onClick={() => setShowImportModal(false)}>
-            Cancel
-          </Button>
-        </Modal.Footer>
+              {importForm.formState.errors.file && (
+                <div className="invalid-feedback">
+                  {importForm.formState.errors.file.message}
+                </div>
+              )}
+              <div className="form-text">
+                Select a .json file exported from this application
+              </div>
+            </div>
+
+            {/* Overwrite Option */}
+            <div className="mb-3">
+              <div className="form-check">
+                <Controller
+                  name="overwriteExisting"
+                  control={importForm.control}
+                  render={({ field }) => (
+                    <input
+                      {...field}
+                      type="checkbox"
+                      id="overwrite-existing"
+                      className="form-check-input"
+                      checked={field.value}
+                    />
+                  )}
+                />
+                <label htmlFor="overwrite-existing" className="form-check-label">
+                  Overwrite existing presets with the same name
+                </label>
+              </div>
+            </div>
+          </Modal.Body>
+
+          <Modal.Footer>
+            <Button variant="secondary" onClick={() => setShowImportModal(false)}>
+              Cancel
+            </Button>
+            <Button
+              type="submit"
+              variant="primary"
+              disabled={importForm.formState.isSubmitting || !importForm.formState.isValid}
+            >
+              {importForm.formState.isSubmitting ? (
+                <>
+                  <span className="spinner-border spinner-border-sm me-2"></span>
+                  Importing...
+                </>
+              ) : (
+                <>
+                  <i className="bi bi-upload me-1"></i>
+                  Import Preset
+                </>
+              )}
+            </Button>
+          </Modal.Footer>
+        </form>
       </Modal>
     </>
   );

@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { ClipLoader } from 'react-spinners';
 import Container from 'react-bootstrap/Container';
 import Row from 'react-bootstrap/Row';
 import Col from 'react-bootstrap/Col';
@@ -181,7 +182,7 @@ const ModernSettings = () => {
               >
                 {saveStatus === 'saving' ? (
                   <>
-                    <span className="spinner-border spinner-border-sm me-2"></span>
+                    <ClipLoader color="white" size={16} className="me-2" />
                     Saving...
                   </>
                 ) : (

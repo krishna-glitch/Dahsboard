@@ -1,4 +1,4 @@
-import React, { useState, useMemo, useCallback } from 'react';
+import React, { useState, useMemo, useCallback, useEffect, useRef } from 'react';
 import {
   useReactTable,
   getCoreRowModel,
@@ -30,7 +30,7 @@ const TanStackDataTable = ({
   sortable = true,
   paginated = true,
   pageSize = 50,
-  maxHeight = 400,
+  maxHeight = '70vh',
   className = "",
   onRowClick = null,
   onRowSelect = null
@@ -40,6 +40,8 @@ const TanStackDataTable = ({
   const [compact, setCompact] = useState(false);
   const [visibleColumns, setVisibleColumns] = useState(new Set(columns.map(c => c.key)));
   const [pageSizeState, setPageSizeState] = useState(pageSize);
+  const [highlightedRowId, setHighlightedRowId] = useState(null);
+  const lastTapRef = useRef({ time: 0, rowId: null });
 
   // Convert our column format to TanStack format
   const tanStackColumns = useMemo(() => {
@@ -117,11 +119,38 @@ const TanStackDataTable = ({
     }
   }, [onRowClick]);
 
+  const toggleRowHighlight = useCallback((rowId) => {
+    setHighlightedRowId((current) => (current === rowId ? null : rowId));
+  }, []);
+
+  const handleRowDoubleClick = useCallback((row) => {
+    toggleRowHighlight(row.id);
+  }, [toggleRowHighlight]);
+
+  const handleRowTouchEnd = useCallback((row) => {
+    const now = Date.now();
+    const { time: lastTime, rowId: lastRowId } = lastTapRef.current;
+    if (now - lastTime < 350 && lastRowId === row.id) {
+      toggleRowHighlight(row.id);
+      lastTapRef.current = { time: 0, rowId: null };
+    } else {
+      lastTapRef.current = { time: now, rowId: row.id };
+    }
+  }, [toggleRowHighlight]);
+
   // Get visible data for export
   const visibleData = useMemo(() => {
     const rows = table.getFilteredRowModel().rows;
     return rows.map(row => row.original);
   }, [table]);
+
+  const visibleRowIds = table.getRowModel().rows.map(row => row.id);
+
+  useEffect(() => {
+    if (highlightedRowId && !visibleRowIds.includes(highlightedRowId)) {
+      setHighlightedRowId(null);
+    }
+  }, [highlightedRowId, visibleRowIds]);
 
   if (loading) {
     return (
@@ -255,7 +284,11 @@ const TanStackDataTable = ({
       {/* Table */}
       <div
         className={`table-responsive ${compact ? 'table-compact' : ''}`}
-        style={{ maxHeight: `${maxHeight}px`, overflowY: 'auto' }}
+        style={{
+          maxHeight: typeof maxHeight === 'number' ? `${maxHeight}px` : maxHeight,
+          minHeight: '420px',
+          overflowY: 'auto'
+        }}
       >
         <table className="table table-hover table-sm">
           <thead className="table-light sticky-top">
@@ -296,11 +329,13 @@ const TanStackDataTable = ({
               <tr
                 key={row.id}
                 onClick={() => handleRowClick(row)}
+                onDoubleClick={() => handleRowDoubleClick(row)}
+                onTouchEnd={() => handleRowTouchEnd(row)}
                 style={{
                   cursor: onRowClick ? 'pointer' : 'default',
                   height: compact ? '35px' : '45px'
                 }}
-                className={onRowClick ? 'table-row-clickable' : ''}
+                className={`table-data-row${onRowClick ? ' table-row-clickable' : ''}${highlightedRowId === row.id ? ' table-row-highlight' : ''}`}
               >
                 {row.getVisibleCells().map(cell => (
                   <td
@@ -383,8 +418,17 @@ const TanStackDataTable = ({
 
       {/* Custom CSS */}
       <style jsx>{`
+        .table-data-row {
+          transition: background-color 0.2s ease, box-shadow 0.2s ease;
+        }
+
         .table-row-clickable:hover {
           background-color: var(--bs-primary-bg-subtle) !important;
+        }
+
+        .table-row-highlight {
+          background-color: var(--bs-warning-bg-subtle) !important;
+          box-shadow: inset 0 0 0 2px rgba(255, 193, 7, 0.35);
         }
 
         .cell-content {

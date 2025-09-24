@@ -1,4 +1,5 @@
 import React, { useEffect, useState, useCallback, useRef } from 'react';
+import { ClipLoader, RingLoader } from 'react-spinners';
 import Container from 'react-bootstrap/Container';
 import Row from 'react-bootstrap/Row';
 import Col from 'react-bootstrap/Col';
@@ -327,7 +328,7 @@ const EnhancedPerformanceDashboard = () => {
       <Container fluid className="modern-page">
         <div className="d-flex justify-content-center align-items-center" style={{ height: '400px' }}>
           <div className="text-center">
-            <div className="spinner-border text-primary mb-3" role="status" style={{ width: '3rem', height: '3rem' }}></div>
+            <RingLoader color="#0d6efd" size={48} className="mb-3" />
             <h5>Loading Performance Analytics...</h5>
           </div>
         </div>
@@ -504,7 +505,7 @@ const EnhancedPerformanceDashboard = () => {
                     />
                   ) : (
                     <div className="text-center py-4">
-                      <div className="spinner-border spinner-border-sm text-secondary"></div>
+                      <ClipLoader color="#6c757d" size={16} />
                       <p className="text-muted mt-2 mb-0">Loading chart...</p>
                     </div>
                   )}
@@ -529,7 +530,7 @@ const EnhancedPerformanceDashboard = () => {
                     />
                   ) : (
                     <div className="text-center py-4">
-                      <div className="spinner-border spinner-border-sm text-secondary"></div>
+                      <ClipLoader color="#6c757d" size={16} />
                       <p className="text-muted mt-2 mb-0">Loading chart...</p>
                     </div>
                   )}
@@ -554,7 +555,7 @@ const EnhancedPerformanceDashboard = () => {
                     />
                   ) : (
                     <div className="text-center py-4">
-                      <div className="spinner-border spinner-border-sm text-secondary"></div>
+                      <ClipLoader color="#6c757d" size={16} />
                       <p className="text-muted mt-2 mb-0">Loading chart...</p>
                     </div>
                   )}
@@ -696,7 +697,7 @@ const EnhancedPerformanceDashboard = () => {
                       >
                         {testRunning ? (
                           <>
-                            <span className="spinner-border spinner-border-sm me-2"></span>
+                            <ClipLoader color="white" size={16} className="me-2" />
                             Running Test...
                           </>
                         ) : (
@@ -858,7 +859,7 @@ const EnhancedPerformanceDashboard = () => {
                     </div>
                   ) : (
                     <div className="text-center py-4">
-                      <div className="spinner-border text-secondary"></div>
+                      <RingLoader color="#6c757d" size={32} />
                       <p className="text-muted mt-2">Loading system metrics...</p>
                     </div>
                   )}
@@ -908,7 +909,7 @@ const EnhancedPerformanceDashboard = () => {
                     </Table>
                   ) : (
                     <div className="text-center py-4">
-                      <div className="spinner-border text-secondary"></div>
+                      <RingLoader color="#6c757d" size={32} />
                       <p className="text-muted mt-2">Loading application metrics...</p>
                     </div>
                   )}
@@ -962,7 +963,7 @@ const EnhancedPerformanceDashboard = () => {
                       </div>
                     ) : (
                       <div className="text-center py-4">
-                        <div className="spinner-border text-secondary"></div>
+                        <RingLoader color="#6c757d" size={32} />
                         <p className="text-muted mt-2">Analyzing code quality...</p>
                       </div>
                     )}
@@ -1170,7 +1171,7 @@ const EnhancedPerformanceDashboard = () => {
                       </div>
                     ) : (
                       <div className="text-center py-4">
-                        <div className="spinner-border text-secondary"></div>
+                        <RingLoader color="#6c757d" size={32} />
                         <p className="text-muted mt-2">Analyzing bundle...</p>
                       </div>
                     )}

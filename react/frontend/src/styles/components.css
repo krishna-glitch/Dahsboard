@@ -5589,6 +5589,110 @@
   line-height: 1.6;
 }
 
+.stats-panel {
+  display: flex;
+  flex-direction: column;
+  gap: var(--spacing-component-lg);
+  margin-bottom: var(--spacing-section-md, 32px);
+}
+
+.stats-section {
+  background: var(--surface-primary);
+  border-radius: var(--radius-lg);
+  border: 1px solid var(--border-primary);
+  padding: var(--spacing-component-lg);
+  box-shadow: var(--shadow-sm);
+}
+
+.stats-section-title {
+  margin: 0 0 var(--spacing-component-md);
+  font-size: 1.05rem;
+  font-weight: 600;
+  color: var(--text-primary);
+}
+
+.stats-card-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+  gap: var(--spacing-component-md);
+}
+
+.stats-card {
+  border: 1px solid var(--border-secondary);
+  border-radius: var(--radius-md);
+  padding: var(--spacing-component-md);
+  background: var(--surface-primary);
+}
+
+.stats-card-title {
+  font-size: 1rem;
+  margin: 0 0 var(--spacing-component-sm);
+  color: var(--text-primary);
+}
+
+.stats-card-list {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: var(--spacing-component-sm) var(--spacing-component-md);
+  margin: 0;
+}
+
+.stats-card-list dt {
+  font-size: 0.8rem;
+  font-weight: 500;
+  color: var(--text-tertiary);
+  text-transform: uppercase;
+}
+
+.stats-card-list dd {
+  margin: 0;
+  font-size: 0.95rem;
+  color: var(--text-primary);
+}
+
+.stats-table-wrapper {
+  margin-top: var(--spacing-component-lg);
+}
+
+.stats-table-title {
+  font-size: 1rem;
+  font-weight: 600;
+  margin: 0 0 var(--spacing-component-sm);
+  color: var(--text-primary);
+}
+
+.stats-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.9rem;
+}
+
+.stats-table th,
+.stats-table td {
+  border: 1px solid var(--border-secondary);
+  padding: 0.5rem 0.75rem;
+  text-align: right;
+}
+
+.stats-table th:first-child,
+.stats-table td:first-child {
+  text-align: left;
+}
+
+.stats-empty {
+  border: 1px dashed var(--border-secondary);
+  border-radius: var(--radius-lg);
+  padding: var(--spacing-component-lg);
+  text-align: center;
+  color: var(--text-secondary);
+}
+
+.stats-empty i {
+  font-size: 2rem;
+  display: block;
+  margin-bottom: var(--spacing-component-sm);
+}
+
 .chart-subtitle {
   font-size: 0.9rem;
   color: var(--text-secondary);

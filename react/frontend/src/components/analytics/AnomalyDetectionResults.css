@@ -1,0 +1,234 @@
+/* Anomaly Detection Results Styles - Aligned with Design System */
+
+.anomaly-detection-results {
+  border: none;
+  box-shadow: var(--shadow-lg);
+  border-radius: var(--border-radius-xl);
+  background: var(--gradient-surface);
+}
+
+.anomaly-detection-results .card-header {
+  background: var(--gradient-danger);
+  color: var(--light-color);
+  border-bottom: none;
+  border-radius: var(--border-radius-xl) var(--border-radius-xl) 0 0;
+  padding: var(--spacing-lg);
+}
+
+/* Tab Navigation */
+.anomaly-detection-results .nav-tabs {
+  border-bottom: 2px solid var(--border-color);
+  margin-bottom: var(--spacing-md);
+}
+
+.anomaly-detection-results .nav-tabs .nav-link {
+  border: none;
+  border-radius: var(--border-radius-full);
+  padding: var(--spacing-sm) var(--spacing-md);
+  margin-right: var(--spacing-sm);
+  color: var(--text-secondary);
+  background: transparent;
+  transition: var(--transition-fast);
+}
+
+.anomaly-detection-results .nav-tabs .nav-link:hover {
+  background: var(--surface-secondary);
+  color: var(--text-primary);
+  transform: translateY(-1px);
+}
+
+.anomaly-detection-results .nav-tabs .nav-link.active {
+  background: var(--gradient-danger);
+  color: var(--light-color);
+  border: none;
+  box-shadow: var(--shadow-md);
+}
+
+/* Cards */
+.anomaly-detection-results .card {
+  border: 1px solid var(--border-color);
+  border-radius: var(--border-radius-md);
+  transition: var(--transition-fast);
+}
+
+.anomaly-detection-results .card:hover {
+  border-color: var(--border-hover);
+  box-shadow: var(--shadow-sm);
+}
+
+.anomaly-detection-results .card-header {
+  background: var(--gradient-surface);
+  border-bottom: 1px solid var(--border-color);
+  font-size: var(--font-size-sm);
+  color: var(--text-primary);
+  padding: var(--spacing-sm) var(--card-padding);
+}
+
+.anomaly-detection-results .card-body {
+  padding: var(--card-padding);
+}
+
+/* Parameter Items */
+.parameter-item {
+  border: 1px solid var(--border-color);
+  background: var(--surface-primary);
+  border-radius: var(--border-radius-sm);
+  transition: var(--transition-fast);
+  cursor: pointer;
+  margin-bottom: var(--spacing-sm);
+  padding: var(--spacing-sm);
+}
+
+.parameter-item:hover {
+  border-color: var(--primary-color);
+  background: var(--surface-interactive);
+  transform: translateY(-1px);
+  box-shadow: var(--shadow-sm);
+}
+
+.parameter-item.selected {
+  border-color: var(--primary-color);
+  background: var(--surface-interactive);
+  box-shadow: var(--shadow-md);
+}
+
+/* Badges */
+.anomaly-detection-results .badge {
+  font-size: var(--font-size-xs);
+  font-weight: 600;
+  padding: var(--spacing-xs) var(--spacing-sm);
+  border-radius: var(--border-radius-sm);
+}
+
+.anomaly-detection-results .badge.bg-danger {
+  background: var(--gradient-danger) !important;
+}
+
+.anomaly-detection-results .badge.bg-warning {
+  background: var(--gradient-warning) !important;
+  color: var(--dark-color) !important;
+}
+
+.anomaly-detection-results .badge.bg-info {
+  background: var(--gradient-primary) !important;
+}
+
+.anomaly-detection-results .badge.bg-success {
+  background: var(--gradient-success) !important;
+}
+
+/* Alerts */
+.anomaly-detection-results .alert {
+  border-radius: var(--border-radius-md);
+  border: none;
+  padding: var(--spacing-sm) var(--spacing-md);
+}
+
+.anomaly-detection-results .alert-danger {
+  background: var(--gradient-surface);
+  color: var(--danger-color);
+  border-left: 4px solid var(--danger-color);
+}
+
+.anomaly-detection-results .alert-info {
+  background: var(--gradient-surface);
+  color: var(--info-color);
+  border-left: 4px solid var(--info-color);
+}
+
+/* Tables */
+.anomaly-detection-results .table {
+  font-size: var(--font-size-sm);
+}
+
+.anomaly-detection-results .table td {
+  padding: var(--spacing-xs) var(--spacing-sm);
+  border-top: 1px solid var(--border-color);
+  vertical-align: middle;
+}
+
+.anomaly-detection-results .table tbody tr:nth-child(even) {
+  background-color: var(--surface-secondary);
+}
+
+/* Buttons */
+.anomaly-detection-results .btn {
+  border-radius: var(--border-radius-md);
+  padding: var(--spacing-xs) var(--spacing-md);
+  font-weight: 500;
+  transition: var(--transition-fast);
+}
+
+.anomaly-detection-results .btn:hover {
+  transform: translateY(-1px);
+  box-shadow: var(--shadow-sm);
+}
+
+.anomaly-detection-results .btn-outline-primary {
+  border: 2px solid var(--primary-color);
+  color: var(--primary-color);
+}
+
+.anomaly-detection-results .btn-outline-primary:hover {
+  background: var(--primary-color);
+  border-color: var(--primary-color);
+  color: var(--light-color);
+}
+
+/* Loading & Empty States */
+.anomaly-detection-results .spinner-border {
+  width: 3rem;
+  height: 3rem;
+  border-width: 0.3em;
+  color: var(--danger-color);
+}
+
+/* Plot Containers */
+.anomaly-detection-results .js-plotly-plot {
+  border-radius: var(--border-radius-md);
+  overflow: hidden;
+}
+
+/* Responsive Design */
+@media (max-width: 768px) {
+  .anomaly-detection-results .card-header {
+    padding: var(--spacing-sm) var(--spacing-md);
+  }
+
+  .anomaly-detection-results .card-body {
+    padding: var(--spacing-sm);
+  }
+
+  .anomaly-detection-results .nav-tabs .nav-link {
+    padding: var(--spacing-xs) var(--spacing-sm);
+    font-size: var(--font-size-sm);
+  }
+}
+
+@media (max-width: 576px) {
+  .anomaly-detection-results {
+    margin: 0 calc(-1 * var(--spacing-sm));
+    border-radius: var(--border-radius-md);
+  }
+
+  .anomaly-detection-results .nav-tabs {
+    flex-wrap: nowrap;
+    overflow-x: auto;
+  }
+
+  .anomaly-detection-results .nav-tabs .nav-link {
+    white-space: nowrap;
+    margin-right: var(--spacing-xs);
+  }
+}
+
+/* Accessibility */
+.anomaly-detection-results .btn:focus,
+.anomaly-detection-results .nav-link:focus {
+  box-shadow: 0 0 0 0.25rem rgba(var(--primary-color), 0.25);
+}
+
+.parameter-item:focus {
+  outline: 2px solid var(--primary-color);
+  outline-offset: 2px;
+}
