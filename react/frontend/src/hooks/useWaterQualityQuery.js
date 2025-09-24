@@ -1,3 +1,4 @@
+import React from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { getWaterQualityData } from '../services/api';
 import { useToast } from '../components/modern/toastUtils';
@@ -98,14 +99,36 @@ export function useWaterQualityQuery({
           const recordsFormatted = data.length.toLocaleString();
           const rate = Math.round(data.length / (loadingTime || 1));
           
-          toast.showSuccess(
-            `Loaded ${recordsFormatted} water quality records for sites ${sitesText} • ${loadingTime}s • ${rate.toLocaleString()} rec/s`,
-            {
-              title: '📊 Data Loading Complete',
-              duration: 3000,
-              dedupeKey: `wq-success|${selectedSites.join(',')}|${timeRange}`,
-            }
+          const successMessage = React.createElement(
+            'div',
+            { className: 'toast-message' },
+            React.createElement(
+              'span',
+              { className: 'toast-message-primary' },
+              `Loaded ${recordsFormatted} water quality records`
+            ),
+            React.createElement(
+              'span',
+              { className: 'toast-message-meta' },
+              `Sites ${sitesText}`
+            ),
+            React.createElement(
+              'span',
+              { className: 'toast-message-meta' },
+              `${loadingTime}s`
+            ),
+            React.createElement(
+              'span',
+              { className: 'toast-message-meta' },
+              `${rate.toLocaleString()} rec/s`
+            )
           );
+
+          toast.showSuccess(successMessage, {
+            title: 'Data Loading Complete',
+            duration: 3000,
+            dedupeKey: `wq-success|${selectedSites.join(',')}|${timeRange}`,
+          });
         } else {
           toast.showWarning(
             `No water quality records found for sites ${selectedSites.join(', ')}`,

@@ -28,14 +28,13 @@ ReactDOM.createRoot(document.getElementById('root')).render(
       <App />
       <Toaster
         position="top-right"
-        gutter={8}
-        containerStyle={{
-          top: 80, // Below header
-        }}
+        gutter={12}
+        containerClassName="app-toast-container"
         toastOptions={{
           duration: 4000,
+          className: 'app-toast',
           style: {
-            maxWidth: '400px',
+            maxWidth: 'clamp(560px, 60vw, 960px)',
           },
         }}
       />

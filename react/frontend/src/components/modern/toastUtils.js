@@ -1,4 +1,6 @@
+import React from 'react';
 import toast from 'react-hot-toast';
+import Icon from './Icon';
 
 /**
  * Enhanced toast utilities using react-hot-toast
@@ -52,7 +54,13 @@ export const useToast = () => ({
     return toast.success(message, {
       duration: options.duration || 4000,
       style: getToastStyle('success'),
-      icon: '✅',
+      icon:
+        options.icon ||
+        React.createElement(Icon, {
+          name: 'check-circle-fill',
+          size: '1.25rem',
+          color: 'var(--success-color)'
+        }),
       ...options,
     });
   },
@@ -61,7 +69,13 @@ export const useToast = () => ({
     return toast.error(message, {
       duration: options.duration || 6000,
       style: getToastStyle('error'),
-      icon: '❌',
+      icon:
+        options.icon ||
+        React.createElement(Icon, {
+          name: 'x-circle-fill',
+          size: '1.25rem',
+          color: 'var(--danger-color)'
+        }),
       ...options,
     });
   },
@@ -70,7 +84,13 @@ export const useToast = () => ({
     return toast(message, {
       duration: options.duration || 5000,
       style: getToastStyle('warning'),
-      icon: '⚠️',
+      icon:
+        options.icon ||
+        React.createElement(Icon, {
+          name: 'exclamation-triangle-fill',
+          size: '1.25rem',
+          color: 'var(--warning-color)'
+        }),
       ...options,
     });
   },
@@ -79,7 +99,13 @@ export const useToast = () => ({
     return toast(message, {
       duration: options.duration || 4000,
       style: getToastStyle('info'),
-      icon: 'ℹ️',
+      icon:
+        options.icon ||
+        React.createElement(Icon, {
+          name: 'info-circle-fill',
+          size: '1.25rem',
+          color: 'var(--primary-color)'
+        }),
       ...options,
     });
   },
