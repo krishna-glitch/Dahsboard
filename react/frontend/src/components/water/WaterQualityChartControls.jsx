@@ -1,4 +1,5 @@
 import React from 'react';
+import Form from 'react-bootstrap/Form';
 import { WATER_QUALITY_PARAMETERS, CHART_TYPES } from '../../constants/appConstants';
 
 const WaterQualityChartControls = ({
@@ -11,56 +12,71 @@ const WaterQualityChartControls = ({
   compareParameter,
   setCompareParameter,
 }) => {
+  const supportedChartTypes = React.useMemo(
+    () => CHART_TYPES.filter((type) => ['line', 'scatter', 'bar'].includes(type.value)),
+    []
+  );
+
   return (
     <div className="chart-controls">
-      <select
+      <Form.Select
+        size="sm"
+        name="selectedParameter"
+        aria-label="Select water quality parameter"
         value={selectedParameter}
-        onChange={(e) => setSelectedParameter(e.target.value)}
-        className="filter-input"
-        style={{ marginRight: 'var(--spacing-component-sm)' }}
+        onChange={(event) => setSelectedParameter(event.target.value)}
+        className="chart-control-select"
       >
-        {WATER_QUALITY_PARAMETERS.map(param => (
+        {WATER_QUALITY_PARAMETERS.map((param) => (
           <option key={param.value} value={param.value}>
             {param.label}
           </option>
         ))}
-      </select>
+      </Form.Select>
 
-      <select
+      <Form.Select
+        size="sm"
+        name="chartType"
+        aria-label="Select chart type"
         value={chartType}
-        onChange={(e) => setChartType(e.target.value)}
-        className="filter-input"
+        onChange={(event) => setChartType(event.target.value)}
+        className="chart-control-select"
       >
-        {CHART_TYPES.filter(type => ['line', 'scatter', 'bar'].includes(type.value)).map(type => (
+        {supportedChartTypes.map((type) => (
           <option key={type.value} value={type.value}>
             {type.label}
           </option>
         ))}
-      </select>
+      </Form.Select>
 
-      <select
+      <Form.Select
+        size="sm"
+        name="compareMode"
+        aria-label="Select comparison mode"
         value={compareMode}
-        onChange={(e) => setCompareMode(e.target.value)}
-        className="filter-input"
-        style={{ marginLeft: 'var(--spacing-component-sm)' }}
+        onChange={(event) => setCompareMode(event.target.value)}
+        className="chart-control-select"
       >
         <option value="off">No Compare</option>
         <option value="overlay">Overlay</option>
         <option value="split">Side by Side</option>
-      </select>
+      </Form.Select>
+
       {compareMode !== 'off' && (
-        <select
+        <Form.Select
+          size="sm"
+          name="compareParameter"
+          aria-label="Select comparison parameter"
           value={compareParameter}
-          onChange={(e) => setCompareParameter(e.target.value)}
-          className="filter-input"
-          style={{ marginLeft: 'var(--spacing-component-sm)' }}
+          onChange={(event) => setCompareParameter(event.target.value)}
+          className="chart-control-select"
         >
-          {WATER_QUALITY_PARAMETERS.map(param => (
+          {WATER_QUALITY_PARAMETERS.map((param) => (
             <option key={param.value} value={param.value}>
               {param.label}
             </option>
           ))}
-        </select>
+        </Form.Select>
       )}
     </div>
   );

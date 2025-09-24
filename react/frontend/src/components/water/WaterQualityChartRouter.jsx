@@ -12,8 +12,52 @@ const WaterQualityChartRouter = ({
   parameterConfig = {},
   alertShapes = [],
   data = [],
+  summaryItems = [],
 }) => {
   if (activeView === 'details') return null;
+
+  const fallbackSummary = React.useMemo(() => {
+    const totalPoints = chartData.reduce(
+      (sum, series) => sum + (series?.x?.length || 0),
+      0
+    );
+    const siteSet = new Set();
+    (Array.isArray(data) ? data : []).forEach((row) => {
+      if (row?.site_code) {
+        siteSet.add(row.site_code);
+      }
+    });
+
+    const parameterLabel = parameterConfig[selectedParameter]?.label || selectedParameter;
+    const parameterUnit = parameterConfig[selectedParameter]?.unit;
+    const compareLabel =
+      compareMode !== 'off'
+        ? parameterConfig[compareParameter]?.label || compareParameter
+        : null;
+
+    const summary = [
+      `${totalPoints.toLocaleString()} observations`,
+      `${siteSet.size} site${siteSet.size === 1 ? '' : 's'}`,
+      `${parameterLabel}${parameterUnit ? ` (${parameterUnit})` : ''}`,
+    ];
+
+    if (compareLabel) {
+      summary.push(
+        `${compareMode === 'overlay' ? 'Overlay' : 'Side by Side'} vs ${compareLabel}`
+      );
+    }
+
+    return summary;
+  }, [chartData, data, parameterConfig, selectedParameter, compareMode, compareParameter]);
+
+  const hasExternalSummary = Array.isArray(summaryItems) && summaryItems.length > 0;
+
+  const resolvedSummary = React.useMemo(() => {
+    if (hasExternalSummary) {
+      return summaryItems;
+    }
+    return fallbackSummary;
+  }, [hasExternalSummary, summaryItems, fallbackSummary]);
 
   const header = (
     <div className="chart-header">
@@ -22,9 +66,9 @@ const WaterQualityChartRouter = ({
           <i className={`bi bi-${parameterConfig[selectedParameter]?.icon} me-2`}></i>
           {parameterConfig[selectedParameter]?.label} Trends Over Time
         </h3>
-        <p className="text-secondary" style={{ fontSize: '0.9rem', margin: 0 }}>
-          Showing {chartData.reduce((sum, s) => sum + (s?.x?.length || 0), 0)} data points across {chartData.length} sites
-        </p>
+        {!hasExternalSummary && resolvedSummary.length > 0 && (
+          <p className="chart-subtitle">{resolvedSummary.join(' • ')}</p>
+        )}
       </div>
     </div>
   );
@@ -43,9 +87,17 @@ const WaterQualityChartRouter = ({
         <Plot
           data={chartData}
           layout={{
-            height: 450,
-            margin: { l: 70, r: 30, t: 30, b: 60 },
-            xaxis: chartType === 'bar' ? { type: 'category', automargin: true } : { type: 'date', automargin: true },
+            height: 520,
+            margin: { l: 70, r: 30, t: 30, b: 90 },
+            xaxis:
+              chartType === 'bar'
+                ? { type: 'category', automargin: true }
+                : {
+                    type: 'date',
+                    automargin: true,
+                    tickangle: -25,
+                    tickformat: '%b %d'
+                  },
             yaxis: { automargin: true, title: { text: `${parameterConfig[selectedParameter]?.label} (${parameterConfig[selectedParameter]?.unit})` } },
             ...(compareMode === 'overlay' ? { yaxis2: { overlaying: 'y', side: 'right', automargin: true } } : {}),
             hovermode: chartType === 'bar' ? 'x' : 'closest',
@@ -54,7 +106,7 @@ const WaterQualityChartRouter = ({
             paper_bgcolor: 'rgba(0,0,0,0)'
           }}
           config={{ displayModeBar: true, responsive: true, displaylogo: false, scrollZoom: true, modeBarButtonsToRemove: ['pan2d', 'lasso2d', 'select2d'] }}
-          style={{ width: '100%', height: '400px' }}
+          style={{ width: '100%', height: '520px' }}
           onError={(error) => {
             try { log.error('[WQ] Plotly rendering error:', error); } catch { /* ignore log error */ }
           }}
@@ -75,9 +127,16 @@ const WaterQualityChartRouter = ({
                 return Object.values(bySite);
               })()}
               layout={{
-                height: 450,
-                margin: { l: 70, r: 30, t: 30, b: 60 },
-                xaxis: { title: 'Date', type: 'date', showgrid: true, gridcolor: '#f0f0f0' },
+                height: 520,
+                margin: { l: 70, r: 30, t: 30, b: 90 },
+                xaxis: {
+                  title: 'Date',
+                  type: 'date',
+                  showgrid: true,
+                  gridcolor: '#f0f0f0',
+                  tickangle: -25,
+                  tickformat: '%b %d'
+                },
                 yaxis: { title: `${parameterConfig[param]?.label} (${parameterConfig[param]?.unit})`, showgrid: true, gridcolor: '#f0f0f0' },
                 shapes: alertShapes,
                 showlegend: true,
@@ -86,14 +145,11 @@ const WaterQualityChartRouter = ({
                 paper_bgcolor: 'rgba(0,0,0,0)'
               }}
               config={{ displayModeBar: true, responsive: true, displaylogo: false }}
-              style={{ width: '100%', height: '400px' }}
+              style={{ width: '100%', height: '520px' }}
             />
           ))}
         </div>
       )}
-      <div style={{ color: '#6c757d', fontSize: '0.85rem', marginTop: 6 }}>
-        Time series of selected water quality parameter(s) by site over the chosen date range.
-      </div>
     </div>
   );
 
