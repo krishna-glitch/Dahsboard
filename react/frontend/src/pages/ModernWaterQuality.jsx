@@ -13,6 +13,7 @@ import { useWaterQualityMetrics } from '../hooks/useWaterQualityMetrics';
 import { useWaterQualityChartData } from '../hooks/useWaterQualityChartData';
 const WaterQualityChartRouter = lazy(() => import('../components/water/WaterQualityChartRouter'));
 import WaterQualityChartControls from '../components/water/WaterQualityChartControls';
+import { WATER_QUALITY_PARAMETERS } from '../constants/appConstants';
 
 // Error boundaries and performance monitoring
 import DataLoadingErrorBoundary from '../components/boundaries/DataLoadingErrorBoundary';
@@ -51,6 +52,8 @@ const PARAMETER_CONFIG = {
   }
 };
 
+const PARAMETER_KEYS = WATER_QUALITY_PARAMETERS.map((param) => param.value);
+
 /**
  * Modern Water Quality Dashboard
  * Complete rewrite with modern layout and UX patterns
@@ -82,14 +85,26 @@ const ModernWaterQuality = () => {
   };
 
   const validateParameter = (paramParam) => {
-    const validParams = ['temperature_c', 'conductivity_us_cm', 'water_level_m'];
-    return validParams.includes(paramParam) ? paramParam : 'temperature_c';
+    return PARAMETER_KEYS.includes(paramParam) ? paramParam : PARAMETER_KEYS[0];
   };
 
   const validateCompareMode = (modeParam) => {
     const validModes = ['off', 'overlay', 'side-by-side'];
     return validModes.includes(modeParam) ? modeParam : 'off';
   };
+
+  const validateComparisonView = (viewParam) => {
+    return viewParam === 'parameter' ? 'parameter' : 'time-series';
+  };
+
+  const getFallbackYAxisParameter = (primaryParam) => {
+    const fallback = PARAMETER_KEYS.find((value) => value !== primaryParam);
+    return fallback || primaryParam;
+  };
+
+  const initialSelectedParameter = validateParameter(searchParams.get('param'));
+  const initialComparisonView = validateComparisonView(searchParams.get('view'));
+  const initialYAxisCandidate = searchParams.get('yParam');
 
   // ---- Component State ----
   const [selectedSites, setSelectedSites] = useState(() => validateSites(searchParams.get('sites')));
@@ -101,11 +116,18 @@ const ModernWaterQuality = () => {
   const [filtersCollapsed, setFiltersCollapsed] = useState(false);
   const [activeView, setActiveView] = useState('overview');
   const [chartType, setChartType] = useState(() => validateChartType(searchParams.get('chartType')));
-  const [selectedParameter, setSelectedParameter] = useState(() => validateParameter(searchParams.get('param')));
+  const [selectedParameter, setSelectedParameter] = useState(initialSelectedParameter);
   const [compareMode, setCompareMode] = useState(() => validateCompareMode(searchParams.get('mode')));
   const [compareParameter, setCompareParameter] = useState(() => validateParameter(searchParams.get('cmp')));
   const [maxDateAvailable, setMaxDateAvailable] = useState('');
   const [minDateAvailable, setMinDateAvailable] = useState('');
+  const [comparisonView, setComparisonView] = useState(initialComparisonView);
+  const [yAxisParameter, setYAxisParameter] = useState(() => {
+    if (initialYAxisCandidate && PARAMETER_KEYS.includes(initialYAxisCandidate)) {
+      return initialYAxisCandidate;
+    }
+    return getFallbackYAxisParameter(initialSelectedParameter);
+  });
 
   // ---- Data Fetch via React Query (single call) ----
   const {
@@ -136,6 +158,12 @@ const ModernWaterQuality = () => {
     params.set('cmp', compareParameter);
     params.set('mode', compareMode);
     params.set('chartType', chartType);
+    params.set('view', comparisonView);
+    if (comparisonView === 'parameter') {
+      params.set('yParam', yAxisParameter);
+    } else {
+      params.delete('yParam');
+    }
     setSearchParams(params, { replace: true });
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [
@@ -144,9 +172,26 @@ const ModernWaterQuality = () => {
     selectedParameter,
     compareParameter,
     compareMode,
-    chartType
+    chartType,
+    comparisonView,
+    yAxisParameter
     // setSearchParams intentionally omitted to prevent infinite loop
   ]);
+
+  useEffect(() => {
+    if (comparisonView === 'parameter' && chartType !== 'scatter') {
+      setChartType('scatter');
+    }
+  }, [comparisonView, chartType]);
+
+  useEffect(() => {
+    if (comparisonView === 'parameter' && yAxisParameter === selectedParameter) {
+      const fallback = getFallbackYAxisParameter(selectedParameter);
+      if (fallback !== yAxisParameter) {
+        setYAxisParameter(fallback);
+      }
+    }
+  }, [comparisonView, selectedParameter, yAxisParameter]);
 
   // Metadata date range effect - separate to avoid infinite loops
   useEffect(() => {
@@ -287,30 +332,81 @@ const ModernWaterQuality = () => {
     return timeRange;
   }, [metadata?.date_range?.start, metadata?.date_range?.end, timeRange, startDate, endDate, formatSummaryDate]);
 
-  const chartSummaryItems = useMemo(() => {
-    const items = [];
-    items.push(`${totalPoints.toLocaleString()} observations`);
+  const formatParameterLabel = useCallback((paramKey, includeUnit = true) => {
+    if (!paramKey) return '';
+    const details = PARAMETER_CONFIG[paramKey] || {};
+    const base = details.label || paramKey;
+    if (!includeUnit || !details.unit) return base;
+    return `${base} (${details.unit})`;
+  }, []);
 
-    const siteCount = metrics?.sitesCount || selectedSites.length;
-    items.push(`${siteCount} site${siteCount === 1 ? '' : 's'}`);
-
-    const parameterDetails = PARAMETER_CONFIG[selectedParameter] || {};
-    const parameterLabel = parameterDetails.label || selectedParameter;
-    const parameterUnit = parameterDetails.unit ? ` (${parameterDetails.unit})` : '';
-    items.push(`${parameterLabel}${parameterUnit}`);
-
-    if (chartTimeframeLabel) {
-      items.push(chartTimeframeLabel);
+  const parameterScatter = useMemo(() => {
+    if (comparisonView !== 'parameter') {
+      return { traces: [], totalPoints: 0, siteCount: 0 };
     }
 
-    if (compareMode !== 'off') {
-      const compareDetails = PARAMETER_CONFIG[compareParameter] || {};
-      const compareLabel = compareDetails.label || compareParameter;
-      items.push(`${compareMode === 'overlay' ? 'Overlay' : 'Side by Side'} vs ${compareLabel}`);
-    }
+    const xKey = selectedParameter;
+    const yKey = yAxisParameter;
+    const bySite = new Map();
 
-    return items.filter(Boolean);
-  }, [totalPoints, metrics?.sitesCount, selectedSites, selectedParameter, compareMode, compareParameter, chartTimeframeLabel]);
+    rows.forEach((row) => {
+      if (!row) return;
+      const xVal = row[xKey];
+      const yVal = row[yKey];
+      if (xVal == null || yVal == null) return;
+      const site = row.site_code || 'Unknown';
+      if (!bySite.has(site)) {
+        bySite.set(site, { x: [], y: [], text: [] });
+      }
+      const point = bySite.get(site);
+      point.x.push(Number(xVal));
+      point.y.push(Number(yVal));
+      const timestamp = row.measurement_timestamp ? new Date(row.measurement_timestamp).toLocaleString() : 'Unknown time';
+      point.text.push(timestamp);
+    });
+
+    let totalPointsComputed = 0;
+    const traces = Array.from(bySite.entries()).map(([site, values]) => {
+      totalPointsComputed += values.x.length;
+      return {
+        type: 'scattergl',
+        mode: 'markers',
+        name: site,
+        x: values.x,
+        y: values.y,
+        text: values.text,
+        hovertemplate:
+          `%{text}<br>${formatParameterLabel(selectedParameter, true)}: %{x}<br>${formatParameterLabel(yAxisParameter, true)}: %{y}<extra>${site}</extra>`,
+        marker: {
+          size: 6,
+          opacity: 0.75,
+        },
+      };
+    });
+
+    return {
+      traces,
+      totalPoints: totalPointsComputed,
+      siteCount: traces.length,
+    };
+  }, [comparisonView, rows, selectedParameter, yAxisParameter, formatParameterLabel]);
+
+  const observationCount = useMemo(
+    () => (comparisonView === 'parameter' ? parameterScatter.totalPoints : totalPoints),
+    [comparisonView, parameterScatter.totalPoints, totalPoints]
+  );
+
+  const chartSummaryItems = useMemo(
+    () => [`${observationCount.toLocaleString()} observations`],
+    [observationCount]
+  );
+
+  const chartDescriptionText = useMemo(() => {
+    if (comparisonView === 'parameter') {
+      return `Parameter comparison scatter plot for ${formatParameterLabel(selectedParameter, true)} versus ${formatParameterLabel(yAxisParameter, true)}.`;
+    }
+    return 'Time series of selected water quality parameter(s) by site over the chosen date range.';
+  }, [comparisonView, selectedParameter, yAxisParameter, formatParameterLabel]);
 
   const dateSpan =
     metadata?.date_range?.start && metadata?.date_range?.end
@@ -494,15 +590,9 @@ const ModernWaterQuality = () => {
 
             {activeView !== 'details' && (
               <div className="chart-container">
-                <div className="chart-header">
-                  <div>
-                    <div className="chart-summary" aria-live="polite">
-                      {chartSummaryItems.map((item, index) => (
-                        <span key={`${item}-${index}`} className="chart-summary-item">
-                          {item}
-                        </span>
-                      ))}
-                    </div>
+                <div className="chart-controls">
+                  <div className="chart-observation-count" aria-live="polite">
+                    {observationCount.toLocaleString()} observations
                   </div>
                   <WaterQualityChartControls
                     selectedParameter={selectedParameter}
@@ -513,13 +603,21 @@ const ModernWaterQuality = () => {
                     setCompareMode={setCompareMode}
                     compareParameter={compareParameter}
                     setCompareParameter={setCompareParameter}
+                    comparisonView={comparisonView}
+                    setComparisonView={setComparisonView}
+                    yAxisParameter={yAxisParameter}
+                    setYAxisParameter={setYAxisParameter}
                   />
                 </div>
                 {activeView === 'overview' && (
                   <ChartErrorBoundary
-                    chartType={`${chartType}-${selectedParameter}`}
-                    title={`${PARAMETER_CONFIG[selectedParameter]?.label} Trends`}
-                    dataLength={totalPoints}
+                    chartType={`${comparisonView}-${chartType}-${selectedParameter}`}
+                    title={
+                      comparisonView === 'parameter'
+                        ? `${formatParameterLabel(selectedParameter, false)} vs ${formatParameterLabel(yAxisParameter, false)}`
+                        : `${PARAMETER_CONFIG[selectedParameter]?.label} Trends`
+                    }
+                    dataLength={comparisonView === 'parameter' ? parameterScatter.totalPoints : totalPoints}
                     onRetry={refetch}
                     onShowDataTable={() => setActiveView('details')}
                   >
@@ -535,15 +633,17 @@ const ModernWaterQuality = () => {
                         alertShapes={alertShapes}
                         data={rows}
                         summaryItems={chartSummaryItems}
+                        comparisonView={comparisonView}
+                        parameterScatterTraces={parameterScatter.traces}
+                        xAxisLabel={formatParameterLabel(selectedParameter, true)}
+                        yAxisLabel={formatParameterLabel(yAxisParameter, true)}
                         onShowDataTable={() => setActiveView('details')}
                         onRetry={refetch}
                       />
                     </Suspense>
                   </ChartErrorBoundary>
                 )}
-                <p className="chart-description">
-                  Time series of selected water quality parameter(s) by site over the chosen date range.
-                </p>
+                <p className="chart-description">{chartDescriptionText}</p>
               </div>
             )}
 

@@ -5542,6 +5542,10 @@
   color: var(--text-tertiary);
 }
 
+.chart-controls + #water-quality-chart {
+  margin-top: var(--spacing-component-md);
+}
+
 .chart-summary {
   display: flex;
   flex-wrap: wrap;
@@ -5569,6 +5573,13 @@
 
 .chart-summary-item:first-of-type::before {
   content: '';
+}
+
+.chart-observation-count {
+  font-size: 0.9rem;
+  color: var(--text-secondary);
+  margin-right: var(--spacing-component-md);
+  white-space: nowrap;
 }
 
 .chart-description {

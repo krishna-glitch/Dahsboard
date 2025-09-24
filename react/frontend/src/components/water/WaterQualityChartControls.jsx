@@ -11,9 +11,23 @@ const WaterQualityChartControls = ({
   setCompareMode,
   compareParameter,
   setCompareParameter,
+  comparisonView,
+  setComparisonView,
+  yAxisParameter,
+  setYAxisParameter,
 }) => {
   const supportedChartTypes = React.useMemo(
     () => CHART_TYPES.filter((type) => ['line', 'scatter', 'bar'].includes(type.value)),
+    []
+  );
+
+  const parameterOptions = React.useMemo(
+    () =>
+      WATER_QUALITY_PARAMETERS.map((param) => (
+        <option key={param.value} value={param.value}>
+          {param.label}
+        </option>
+      )),
     []
   );
 
@@ -27,20 +41,29 @@ const WaterQualityChartControls = ({
         onChange={(event) => setSelectedParameter(event.target.value)}
         className="chart-control-select"
       >
-        {WATER_QUALITY_PARAMETERS.map((param) => (
-          <option key={param.value} value={param.value}>
-            {param.label}
-          </option>
-        ))}
+        {parameterOptions}
+      </Form.Select>
+
+      <Form.Select
+        size="sm"
+        name="comparisonView"
+        aria-label="Select visualization mode"
+        value={comparisonView}
+        onChange={(event) => setComparisonView(event.target.value)}
+        className="chart-control-select"
+      >
+        <option value="time-series">Time Series</option>
+        <option value="parameter">Parameter Comparison</option>
       </Form.Select>
 
       <Form.Select
         size="sm"
         name="chartType"
         aria-label="Select chart type"
-        value={chartType}
+        value={comparisonView === 'parameter' ? 'scatter' : chartType}
         onChange={(event) => setChartType(event.target.value)}
         className="chart-control-select"
+        disabled={comparisonView === 'parameter'}
       >
         {supportedChartTypes.map((type) => (
           <option key={type.value} value={type.value}>
@@ -49,20 +72,22 @@ const WaterQualityChartControls = ({
         ))}
       </Form.Select>
 
-      <Form.Select
-        size="sm"
-        name="compareMode"
-        aria-label="Select comparison mode"
-        value={compareMode}
-        onChange={(event) => setCompareMode(event.target.value)}
-        className="chart-control-select"
-      >
-        <option value="off">No Compare</option>
-        <option value="overlay">Overlay</option>
-        <option value="split">Side by Side</option>
-      </Form.Select>
+      {comparisonView === 'time-series' && (
+        <Form.Select
+          size="sm"
+          name="compareMode"
+          aria-label="Select comparison mode"
+          value={compareMode}
+          onChange={(event) => setCompareMode(event.target.value)}
+          className="chart-control-select"
+        >
+          <option value="off">No Compare</option>
+          <option value="overlay">Overlay</option>
+          <option value="split">Side by Side</option>
+        </Form.Select>
+      )}
 
-      {compareMode !== 'off' && (
+      {comparisonView === 'time-series' && compareMode !== 'off' && (
         <Form.Select
           size="sm"
           name="compareParameter"
@@ -71,11 +96,20 @@ const WaterQualityChartControls = ({
           onChange={(event) => setCompareParameter(event.target.value)}
           className="chart-control-select"
         >
-          {WATER_QUALITY_PARAMETERS.map((param) => (
-            <option key={param.value} value={param.value}>
-              {param.label}
-            </option>
-          ))}
+          {parameterOptions}
+        </Form.Select>
+      )}
+
+      {comparisonView === 'parameter' && (
+        <Form.Select
+          size="sm"
+          name="yAxisParameter"
+          aria-label="Select Y-axis parameter"
+          value={yAxisParameter}
+          onChange={(event) => setYAxisParameter(event.target.value)}
+          className="chart-control-select"
+        >
+          {parameterOptions}
         </Form.Select>
       )}
     </div>
