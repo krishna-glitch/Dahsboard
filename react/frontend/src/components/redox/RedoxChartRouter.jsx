@@ -9,8 +9,8 @@ import DeckRedoxScatter from './DeckRedoxScatter';
 
 const RedoxChartRouter = React.memo(function RedoxChartRouter({
   selectedView,
-  data,
-  chartData,
+  data = [],
+  chartData = {},
   chartType = 'line',
   chartViewMode = 'by-depth',
   snapshotMode = 'profile',
@@ -18,11 +18,20 @@ const RedoxChartRouter = React.memo(function RedoxChartRouter({
   invertRollingY = false,
   invertX = false,
   invertY = true,
-  snapshotSeries = [],
+  snapshotSeries = { profile: [], scatter: [] },
   parameterLabel = 'Depth & Redox',
   selectedSites = [],
   siteColors = {},
 }) {
+  // Ensure we have a valid selectedView
+  if (!selectedView) {
+    return (
+      <div style={{ padding: '20px', textAlign: 'center', color: '#666' }}>
+        <p>Please select a chart view to display</p>
+      </div>
+    );
+  }
+
   switch (selectedView) {
     case 'timeseries':
       // For very large datasets (100k+), use deck.gl for maximum performance

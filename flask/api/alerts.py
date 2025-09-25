@@ -17,7 +17,7 @@ logger = get_advanced_logger(__name__)
 alerts_bp = Blueprint('alerts_bp', __name__)
 
 @alerts_bp.route('/data', methods=['GET'])
-# @login_required  # Temporarily disabled for testing
+@login_required
 @enterprise_performance(data_type='alerts')
 def get_alerts_data():
     start_time = time.time()
@@ -43,36 +43,40 @@ def get_alerts_data():
         actual_start_date = None
         actual_end_date = None
         
+        # Use dynamic database date service
+        from services.database_date_service import database_date_service
+        db_latest_date = database_date_service.get_database_latest_date()
+
         # Handle comprehensive time range options
         if time_range == 'Last 24 Hours' or time_range == 'Today':
             days_back = 1
-            actual_start_date = datetime(2024, 5, 31, 23, 59, 59) - timedelta(days=1)
+            actual_start_date = db_latest_date - timedelta(days=1)
         elif time_range == 'Last 7 Days':
             days_back = 7
-            actual_start_date = datetime(2024, 5, 31, 23, 59, 59) - timedelta(days=7)
+            actual_start_date = db_latest_date - timedelta(days=7)
         elif time_range == 'Last 30 Days':
             days_back = 30
-            actual_start_date = datetime(2024, 5, 31, 23, 59, 59) - timedelta(days=30)
+            actual_start_date = db_latest_date - timedelta(days=30)
         elif time_range == 'Last 90 Days':
             days_back = 90
-            actual_start_date = datetime(2024, 5, 31, 23, 59, 59) - timedelta(days=90)
+            actual_start_date = db_latest_date - timedelta(days=90)
         elif time_range == 'Last 6 Months':
             days_back = 180
-            actual_start_date = datetime(2024, 5, 31, 23, 59, 59) - timedelta(days=180)
+            actual_start_date = db_latest_date - timedelta(days=180)
         elif time_range == 'Last Year':
             days_back = 365
-            actual_start_date = datetime(2024, 5, 31, 23, 59, 59) - timedelta(days=365)
+            actual_start_date = db_latest_date - timedelta(days=365)
         elif time_range == 'Custom Range' and start_date and end_date:
             days_back = (end_date - start_date).days
             actual_start_date = start_date
             actual_end_date = end_date
         else:
             # Default fallback
-            actual_start_date = datetime(2024, 5, 31, 23, 59, 59) - timedelta(days=days_back)
+            actual_start_date = db_latest_date - timedelta(days=days_back)
         
         if actual_end_date is None:
-            # FIXED: Use database's actual data range (data ends 2024-05-31) instead of current date
-            actual_end_date = datetime(2024, 5, 31, 23, 59, 59)
+            # Use dynamic database date
+            actual_end_date = db_latest_date
             
         logger.info(f"Using date range: {actual_start_date} to {actual_end_date} ({days_back} days)")
 
@@ -165,6 +169,48 @@ def get_alerts_data():
                 }
             }
         }), 500
+
+
+@alerts_bp.route('/active', methods=['GET'])
+# @login_required
+def get_active_alerts_data():
+    logger.info("Received request for active alerts data API.")
+    try:
+        # Mock data for active alerts
+        active_alerts = [
+            {
+                "id": "alert_123",
+                "type": "High Temperature",
+                "severity": "critical",
+                "message": "Temperature in S1 exceeded critical threshold (35°C)",
+                "timestamp": "2025-09-09T10:30:00Z",
+                "site": "S1",
+                "parameter": "temperature_c"
+            },
+            {
+                "id": "alert_124",
+                "type": "Low pH",
+                "severity": "high",
+                "message": "pH level in S2 dropped below critical threshold (6.0)",
+                "timestamp": "2025-09-09T11:00:00Z",
+                "site": "S2",
+                "parameter": "ph"
+            },
+            {
+                "id": "alert_125",
+                "type": "Sensor Offline",
+                "severity": "medium",
+                "message": "Sensor 'Flow_01' in S1 is offline for 30 minutes",
+                "timestamp": "2025-09-09T09:45:00Z",
+                "site": "S1",
+                "parameter": "sensor_status"
+            }
+        ]
+        logger.info("Successfully retrieved mock active alerts data.")
+        return jsonify({"alerts": active_alerts}), 200
+    except Exception as e:
+        logger.error(f"Error in get_active_alerts_data API: {e}", exc_info=True)
+        return jsonify({'error': 'Failed to retrieve active alerts data', 'details': str(e)}), 500
 
 @alerts_bp.route('/acknowledge', methods=['POST'])
 @login_required

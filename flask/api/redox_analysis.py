@@ -2,10 +2,15 @@ from flask import Blueprint, jsonify, request
 from flask_login import login_required
 import logging
 import pandas as pd
+from datetime import datetime, timedelta
 
 from services.core_data_service import core_data_service, DataQuery
+from services.config_service import config_service
+from services.adaptive_data_resolution import adaptive_resolution
+from services.monthly_cache_service import fetch_year_window
 from utils.optimized_serializer import serialize_dataframe_optimized
-from utils.api_cache_utils import cached_api_response
+# Redis-enhanced caching - falls back to memory if Redis unavailable
+from utils.redis_api_cache_utils import redis_cached_api_response
 
 # Import comprehensive performance optimization
 from utils.advanced_performance_integration_simple import enterprise_performance
@@ -104,7 +109,7 @@ def _intelligent_downsample_redox(df: pd.DataFrame, target_size: int = 5000) -> 
 @redox_analysis_bp.route('/data', methods=['GET'])
 # @login_required  # Temporarily disabled for testing
 @enterprise_performance(data_type='redox_analysis')
-@cached_api_response(ttl=43200)  # Site-aware caching that preserves filtering - 12 hours
+@redis_cached_api_response(ttl=43200)  # Redis cache preserves filtering - 12 hours
 def get_redox_analysis_data():
     start_time = time.time()
     logger.info(f"[REDOX DEBUG] API data loading triggered.")
@@ -140,8 +145,9 @@ def get_redox_analysis_data():
             logger.info(f"[CUSTOM RANGE] Using user-specified: {start_date} to {end_date}")
         else:
             days_back = config_service.get_days_back_for_range(time_range)
-            # FIXED: Use database's actual data range (data ends 2024-05-31) instead of current date
-            end_date = datetime(2024, 5, 31, 23, 59, 59)
+            # Use dynamic database date service
+            from services.database_date_service import database_date_service
+            end_date = database_date_service.get_database_latest_date()
             start_date = end_date - timedelta(days=days_back)
             
             # Log the dynamic date range being used
@@ -155,46 +161,61 @@ def get_redox_analysis_data():
         logger.info(f"[ADAPTIVE RESOLUTION] {resolution_config['aggregation_method']} aggregation "
                    f"for {days_back} days ({resolution_config['performance_tier']} tier)")
 
-        # Implement smart data loading strategy (same as water quality)
-        logger.info(f"[REDOX DEBUG] Loading {days_back}-day dataset with performance mode: {performance_mode}")
-        
-        # FIXED: Reduce excessive limits that cause database timeouts
-        if performance_mode == 'maximum':
-            # Reduced limits to prevent database timeouts
-            if days_back <= 7:
-                initial_limit = 15000  # 1 week - reduced from 50K
-            elif days_back <= 30:
-                initial_limit = 20000  # 1 month - reduced from 100K
-            else:
-                initial_limit = 25000  # Longer periods - reduced from 200K
-        else:
-            # For other modes, use smaller limits for faster loading
-            performance_limits = {
-                'fast': 3000,    # Reduced from 5K
-                'balanced': 8000, # Reduced from 15K
-                'high_detail': 15000  # Reduced from 30K
-            }
-            initial_limit = performance_limits.get(performance_mode, 8000)
-        
-        logger.info(f"[SMART LOADING] Using initial limit: {initial_limit} for {performance_mode} mode")
-        
-        # Load data using direct method with limit and timeout handling
-        logger.info(f"[REDOX DEBUG] Starting database query with limit {initial_limit}...")
-        
-        try:
-            df = core_data_service.load_redox_data(
+        use_monthly_cache = days_back >= 330
+
+        if use_monthly_cache:
+            logger.info("[REDOX] Monthly cache path engaged for year-long request")
+
+            def month_loader(month_start: datetime, month_end: datetime) -> pd.DataFrame:
+                return core_data_service.load_redox_data(
+                    sites=selected_sites,
+                    start_date=month_start,
+                    end_date=month_end,
+                    limit=25000,
+                )
+
+            df = fetch_year_window(
+                page='redox',
                 sites=selected_sites,
-                start_date=start_date,
+                parameters=[],
                 end_date=end_date,
-                limit=initial_limit
+                loader=month_loader,
             )
-            logger.info(f"[REDOX DEBUG] Database query completed successfully")
-            
-        except Exception as db_error:
-            logger.error(f"[REDOX ERROR] Database query failed: {str(db_error)}")
-            # Return empty dataframe and let the frontend handle gracefully
-            df = pd.DataFrame()
-            logger.info(f"[REDOX FALLBACK] Returning empty dataset due to database error")
+        else:
+            # Implement smart data loading strategy (same as water quality)
+            logger.info(f"[REDOX DEBUG] Loading {days_back}-day dataset with performance mode: {performance_mode}")
+
+            if performance_mode == 'maximum':
+                if days_back <= 7:
+                    initial_limit = 15000
+                elif days_back <= 30:
+                    initial_limit = 20000
+                else:
+                    initial_limit = 25000
+            else:
+                performance_limits = {
+                    'fast': 3000,
+                    'balanced': 8000,
+                    'high_detail': 15000,
+                }
+                initial_limit = performance_limits.get(performance_mode, 8000)
+
+            logger.info(f"[SMART LOADING] Using initial limit: {initial_limit} for {performance_mode} mode")
+            logger.info(f"[REDOX DEBUG] Starting database query with limit {initial_limit}...")
+
+            try:
+                df = core_data_service.load_redox_data(
+                    sites=selected_sites,
+                    start_date=start_date,
+                    end_date=end_date,
+                    limit=initial_limit,
+                )
+                logger.info("[REDOX DEBUG] Database query completed successfully")
+
+            except Exception as db_error:
+                logger.error(f"[REDOX ERROR] Database query failed: {str(db_error)}")
+                df = pd.DataFrame()
+                logger.info("[REDOX FALLBACK] Returning empty dataset due to database error")
 
         if not df.empty:
             logger.info(f"[REDOX DEBUG] Loaded {len(df)} redox records successfully")
@@ -328,7 +349,7 @@ def get_redox_date_range():
 # New endpoints backed by mv_processed_eh
 @redox_analysis_bp.route('/processed/time_series', methods=['GET'])
 @enterprise_performance(data_type='redox_processed_time_series')
-@cached_api_response(ttl=43200)  # 12 hours for better monthly reuse
+@redis_cached_api_response(ttl=43200)  # Redis cache for 12 hours for better monthly reuse
 def processed_time_series():
     """Dual-axis time series from mv_processed_eh.
 
@@ -358,11 +379,17 @@ def processed_time_series():
         chunk_size = request.args.get('chunk_size', type=int) or 100000
         offset = request.args.get('offset', 0, type=int)
         logger.info(f"🚀 [TIME SERIES] Loading data for site={site_param} start={start_ts} end={end_ts} chunk_size={chunk_size} offset={offset}")
-        logger.info(f"🧭 [TIME SERIES PARAMS] wire_format={wire_format} source={source} max_fidelity={request.args.get('max_fidelity')}")
+        logger.info(f"🧭 [TIME SERIES PARAMS] wire_format={wire_format} source={source} max_fidelity={request.args.get('max_fidelity')} resolution={request.args.get('resolution')}")
 
-        # Derive cadence from max_fidelity flag: ON -> 96/day, OFF -> 12/day
+        # Derive cadence from max_fidelity flag and requested resolution
         max_fidelity_val = (request.args.get('max_fidelity', '') or '').lower() in ('1', 'true', 'yes', 'on', 't')
-        cadence_per_day = 96 if max_fidelity_val else 12
+        requested_resolution = (request.args.get('resolution') or '').lower()
+        # Effective resolution: raw for max fidelity, else default to 2h unless explicitly provided
+        if max_fidelity_val:
+            effective_resolution = 'raw'
+        else:
+            effective_resolution = requested_resolution or '2h'
+        cadence_per_day = 96 if effective_resolution == 'raw' else 12
 
         # Enforce time range <= 366 days
         days_range = max(0, (end_dt.normalize() - start_dt.normalize()).days or 0)
@@ -374,24 +401,52 @@ def processed_time_series():
         if expected_total > 1_000_000:
             return jsonify({'error': 'The record limit is too high. Please reduce the time range to 1 year or less.'}), 400
 
-        # MV PATH with SQL pagination; restrict depths strictly
+        # MV PATH with SQL pagination; restrict depths strictly; switch MV based on resolution
         try:
-            total_records = core_data_service.count_processed_eh_time_series(
-                site_code=site_param,
-                start_ts=start_dt,
-                end_ts=end_dt,
-                allowed_depths=allowed_depths
-            )
-        except Exception:
+            if effective_resolution == '2h':
+                try:
+                    total_records = core_data_service.count_processed_eh_time_series_2h(
+                        site_code=site_param,
+                        start_ts=start_dt,
+                        end_ts=end_dt,
+                        allowed_depths=allowed_depths
+                    )
+                    df = core_data_service.load_processed_eh_time_series_2h(
+                        site_code=site_param,
+                        start_ts=start_dt,
+                        end_ts=end_dt,
+                        allowed_depths=allowed_depths,
+                        limit=chunk_size if chunk_size else None,
+                        offset=offset if chunk_size else 0
+                    )
+                except Exception as mv_err:
+                    logger.warning(f"2h MV path failed, falling back to adhoc aggregation: {mv_err}")
+                    total_records = None  # unknown count on adhoc
+                    df = core_data_service.load_processed_eh_time_series_2h_adhoc(
+                        site_code=site_param,
+                        start_ts=start_dt,
+                        end_ts=end_dt,
+                        allowed_depths=allowed_depths
+                    )
+            else:
+                total_records = core_data_service.count_processed_eh_time_series(
+                    site_code=site_param,
+                    start_ts=start_dt,
+                    end_ts=end_dt,
+                    allowed_depths=allowed_depths
+                )
+                df = core_data_service.load_processed_eh_time_series(
+                    site_code=site_param,
+                    start_ts=start_dt,
+                    end_ts=end_dt,
+                    allowed_depths=allowed_depths,
+                    limit=chunk_size if chunk_size else None,
+                    offset=offset if chunk_size else 0
+                )
+        except Exception as e_load:
+            logger.error(f"Failed to load time series: {e_load}")
             total_records = None
-        df = core_data_service.load_processed_eh_time_series(
-            site_code=site_param,
-            start_ts=start_dt,
-            end_ts=end_dt,
-            allowed_depths=allowed_depths,
-            limit=chunk_size if chunk_size else None,
-            offset=offset if chunk_size else 0
-        )
+            df = pd.DataFrame()
         logger.info(f"[TIME SERIES] rows(initial)={len(df)}")
 
         # Ensure proper dtypes before any aggregation or dedup
@@ -535,10 +590,11 @@ def processed_time_series():
                     'chunk_size': chunk_size,
                     'has_more': bool(chunk_size and (offset + chunk_size) < total_records)
                 } if chunk_size else None),
-                'allowed_inversions': { 'y1': True, 'y2': True, 'x': False }
+                'allowed_inversions': { 'y1': True, 'y2': True, 'x': False },
+                'resolution': effective_resolution
             }
         }
-        logger.info(f"📄 [TIME SERIES META] source={source} wire_format={wire_format} total={total_records} returned={response_payload['metadata']['returned_records']} chunked={bool(chunk_size)}")
+        logger.info(f"📄 [TIME SERIES META] source={source} wire_format={wire_format} res={effective_resolution} total={total_records} returned={response_payload['metadata']['returned_records']} chunked={bool(chunk_size)}")
         # No thinning metadata; server does not thin beyond cadence selection
         return jsonify(response_payload), 200
     except Exception as e:
@@ -548,7 +604,7 @@ def processed_time_series():
 
 @redox_analysis_bp.route('/processed/depth_snapshot', methods=['GET'])
 @enterprise_performance(data_type='redox_processed_depth_snapshot')
-@cached_api_response(ttl=43200)  # 12 hours for better monthly reuse
+@redis_cached_api_response(ttl=43200)  # Redis cache for 12 hours for better monthly reuse
 def processed_depth_snapshot():
     """Depth profile snapshot (Eh vs Depth) from mv_processed_eh.
 
@@ -578,7 +634,7 @@ def processed_depth_snapshot():
 
 @redox_analysis_bp.route('/processed/rolling_mean', methods=['GET'])
 @enterprise_performance(data_type='redox_processed_rolling_mean')
-@cached_api_response(ttl=43200)  # 12 hours for better monthly reuse
+@redis_cached_api_response(ttl=43200)  # Redis cache for 12 hours for better monthly reuse
 def processed_rolling_mean():
     """High-performance rolling mean using dedicated Polars/Pandas service.
     

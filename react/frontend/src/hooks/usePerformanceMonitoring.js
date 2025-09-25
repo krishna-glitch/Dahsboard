@@ -155,7 +155,7 @@ export const useDataLoadingPerformance = (componentName) => {
     
     try {
       const result = await fetchFunction();
-      const duration = timer.end({
+      timer.end({
         dataType,
         success: true,
         recordCount: Array.isArray(result) ? result.length : 1

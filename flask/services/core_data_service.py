@@ -572,6 +572,127 @@ class CoreDataService(IDataService):
             
         return df
 
+    def load_processed_eh_time_series_2h(
+        self,
+        site_code: str,
+        start_ts: datetime,
+        end_ts: datetime,
+        allowed_depths: Optional[List[float]] = None,
+        limit: Optional[int] = None,
+        offset: int = 0,
+    ) -> pd.DataFrame:
+        """Load 2-hour cadence time series from mv_processed_eh_2h and alias columns for consistency.
+
+        Returns columns: site_id, measurement_timestamp, depth_cm, processed_eh, site_code
+        """
+        # Map site codes to site_ids to avoid corrupted site table
+        site_id_map = {'S1': '1', 'S2': '2', 'S3': '3', 'S4': '4'}
+        site_id = site_id_map.get(site_code)
+        if not site_id:
+            return pd.DataFrame()
+
+        base_query = """
+        SELECT 
+            mv.site_id,
+            mv.bucket_ts AS measurement_timestamp,
+            mv.depth_cm,
+            mv.processed_eh
+        FROM impact.mv_processed_eh_2h mv
+        WHERE mv.site_id = :site_id
+          AND mv.bucket_ts BETWEEN :start_ts AND :end_ts
+        """
+        params = {
+            'site_id': site_id,
+            'start_ts': start_ts,
+            'end_ts': end_ts,
+        }
+        if allowed_depths:
+            base_query += " AND mv.depth_cm IN :allowed_depths"
+            params['allowed_depths'] = allowed_depths
+        query = base_query + "\n        ORDER BY mv.bucket_ts, mv.depth_cm\n        "
+        if limit is not None:
+            try:
+                limit = int(limit)
+            except Exception:
+                limit = None
+        if limit and limit > 0:
+            query += f" LIMIT {limit}"
+            try:
+                offset = int(offset) if offset is not None else 0
+            except Exception:
+                offset = 0
+            if offset and offset > 0:
+                query += f" OFFSET {offset}"
+        logger.info(f"Executing mv_processed_eh_2h time series for site_code={site_code}")
+        df = self.db.execute_query(query, params)
+        if not df.empty:
+            df['site_code'] = site_code
+        return df
+
+    def count_processed_eh_time_series_2h(
+        self,
+        site_code: str,
+        start_ts: datetime,
+        end_ts: datetime,
+        allowed_depths: Optional[List[float]] = None,
+    ) -> int:
+        try:
+            query = """
+                SELECT COUNT(*) AS n
+                FROM impact.mv_processed_eh_2h mv
+                JOIN impact.site s ON mv.site_id::varchar = s.site_id
+                WHERE s.code = :site_code
+                  AND mv.bucket_ts BETWEEN :start_ts AND :end_ts
+            """
+            params = { 'site_code': site_code, 'start_ts': start_ts, 'end_ts': end_ts }
+            if allowed_depths:
+                query += " AND mv.depth_cm IN :allowed_depths"
+                params['allowed_depths'] = allowed_depths
+            df = self.db.execute_query(query, params)
+            if df.empty:
+                return 0
+            return int(df.iloc[0]['n'])
+        except Exception as e:
+            logger.error(f"Failed to count mv_processed_eh_2h time series: {e}")
+            return 0
+
+    def load_processed_eh_time_series_2h_adhoc(
+        self,
+        site_code: str,
+        start_ts: datetime,
+        end_ts: datetime,
+        allowed_depths: Optional[List[float]] = None,
+    ) -> pd.DataFrame:
+        """Fallback 2-hour aggregation directly from mv_processed_eh when mv_processed_eh_2h is unavailable."""
+        site_id_map = {'S1': '1', 'S2': '2', 'S3': '3', 'S4': '4'}
+        site_id = site_id_map.get(site_code)
+        if not site_id:
+            return pd.DataFrame()
+        query = """
+        SELECT
+          mv.site_id,
+          dateadd(hour, 2 * (datediff(hour, timestamp '1970-01-01 00:00:00', mv.measurement_timestamp) / 2), timestamp '1970-01-01 00:00:00') AS measurement_timestamp,
+          mv.depth_cm,
+          AVG(mv.processed_eh) AS processed_eh
+        FROM impact.mv_processed_eh mv
+        WHERE mv.site_id = :site_id
+          AND mv.measurement_timestamp BETWEEN :start_ts AND :end_ts
+        {depth_filter}
+        GROUP BY 1, 2, 3
+        ORDER BY 2, 3
+        """
+        depth_filter = ""
+        params = { 'site_id': site_id, 'start_ts': start_ts, 'end_ts': end_ts }
+        if allowed_depths:
+            depth_filter = " AND mv.depth_cm IN :allowed_depths"
+            params['allowed_depths'] = allowed_depths
+        query = query.format(depth_filter=depth_filter)
+        logger.info(f"Executing adhoc 2h aggregation for site_code={site_code}")
+        df = self.db.execute_query(query, params)
+        if not df.empty:
+            df['site_code'] = site_code
+        return df
+
     def count_processed_eh_time_series(
         self,
         site_code: str,
@@ -658,6 +779,35 @@ class CoreDataService(IDataService):
         }
         logger.info(f"Executing mv_processed_eh rolling mean for site_code={site_code}")
         return self.db.execute_query(query, params)
+
+    def get_water_quality_date_range(self, sites: List[str] = None) -> Dict[str, Optional[str]]:
+        """Return earliest and latest water quality timestamps for optional site filter."""
+        try:
+            query = """
+            SELECT 
+                MIN(wq.measurement_timestamp) AS earliest,
+                MAX(wq.measurement_timestamp) AS latest
+            FROM impact.water_quality wq
+            """
+            params = {}
+            if sites and len(sites) > 0:
+                query += " JOIN impact.site s ON wq.site_id = s.site_id WHERE s.code IN :sites"
+                params['sites'] = sites
+            
+            result = self.db.execute_query(query, params)
+            if result.empty:
+                return { 'earliest': None, 'latest': None }
+            
+            earliest = result['earliest'].iloc[0]
+            latest = result['latest'].iloc[0]
+            
+            earliest_str = pd.to_datetime(earliest).isoformat() if pd.notna(earliest) else None
+            latest_str = pd.to_datetime(latest).isoformat() if pd.notna(latest) else None
+            
+            return { 'earliest': earliest_str, 'latest': latest_str }
+        except Exception as e:
+            logger.error(f"Failed to get water quality date range: {e}")
+            return { 'earliest': None, 'latest': None }
 
     def get_redox_date_range(self, sites: List[str] = None) -> Dict[str, Optional[str]]:
         """Return earliest and latest processed redox timestamps (from MV) for optional site filter."""

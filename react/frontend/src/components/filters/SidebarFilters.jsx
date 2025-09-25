@@ -24,7 +24,9 @@ const SidebarFilters = ({
   onApplyFilters = () => {},
   loading = false,
   minDate = undefined,
-  maxDate = undefined
+  maxDate = undefined,
+  presetSettings = null,
+  onPresetSaved
 }) => {
   return (
     <div className={`filter-panel ${collapsed ? 'collapsed' : ''}`}>
@@ -44,10 +46,11 @@ const SidebarFilters = ({
         onToggleCollapse={onToggleCollapse}
         maxDate={maxDate}
         minDate={minDate}
+        presetSettings={presetSettings}
+        onPresetSaved={onPresetSaved}
       />
     </div>
   );
 };
 
 export default SidebarFilters;
-

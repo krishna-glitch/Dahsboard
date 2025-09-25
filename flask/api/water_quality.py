@@ -1,8 +1,9 @@
-from flask import Blueprint, jsonify, request
+from flask import Blueprint, jsonify, request, make_response
 from flask_login import login_required
 import logging
 import time
-from datetime import datetime, timedelta
+import hashlib
+from datetime import datetime, timedelta, timezone
 import pandas as pd
 
 from services.core_data_service import core_data_service, DataQuery, DataType
@@ -12,6 +13,7 @@ from services.consolidated_cache_service import cached, cache_service
 from utils.api_cache_utils import cached_api_response
 from services.advanced_filter_service import advanced_filter_service
 from utils.optimized_serializer import serialize_dataframe_optimized
+from services.monthly_cache_service import fetch_year_window
 
 # Initialize logger
 from config.advanced_logging_config import get_advanced_logger
@@ -89,7 +91,7 @@ def _intelligent_downsample_water_quality(df: pd.DataFrame, target_size: int = 5
     return result_df
 
 @water_quality_bp.route('/data', methods=['GET'])
-# @login_required  # Temporarily disabled for testing
+@login_required
 @cached_api_response(ttl=1800)  # Site-aware caching that preserves filtering - 30 minutes
 def get_water_quality_data():
     """
@@ -135,12 +137,15 @@ def get_water_quality_data():
             logger.info(f"[WATER QUALITY] Using custom date range: {start_date} to {end_date}")
         else:
             days_back = config_service.get_days_back_for_range(time_range)
-            # FIXED: Use database's actual data range (data ends 2024-05-31) instead of current date
-            end_date = datetime(2024, 5, 31, 23, 59, 59)
+            end_date = datetime.now(timezone.utc)
             start_date = end_date - timedelta(days=days_back)
             
             # Log the dynamic date range being used
             logger.info(f"[DYNAMIC RANGE] Using current date range: {start_date} to {end_date} (days_back: {days_back})")
+
+        # Update filter_config with the calculated dates so it's respected by the service
+        filter_config.start_date = start_date
+        filter_config.end_date = end_date
 
         # Calculate days back for performance optimization
         days_back = (end_date - start_date).days if start_date and end_date else 30
@@ -150,44 +155,63 @@ def get_water_quality_data():
         logger.info(f"[ADAPTIVE RESOLUTION] {resolution_config['aggregation_method']} aggregation "
                    f"for {days_back} days ({resolution_config['performance_tier']} tier)")
 
-        # Implement smart data loading strategy
-        logger.info(f"[WATER QUALITY] Loading {days_back}-day dataset with performance mode: {performance_mode}")
-        
-        # Calculate intelligent limit based on performance mode and time range
-        # If client requests full detail, elevate to maximum mode
-        if no_downsample:
-            performance_mode = 'maximum'
-        if performance_mode == 'maximum':
-            # For maximum detail, set reasonable upper bound but still limit for performance
-            if days_back <= 7:
-                initial_limit = 50000  # 1 week - can handle more data
-            elif days_back <= 30:
-                initial_limit = 100000  # 1 month 
-            else:
-                initial_limit = 200000  # Longer periods
+        use_monthly_cache = (days_back >= 330) and not chunk_size and not offset
+
+        if use_monthly_cache:
+            logger.info("[WATER QUALITY] Monthly cache path engaged for year-long request")
+
+            def month_loader(month_start: datetime, month_end: datetime) -> pd.DataFrame:
+                return core_data_service.load_water_quality_data(
+                    sites=selected_sites,
+                    start_date=month_start,
+                    end_date=month_end,
+                    limit=200000,
+                )
+
+            df = fetch_year_window(
+                page='water_quality',
+                sites=selected_sites,
+                parameters=filter_config.parameters or [],
+                end_date=end_date,
+                loader=month_loader,
+            )
         else:
-            # For other modes, use smaller limits for faster loading
-            performance_limits = {
-                'fast': 5000,
-                'balanced': 15000, 
-                'high_detail': 30000
-            }
-            initial_limit = performance_limits.get(performance_mode, 15000)
-        
-        # If client requested chunking, ensure we fetch at least enough rows to cover the desired window
-        if chunk_size and chunk_size > 0:
-            try:
-                initial_limit = max(initial_limit or 0, (offset or 0) + chunk_size)
-            except Exception:
-                pass
-        logger.info(f"[SMART LOADING] Using initial limit: {initial_limit} for {performance_mode} mode (chunk_size={chunk_size} offset={offset})")
-        
-        df = core_data_service.load_water_quality_data(
-            sites=selected_sites,
-            start_date=start_date,
-            end_date=end_date,
-            limit=initial_limit  # Pass the calculated limit
-        )
+            # Implement smart data loading strategy
+            logger.info(f"[WATER QUALITY] Loading {days_back}-day dataset with performance mode: {performance_mode}")
+
+            # Calculate intelligent limit based on performance mode and time range
+            if no_downsample:
+                performance_mode = 'maximum'
+            if performance_mode == 'maximum':
+                if days_back <= 7:
+                    initial_limit = 50000
+                elif days_back <= 30:
+                    initial_limit = 100000
+                else:
+                    initial_limit = 200000
+            else:
+                performance_limits = {
+                    'fast': 5000,
+                    'balanced': 15000,
+                    'high_detail': 30000,
+                }
+                initial_limit = performance_limits.get(performance_mode, 15000)
+
+            if chunk_size and chunk_size > 0:
+                try:
+                    initial_limit = max(initial_limit or 0, (offset or 0) + chunk_size)
+                except Exception:
+                    pass
+            logger.info(
+                f"[SMART LOADING] Using initial limit: {initial_limit} for {performance_mode} mode (chunk_size={chunk_size} offset={offset})"
+            )
+
+            df = core_data_service.load_water_quality_data(
+                sites=selected_sites,
+                start_date=start_date,
+                end_date=end_date,
+                limit=initial_limit,
+            )
 
         if not df.empty:
             logger.info(f"[WATER QUALITY] Loaded {len(df)} water quality records successfully")
@@ -293,8 +317,22 @@ def get_water_quality_data():
             }
         }
 
+        # Generate ETag based on data fingerprint for optimal client caching
+        data_fingerprint = f"{len(df)}-{selected_sites}-{time_range}"
+        if not df.empty and 'measurement_timestamp' in df.columns:
+            data_fingerprint += f"-{df['measurement_timestamp'].min()}-{df['measurement_timestamp'].max()}"
+
+        etag = hashlib.md5(data_fingerprint.encode()).hexdigest()[:16]
+
         logger.info(f"[WATER QUALITY] SUCCESS: Loaded {len(df)} records in {loading_time_ms:.1f}ms")
-        return structured_data, 200
+
+        # Create response with proper cache headers
+        response = make_response(structured_data, 200)
+        response.headers['ETag'] = f'"{etag}"'
+        response.headers['Cache-Control'] = 'public, max-age=1800'  # 30 minutes
+        response.headers['Vary'] = 'Authorization'  # Vary by user session
+
+        return response
 
     except Exception as e:
         loading_time_ms = (time.time() - start_time) * 1000
@@ -314,7 +352,7 @@ def get_water_quality_data():
 
 
 @water_quality_bp.route('/sites', methods=['GET'])
-# @login_required  # Temporarily disabled for testing
+@login_required
 @cached_api_response(ttl=1800)  # Cache for 30 minutes as sites don't change frequently
 def get_available_sites():
     """Get all available monitoring sites"""
@@ -371,7 +409,6 @@ def get_available_sites():
         logger.error(f"[SITES] Traceback: {traceback.format_exc()}")
         
         return jsonify({
-            'sites': [],
             'error': 'Failed to load sites data',
             'details': str(e),
             'metadata': {
@@ -380,3 +417,5 @@ def get_available_sites():
                 'error_occurred': True
             }
         }), 500
+
+

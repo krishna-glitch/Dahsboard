@@ -2,6 +2,7 @@ import { useQuery } from '@tanstack/react-query';
 import { getRedoxAnalysisData } from '../services/api';
 import { useToast } from '../components/modern/toastUtils';
 import { log } from '../utils/log';
+import { normalizeParams, canonicalKeyFromParams } from '../utils/normalize';
 
 /**
  * React Query hook for redox analysis data
@@ -28,17 +29,14 @@ export function useRedoxAnalysisQuery({
     ),
   });
 
-  const queryKey = [
-    'redox-analysis',
-    {
-      sites: selectedSites,
-      timeRange,
-      startDate,
-      endDate,
-      depth: selectedDepth,
-      maxFidelity,
-    },
-  ];
+  const norm = normalizeParams('redox-analysis', {
+    sites: selectedSites,
+    time_range: timeRange,
+    start_date: startDate,
+    end_date: endDate,
+    max_fidelity: maxFidelity,
+  });
+  const queryKey = ['redox-analysis', canonicalKeyFromParams(norm)];
 
   const query = useQuery({
     queryKey,

@@ -1,75 +1,82 @@
-import { defineConfig } from 'vite'
-import react from '@vitejs/plugin-react'
-import viteCompression from 'vite-plugin-compression'
-import { fileURLToPath } from 'node:url'
+import { defineConfig } from 'vite';
+import react from '@vitejs/plugin-react';
+import viteCompression from 'vite-plugin-compression';
+import { fileURLToPath } from 'node:url';
 
 // https://vite.dev/config/
-export default defineConfig({
-  plugins: [
+export default defineConfig(async () => {
+  const plugins = [
     react(),
     // Enable gzip compression for better Lighthouse scores
     viteCompression({
       algorithm: 'gzip',
-      ext: '.gz'
+      ext: '.gz',
     }),
     // Enable brotli compression (preferred)
     viteCompression({
       algorithm: 'brotliCompress',
-      ext: '.br'
-    })
-  ],
-  base: './',
-  resolve: {
-    alias: [
-      // Use the ESM build of Apache Arrow
-      { find: 'apache-arrow', replacement: '@apache-arrow/esnext-esm' },
-      // Map react-plotly.js import to the minified dist file via absolute path to avoid duplication
-      { 
-        find: 'plotly.js/dist/plotly', 
-        replacement: fileURLToPath(new URL('./node_modules/plotly.js-dist-min/plotly.min.js', import.meta.url))
-      }
-    ]
-  },
-  build: {
-    rollupOptions: {
-      output: {
-        // Split heavy libs like Plotly into a separate chunk for better caching
-        manualChunks(id) {
-          if (id.includes('plotly')) return 'plotly-vendor';
-          if (id.includes('react-plotly')) return 'plotly-react';
-        }
-      }
-    }
-  },
-  server: {
-    proxy: {
-      '/api': {
-        target: 'http://127.0.0.1:5000',
-        changeOrigin: true, // Forward correct Host so cookies apply to frontend origin
-        secure: false,
-        ws: true,
-        cookieDomainRewrite: { '*': 'localhost' }, // Rewrite any domain to localhost (dev origin)
-        cookiePathRewrite: false,   // Preserve cookie path
-        configure: (proxy) => {
-          proxy.on('error', (err) => {
-            console.log('proxy error', err);
-          });
-          proxy.on('proxyReq', (proxyReq, req) => {
-            console.log('Sending Request to the Target:', req.method, req.url);
-            // Ensure cookies are forwarded
-            if (req.headers.cookie) {
-              console.log('Forwarding cookies:', req.headers.cookie);
-            }
-          });
-          proxy.on('proxyRes', (proxyRes, req) => {
-            console.log('Received Response from the Target:', proxyRes.statusCode, req.url);
-            // Log set-cookie headers
-            if (proxyRes.headers['set-cookie']) {
-              console.log('Received Set-Cookie:', proxyRes.headers['set-cookie']);
-            }
-          });
-        },
-      }
+      ext: '.br',
+    }),
+  ];
+
+  if (process.env.ANALYZE === '1' || process.env.VISUALIZE === '1') {
+    try {
+      const { visualizer } = await import('rollup-plugin-visualizer');
+      plugins.push(visualizer({
+        filename: 'dist/stats.html',
+        template: 'treemap',
+        gzipSize: true,
+        brotliSize: true,
+      }));
+    } catch (e) {
+      // eslint-disable-next-line no-console
+      console.warn('[vite] rollup-plugin-visualizer not installed; skip analyze');
     }
   }
-})
+
+  return {
+    plugins,
+    base: './',
+    resolve: {
+      alias: [
+        { find: 'apache-arrow', replacement: '@apache-arrow/esnext-esm' },
+        {
+          find: 'plotly.js/dist/plotly',
+          replacement: fileURLToPath(
+            new URL('./node_modules/plotly.js-dist-min/plotly.min.js', import.meta.url),
+          ),
+        },
+      ],
+    },
+    build: {
+      // Use default minifier unless explicitly requested; avoids requiring lightningcss
+      cssMinify: process.env.CSS_MINIFIER === 'lightningcss' ? 'lightningcss' : true,
+      // Enable source maps by default for better debugging and Lighthouse scores
+      sourcemap: process.env.VITE_SOURCEMAP !== '0',
+      rollupOptions: {
+        output: {
+          manualChunks(id) {
+            const normalized = id.split('node_modules/').pop() || id;
+            if (normalized.includes('plotly.js-basic-dist-min')) return 'plotly-basic';
+            if (normalized.includes('plotly.js-gl2d-dist-min')) return 'plotly-gl2d';
+            if (normalized.includes('plotly.js-dist-min')) return 'plotly-full';
+            if (normalized.includes('react-plotly')) return 'plotly-react';
+            if (normalized.includes('plotly')) return 'plotly-vendor';
+            if (normalized.includes('@tanstack/react-query') || normalized.includes('@apache-arrow')) {
+              return 'data-vendor';
+            }
+            if (
+              normalized.includes('react/') ||
+              normalized.includes('react-dom') ||
+              normalized.includes('react-router-dom')
+            ) {
+              return 'react-vendor';
+            }
+            return undefined;
+          },
+          sourcemapExcludeSources: true,
+        },
+      },
+    },
+  };
+});

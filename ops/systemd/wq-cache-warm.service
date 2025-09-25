@@ -1,0 +1,19 @@
+[Unit]
+Description=Prewarm Nginx/Flask API cache (both fidelities)
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+WorkingDirectory=/srv/water-quality
+Environment="PYTHONUNBUFFERED=1"
+Environment="BASE_URL=http://127.0.0.1"  # override in drop-in or edit for host
+Environment="SITES=S1,S2,S3,S4"
+Environment="START_YM=2023-01"
+Environment="END_YM=2023-12"
+Environment="PARALLEL=4"
+ExecStart=/bin/bash scripts/prewarm_both.sh
+
+[Install]
+WantedBy=multi-user.target
+

@@ -1,8 +1,9 @@
 import React, { useState, useEffect, useMemo, Suspense } from 'react';
-import { Spinner, Card } from 'react-bootstrap';
+import Spinner from 'react-bootstrap/Spinner';
+import Card from 'react-bootstrap/Card';
 
-// Lazy load Plot component for code splitting
-const Plot = React.lazy(() => import('react-plotly.js'));
+// Lazy load PlotlyLite wrapper (uses smaller Plotly bundles)
+const Plot = React.lazy(() => import('../PlotlyLite'));
 
 /**
  * Progressive loading wrapper for Plotly charts

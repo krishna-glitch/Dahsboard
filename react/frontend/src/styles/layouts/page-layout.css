@@ -96,14 +96,10 @@
   position: sticky;
   top: 80px; /* Height of navigation */
   height: calc(100vh - 80px);
+  /* Use auto overflow with proper z-index stacking for dropdowns */
   overflow-y: auto;
-  overflow-x: visible;
+  overflow-x: hidden;
   z-index: 1000;
-}
-
-/* Override the overflow fix for sidebar */
-.page-sidebar {
-  overflow: visible !important;
 }
 
 .page-content-area {
@@ -145,15 +141,12 @@
    SIDEBAR DROPDOWN FIXES
    ============================================================================= */
 
-/* Fix dropdown positioning and overflow issues */
-.page-sidebar {
-  /* Allow dropdowns to expand beyond sidebar boundaries */
-  overflow: visible !important;
-}
+/* Fix dropdown positioning and overflow issues - overflow handled in main .page-sidebar selector above */
 
 .page-sidebar .card-body {
-  /* Ensure card body allows dropdowns to overflow */
-  overflow: visible !important;
+  /* Use position relative with auto overflow for dropdown positioning */
+  position: relative;
+  overflow: auto;
 }
 
 /* Bootstrap form-select dropdown fix */
@@ -182,9 +175,7 @@
 
 /* Specific fix for Bootstrap form-select dropdown */
 .page-sidebar select.form-select {
-  -webkit-appearance: menulist;
-  -moz-appearance: menulist;
-  appearance: menulist;
+  appearance: auto;
 }
 
 /* Ensure all form elements can be clicked */
@@ -264,7 +255,7 @@
    ============================================================================= */
 
 /* Large Desktop: 1200px+ */
-@media (min-width: 1200px) {
+@media (width >= 1200px) {
   .page-with-sidebar {
     grid-template-columns: 420px 1fr;
   }
@@ -279,7 +270,7 @@
 }
 
 /* Desktop: 1024px - 1199px */
-@media (max-width: 1199px) {
+@media (width <= 1199px) {
   .page-header {
     padding: var(--spacing-lg);
   }
@@ -294,13 +285,9 @@
 }
 
 /* Tablet: 768px - 1023px */
-@media (max-width: 1023px) {
+@media (width <= 1023px) {
   .page-with-sidebar {
-    grid-template-columns: 1fr;
-    grid-template-rows: auto 1fr;
-    grid-template-areas:
-      "sidebar"
-      "content";
+    grid-template: "sidebar" auto "content" 1fr / 1fr;
   }
   
   .page-sidebar {
@@ -337,7 +324,7 @@
 }
 
 /* Mobile: 480px - 767px */
-@media (max-width: 767px) {
+@media (width <= 767px) {
   .page-layout {
     min-height: calc(100vh - 60px);
   }
@@ -377,7 +364,7 @@
 }
 
 /* Small Mobile: <480px */
-@media (max-width: 479px) {
+@media (width <= 479px) {
   .page-header {
     padding: var(--spacing-sm);
     margin-bottom: var(--spacing-md);

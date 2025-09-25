@@ -1,0 +1,515 @@
+/* SimpleFilters Component - Professional Water Quality Dashboard Style */
+
+.filterContainer {
+  background: var(--surface-primary);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-sm);
+  border: 1px solid var(--border-primary);
+  overflow: hidden;
+  transition: var(--transition-all);
+}
+
+.filterContainer:hover {
+  box-shadow: var(--shadow-md);
+  transform: translateY(-1px);
+}
+
+.filterHeader {
+  background: var(--gradient-surface);
+  padding: var(--spacing-component-md);
+  border-bottom: 1px solid var(--border-secondary);
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.filterTitle {
+  font: var(--typography-heading-small);
+  color: var(--text-primary);
+  margin: 0;
+  display: flex;
+  align-items: center;
+  gap: var(--spacing-component-sm);
+}
+
+.filterIcon {
+  width: var(--icon-size-medium);
+  height: var(--icon-size-medium);
+  color: var(--primary-color);
+}
+
+.toggleButton {
+  background: none;
+  border: none;
+  color: var(--text-secondary);
+  cursor: pointer;
+  padding: var(--spacing-component-xs);
+  border-radius: var(--radius-sm);
+  transition: var(--transition-color);
+  display: flex;
+  align-items: center;
+  gap: var(--spacing-component-xs);
+  font: var(--typography-body-small);
+}
+
+.toggleButton:hover {
+  color: var(--primary-color);
+  background-color: var(--surface-secondary);
+}
+
+.filterContent {
+  padding: var(--spacing-component-lg);
+}
+
+.filterGrid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+  gap: var(--spacing-component-lg);
+  margin-bottom: var(--spacing-component-lg);
+}
+
+.filterGroup {
+  display: flex;
+  flex-direction: column;
+  gap: var(--spacing-component-sm);
+}
+
+.filterLabel {
+  font: var(--typography-label);
+  color: var(--text-secondary);
+  margin-bottom: var(--spacing-component-xs);
+  display: flex;
+  align-items: center;
+  gap: var(--spacing-component-xs);
+}
+
+.required {
+  color: var(--danger-color);
+}
+
+.filterControl {
+  position: relative;
+}
+
+/* Form Control Styling - Professional Design System */
+.filterInput,
+.filterSelect {
+  width: 100%;
+  padding: 0.75rem 1rem;
+  border: 2px solid var(--border-primary);
+  border-radius: var(--radius-input);
+  font: var(--typography-body-medium);
+  background-color: var(--surface-primary);
+  color: var(--text-primary);
+  transition: var(--transition-border), var(--transition-shadow);
+}
+
+.filterInput:focus,
+.filterSelect:focus {
+  outline: none;
+  border-color: var(--border-focus);
+  box-shadow: var(--shadow-focus-primary);
+}
+
+.filterInput::placeholder {
+  color: var(--text-tertiary);
+}
+
+/* Error States */
+.filterInput.error,
+.filterSelect.error {
+  border-color: var(--danger-color);
+  box-shadow: var(--shadow-focus-danger);
+}
+
+/* React Select Styling */
+.reactSelect {
+  font: var(--typography-body-medium);
+}
+
+.reactSelect .react-select__control {
+  border: 2px solid var(--border-primary);
+  border-radius: var(--radius-input);
+  min-height: 48px;
+  background-color: var(--surface-primary);
+  transition: var(--transition-border), var(--transition-shadow);
+  box-shadow: none;
+}
+
+.reactSelect .react-select__control:hover {
+  border-color: var(--border-hover);
+}
+
+.reactSelect .react-select__control--is-focused {
+  border-color: var(--border-focus);
+  box-shadow: var(--shadow-focus-primary);
+}
+
+.reactSelect .react-select__value-container {
+  padding: 0 1rem;
+}
+
+.reactSelect .react-select__placeholder {
+  color: var(--text-tertiary);
+}
+
+.reactSelect .react-select__menu {
+  border-radius: var(--radius-md);
+  box-shadow: var(--shadow-lg);
+  border: 1px solid var(--border-primary);
+  background-color: var(--surface-primary);
+  z-index: 1000;
+}
+
+.reactSelect .react-select__menu-list {
+  padding: var(--spacing-component-xs);
+}
+
+.reactSelect .react-select__option {
+  padding: 0.75rem 1rem;
+  border-radius: var(--radius-sm);
+  transition: var(--transition-color);
+}
+
+.reactSelect .react-select__option:hover,
+.reactSelect .react-select__option--is-focused {
+  background-color: var(--surface-secondary);
+  color: var(--text-primary);
+}
+
+.reactSelect .react-select__option--is-selected {
+  background-color: var(--primary-color);
+  color: var(--text-inverse);
+}
+
+.reactSelect .react-select__multi-value {
+  background-color: var(--surface-secondary);
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--border-secondary);
+  margin: 2px;
+}
+
+.reactSelect .react-select__multi-value__label {
+  color: var(--text-primary);
+  padding: 4px 8px;
+  font: var(--typography-body-small);
+}
+
+.reactSelect .react-select__multi-value__remove {
+  color: var(--text-secondary);
+  border-radius: 0 var(--radius-sm) var(--radius-sm) 0;
+  transition: var(--transition-color);
+}
+
+.reactSelect .react-select__multi-value__remove:hover {
+  background-color: var(--danger-color);
+  color: var(--text-inverse);
+}
+
+/* Date Range Controls */
+.dateRange {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: var(--spacing-component-md);
+}
+
+/* Action Buttons */
+.filterActions {
+  display: flex;
+  gap: var(--spacing-component-sm);
+  justify-content: flex-end;
+  padding-top: var(--spacing-component-lg);
+  border-top: 1px solid var(--border-secondary);
+}
+
+.actionButton {
+  padding: 0.75rem 1.5rem;
+  border-radius: var(--radius-button);
+  font: var(--typography-label);
+  border: none;
+  cursor: pointer;
+  transition: var(--transition-all);
+  display: inline-flex;
+  align-items: center;
+  gap: var(--spacing-component-xs);
+  min-width: 100px;
+  justify-content: center;
+}
+
+.primaryButton {
+  background: var(--gradient-primary);
+  color: var(--text-inverse);
+  box-shadow: var(--shadow-interactive);
+}
+
+.primaryButton:hover:not(:disabled) {
+  box-shadow: var(--shadow-interactive-hover);
+  transform: translateY(-1px);
+}
+
+.primaryButton:active {
+  box-shadow: var(--shadow-interactive-active);
+  transform: translateY(0);
+}
+
+.primaryButton:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+  transform: none;
+}
+
+.secondaryButton {
+  background: var(--surface-primary);
+  color: var(--text-secondary);
+  border: 1px solid var(--border-primary);
+  box-shadow: var(--shadow-interactive);
+}
+
+.secondaryButton:hover:not(:disabled) {
+  color: var(--text-primary);
+  border-color: var(--border-hover);
+  box-shadow: var(--shadow-interactive-hover);
+  transform: translateY(-1px);
+}
+
+.secondaryButton:active {
+  box-shadow: var(--shadow-interactive-active);
+  transform: translateY(0);
+}
+
+/* Error Display */
+.errorMessage {
+  color: var(--danger-color);
+  font: var(--typography-body-small);
+  margin-top: var(--spacing-component-xs);
+  display: flex;
+  align-items: center;
+  gap: var(--spacing-component-xs);
+}
+
+.errorIcon {
+  width: var(--icon-size-small);
+  height: var(--icon-size-small);
+}
+
+/* Loading States */
+.loading {
+  opacity: 0.6;
+  pointer-events: none;
+}
+
+.loadingSpinner {
+  display: inline-block;
+  width: var(--icon-size-small);
+  height: var(--icon-size-small);
+  border: 2px solid var(--border-secondary);
+  border-top: 2px solid var(--primary-color);
+  border-radius: var(--radius-full);
+  animation: spin 1s linear infinite;
+}
+
+@keyframes spin {
+  0% { transform: rotate(0deg); }
+  100% { transform: rotate(360deg); }
+}
+
+/* Preset Management */
+.presetSection {
+  margin-top: var(--spacing-component-lg);
+  padding-top: var(--spacing-component-lg);
+  border-top: 1px solid var(--border-secondary);
+}
+
+.presetHeader {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: var(--spacing-component-md);
+}
+
+.presetTitle {
+  font: var(--typography-heading-small);
+  color: var(--text-primary);
+  margin: 0;
+}
+
+.presetList {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--spacing-component-sm);
+}
+
+.presetChip {
+  background: var(--surface-secondary);
+  border: 1px solid var(--border-primary);
+  border-radius: var(--radius-full);
+  padding: 0.5rem 1rem;
+  font: var(--typography-body-small);
+  color: var(--text-primary);
+  cursor: pointer;
+  transition: var(--transition-all);
+  display: flex;
+  align-items: center;
+  gap: var(--spacing-component-xs);
+}
+
+.presetChip:hover {
+  background: var(--primary-color);
+  color: var(--text-inverse);
+  transform: translateY(-1px);
+  box-shadow: var(--shadow-sm);
+}
+
+.presetChip.active {
+  background: var(--primary-color);
+  color: var(--text-inverse);
+  border-color: var(--primary-color);
+}
+
+/* Responsive Design */
+@media (max-width: 768px) {
+  .filterGrid {
+    grid-template-columns: 1fr;
+    gap: var(--spacing-component-md);
+  }
+
+  .dateRange {
+    grid-template-columns: 1fr;
+  }
+
+  .filterActions {
+    flex-direction: column-reverse;
+  }
+
+  .actionButton {
+    width: 100%;
+  }
+
+  .presetList {
+    flex-direction: column;
+  }
+
+  .presetChip {
+    justify-content: center;
+  }
+}
+
+/* Animation Entry Effect */
+.filterContainer {
+  animation: filterFadeIn 0.6s var(--ease-in-out) forwards;
+  opacity: 0;
+  transform: translateY(20px);
+}
+
+@keyframes filterFadeIn {
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+/* Focus Visible */
+.actionButton:focus-visible,
+.presetChip:focus-visible {
+  outline: 2px solid var(--border-focus);
+  outline-offset: 2px;
+}
+
+/* Collapsed State Styles */
+.collapsedContainer {
+  display: flex;
+  flex-direction: column;
+  gap: var(--spacing-component-sm);
+  padding: var(--spacing-component-md);
+  background: var(--surface-primary);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-sm);
+  border: 1px solid var(--border-primary);
+  min-width: 200px;
+}
+
+.collapsedButton {
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: flex-start;
+  gap: var(--spacing-component-sm);
+  width: 100%;
+  padding: var(--spacing-component-sm) var(--spacing-component-md);
+  border: 1px solid var(--border-primary);
+  border-radius: var(--radius-md);
+  background: var(--surface-secondary);
+  color: var(--text-secondary);
+  cursor: pointer;
+  transition: var(--transition-all);
+  font: var(--typography-body-small);
+  text-align: left;
+}
+
+.collapsedButton:hover {
+  background: var(--primary-color);
+  color: var(--text-inverse);
+  transform: translateY(-1px);
+  box-shadow: var(--shadow-sm);
+}
+
+.collapsedButton.active {
+  background: var(--primary-color);
+  color: var(--text-inverse);
+}
+
+.badge {
+  background: var(--primary-color);
+  color: var(--text-inverse);
+  font: var(--typography-caption);
+  min-width: 20px;
+  height: 20px;
+  border-radius: var(--radius-full);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  box-shadow: var(--shadow-xs);
+  margin-left: auto;
+}
+
+/* Site Control Section */
+.siteControlSection {
+  display: flex;
+  justify-content: center;
+  padding: var(--spacing-component-sm) 0;
+  border-top: 1px solid var(--border-secondary);
+  border-bottom: 1px solid var(--border-secondary);
+  margin: var(--spacing-component-md) 0;
+}
+
+/* Control Buttons */
+.controlButtons {
+  display: flex;
+  gap: var(--spacing-component-sm);
+}
+
+.controlButton {
+  background: var(--surface-primary);
+  border: 1px solid var(--border-primary);
+  border-radius: var(--radius-md);
+  padding: 0.5rem 0.75rem;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--spacing-component-xs);
+  color: var(--text-secondary);
+  cursor: pointer;
+  transition: var(--transition-all);
+  font: var(--typography-body-small);
+  font-weight: 500;
+  white-space: nowrap;
+  box-shadow: var(--shadow-xs);
+}
+
+.controlButton:hover {
+  background: var(--primary-color);
+  border-color: var(--primary-color);
+  color: var(--text-inverse);
+  box-shadow: var(--shadow-sm);
+  transform: translateY(-1px);
+}

@@ -129,52 +129,59 @@ export function useRedoxMetrics(data, selectedSites = []) {
   const [metrics, setMetrics] = useState(computeMetricsInline(data, selectedSites));
   const workerRef = useRef(null);
 
+  const selectedSitesKey = selectedSites?.join?.(',');
   useEffect(() => {
-    if (!Array.isArray(data) || data.length === 0) {
-      setMetrics(computeMetricsInline([], selectedSites));
-      return;
-    }
-    const LARGE_THRESHOLD = 50000; // Increased since we optimized the inline computation
-    if (data.length < LARGE_THRESHOLD) {
-      try {
-        setMetrics(computeMetricsInline(data, selectedSites));
-        return;
-      } catch (error) {
-        console.error('Error computing metrics inline, falling back to simplified metrics:', error);
-        // Fallback to very basic metrics if inline computation fails
-        setMetrics({
-          totalMeasurements: data.length,
-          redoxRange: 'Computing...',
-          avgRedox: 0,
-          zonesDetected: 0,
-          validMeasurements: data.length,
-          dataCompleteness: 100,
-          sitesCount: selectedSites.length,
-          breakdown: { redoxRange: [], avgRedox: [] }
-        });
+    let cancelled = false;
+
+    const runMetricsComputation = async () => {
+      if (!Array.isArray(data) || data.length === 0) {
+        setMetrics(computeMetricsInline([], selectedSites));
         return;
       }
-    }
-    // Optional: use worker for large datasets
-    if (!workerRef.current) {
-      workerRef.current = new Worker(new URL('../workers/metricsWorker.js', import.meta.url), { type: 'module' });
-    }
-    let cancelled = false;
-    const worker = workerRef.current;
-    worker.onmessage = (e) => {
-      if (cancelled) return;
-      const { ok, result } = e.data || {};
-      if (ok && result) setMetrics(result);
+
+      const LARGE_THRESHOLD = 50000;
+      if (data.length < LARGE_THRESHOLD) {
+        try {
+          setMetrics(computeMetricsInline(data, selectedSites));
+          return;
+        } catch (error) {
+          console.error('Error computing metrics inline, falling back to simplified metrics:', error);
+          setMetrics({
+            totalMeasurements: data.length,
+            redoxRange: 'Computing...',
+            avgRedox: 0,
+            zonesDetected: 0,
+            validMeasurements: data.length,
+            dataCompleteness: 100,
+            sitesCount: selectedSites.length,
+            breakdown: { redoxRange: [], avgRedox: [] }
+          });
+          return;
+        }
+      }
+
+      // Use worker for large datasets
+      if (!workerRef.current) {
+        workerRef.current = new Worker(new URL('../workers/metricsWorker.js', import.meta.url), { type: 'module' });
+      }
+      const worker = workerRef.current;
+      worker.onmessage = (e) => {
+        if (cancelled) return;
+        const { ok, result } = e.data || {};
+        if (ok && result) setMetrics(result);
+      };
+      try {
+        worker.postMessage({ cmd: 'computeMetrics', payload: { data, selectedSites } });
+      } catch {
+        // Fallback inline if worker post fails
+        setMetrics(computeMetricsInline(data, selectedSites));
+      }
     };
-    try {
-      worker.postMessage({ cmd: 'computeMetrics', payload: { data, selectedSites } });
-    } catch (e) {
-      // Fallback inline if worker post fails
-      setMetrics(computeMetricsInline(data, selectedSites));
-    }
+
+    runMetricsComputation();
+
     return () => { cancelled = true; };
-  }, [Array.isArray(data) ? data.length : 0, selectedSites?.join?.(',')]);
+  }, [data, selectedSitesKey, selectedSites]);
 
   return metrics;
 }
-

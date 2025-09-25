@@ -1,7 +1,15 @@
 import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import ProgressivePlot from './modern/ProgressivePlot';
 import { apiClient } from '../services/api';
-import { Row, Col, Card, Form, Button, Badge, Alert, Spinner, Table } from 'react-bootstrap';
+import Row from 'react-bootstrap/Row';
+import Col from 'react-bootstrap/Col';
+import Card from 'react-bootstrap/Card';
+import Form from 'react-bootstrap/Form';
+import Button from 'react-bootstrap/Button';
+import Badge from 'react-bootstrap/Badge';
+import Alert from 'react-bootstrap/Alert';
+import Spinner from 'react-bootstrap/Spinner';
+import Table from 'react-bootstrap/Table';
 import { useToast } from './modern/toastUtils';
 
 const TrendAnalysisChart = ({ 

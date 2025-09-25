@@ -52,7 +52,7 @@ const DataQuality = () => {
       // Compute basic metrics
       let nSites = Array.isArray(res?.sites) ? res.sites.length : 0;
       let nDays = 0;
-      try { nDays = (res?.sites || []).reduce((s, x) => s + ((x.days || []).length), 0); } catch (_) {}
+      try { nDays = (res?.sites || []).reduce((s, x) => s + ((x.days || []).length), 0); } catch { /* ignore */ }
       const t1 = (typeof performance !== 'undefined' && performance.now) ? performance.now() : Date.now();
       const secs = ((t1 - t0) / 1000).toFixed(2);
       const rate = (t1 - t0) > 0 ? `${Math.round(nDays / ((t1 - t0) / 1000)).toLocaleString()} days/s` : '';
@@ -64,7 +64,7 @@ const DataQuality = () => {
     } finally {
       setLoading(false);
     }
-  }, [sites, dataType, timeRange, cadence]);
+  }, [sites, dataType, timeRange, cadence, customStartDate, customEndDate]);
 
   useEffect(() => { 
     (async () => {
@@ -73,7 +73,7 @@ const DataQuality = () => {
         setAvailableSites(resp?.sites || []);
         const defaults = (resp?.sites || []).slice(0,2).map(s=>s.id);
         setSites(defaults);
-      } catch (_) {}
+      } catch { /* ignore */ }
     })();
   }, []);
 
@@ -183,7 +183,7 @@ const DataQuality = () => {
               a.download = `data_quality_${summary?.metadata?.start?.slice(0,10)}_${summary?.metadata?.end?.slice(0,10)}.json`;
               a.click();
               URL.revokeObjectURL(url);
-            } catch (_) {}
+            } catch { /* ignore */ }
           }}>
             <i className="bi bi-download me-1"></i> Export JSON
           </div>

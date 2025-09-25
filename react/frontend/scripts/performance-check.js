@@ -60,14 +60,14 @@ const ANTI_PATTERNS = [
   },
   {
     id: 'unstable-context',
-    pattern: /<(\w+Context)\.Provider\s+value=\{(?!\s*\w+\s*\})[^}]+\}/g,
+    pattern: /<(\w+Context)\.Provider\s+value={(?!\s*\w+\s*})[^}]+\}/g,
     message: 'Context value not memoized. Wrap with useMemo.',
     severity: 'error',
     example: 'const value = useMemo(() => ({ ...values }), [deps]);'
   },
   {
     id: 'large-list',
-    pattern: /\{data\.map\(.*\=>/g,
+    pattern: /\{data\.map\(.*=>/g,
     message: 'Large lists should use virtualization or DataTable component.',
     severity: 'warning',
     example: '<DataTable data={data} virtualized={data.length > 200} />'
@@ -117,7 +117,7 @@ class PerformanceChecker {
         .split('\n')
         .filter(file => file.match(/\.(jsx?|tsx?)$/))
         .filter(file => fs.existsSync(file));
-    } catch (error) {
+    } catch {
       console.log(`${colors.yellow}Warning: Not a git repository or no staged files${colors.reset}`);
       // Fallback: check all React files in src
       return this.getAllReactFiles();
@@ -155,9 +155,6 @@ class PerformanceChecker {
     
     // Check anti-patterns
     ANTI_PATTERNS.forEach(pattern => {
-      let match;
-      let lineIndex = 0;
-      
       lines.forEach((line, index) => {
         pattern.pattern.lastIndex = 0; // Reset regex
         if (pattern.pattern.test(line)) {

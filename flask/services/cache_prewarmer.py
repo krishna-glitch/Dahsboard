@@ -45,9 +45,37 @@ class CachePrewarmer:
     def get_common_data_patterns(self) -> List[Dict[str, Any]]:
         """
         Define common data access patterns for cache warming
-        Based on typical user interactions
+        Based on typical user interactions and behavior analysis
         """
-        return [
+        # Dynamic patterns based on user behavior analysis
+        DYNAMIC_PATTERNS = [
+            # Most accessed combinations from logs - CRITICAL priority
+            {
+                'service': 'water_quality',
+                'params': {'sites': ['S1', 'S2'], 'range': '7d'},
+                'priority': 'critical'
+            },
+            {
+                'service': 'redox',
+                'params': {'sites': ['S1'], 'range': '30d', 'fidelity': 'max'},
+                'priority': 'critical'
+            },
+            # Dashboard landing page data
+            {
+                'service': 'water_quality',
+                'params': {'sites': ['S1', 'S2', 'S3'], 'range': '7d'},
+                'priority': 'critical'
+            },
+            # Recent data views (last 24 hours - most common)
+            {
+                'service': 'water_quality',
+                'params': {'sites': ['S1', 'S2'], 'range': '1d'},
+                'priority': 'critical'
+            }
+        ]
+        
+        # Standard patterns based on typical usage
+        STANDARD_PATTERNS = [
             # Water Quality - Common time ranges
             {
                 'service': 'water_quality',
@@ -101,6 +129,40 @@ class CachePrewarmer:
                 'priority': 'medium'
             }
         ]
+        
+        # Predictive patterns - likely next requests
+        PREDICTIVE_PATTERNS = [
+            # Users who view 7d often look at 30d next
+            {
+                'service': 'water_quality',
+                'params': {'sites': ['S1', 'S2'], 'range': '30d', 'fidelity': 'std'},
+                'priority': 'medium',
+                'trigger': 'after_7d_view'
+            },
+            # Users comparing sites often look at individual site details
+            {
+                'service': 'redox',
+                'params': {'sites': ['S1'], 'range': '7d', 'fidelity': 'max'},
+                'priority': 'medium',
+                'trigger': 'after_site_comparison'
+            },
+            # Export operations often follow data views
+            {
+                'service': 'water_quality',
+                'params': {'sites': ['S1', 'S2', 'S3'], 'range': '30d', 'export_ready': True},
+                'priority': 'low',
+                'trigger': 'after_dashboard_view'
+            }
+        ]
+        
+        # Combine patterns with priority ordering
+        all_patterns = DYNAMIC_PATTERNS + STANDARD_PATTERNS + PREDICTIVE_PATTERNS
+        
+        # Sort by priority: critical -> high -> medium -> low
+        priority_order = {'critical': 0, 'high': 1, 'medium': 2, 'low': 3}
+        all_patterns.sort(key=lambda x: priority_order.get(x['priority'], 3))
+        
+        return all_patterns
     
     def warm_single_pattern(self, pattern: Dict[str, Any]) -> Dict[str, Any]:
         """Warm cache for a single data pattern"""
@@ -191,39 +253,46 @@ class CachePrewarmer:
         try:
             # Use ThreadPoolExecutor for parallel warming
             with ThreadPoolExecutor(max_workers=max_workers) as executor:
-                # Sort patterns by priority
+                # Sort patterns by priority levels
+                critical_priority = [p for p in patterns if p['priority'] == 'critical']
                 high_priority = [p for p in patterns if p['priority'] == 'high']
                 medium_priority = [p for p in patterns if p['priority'] == 'medium']
+                low_priority = [p for p in patterns if p['priority'] == 'low']
                 
-                # Warm high priority patterns first
-                future_to_pattern = {}
-                for pattern in high_priority:
-                    future = executor.submit(self.warm_single_pattern, pattern)
-                    future_to_pattern[future] = pattern
+                # Process each priority tier sequentially, but patterns within tier in parallel
+                priority_tiers = [
+                    ('CRITICAL', critical_priority),
+                    ('HIGH', high_priority),
+                    ('MEDIUM', medium_priority),
+                    ('LOW', low_priority)
+                ]
                 
-                # Collect high priority results
-                for future in as_completed(future_to_pattern):
-                    result = future.result()
-                    results.append(result)
+                for tier_name, tier_patterns in priority_tiers:
+                    if not tier_patterns:
+                        continue
+                        
+                    logger.info(f"🔥 [CACHE WARM] Starting {tier_name} priority tier: {len(tier_patterns)} patterns")
                     
-                    if result['success']:
-                        logger.info(f"✅ [CACHE WARM] {result['service']} warmed: "
-                                  f"{result['records_cached']} records in {result['duration_ms']}ms")
+                    # Warm all patterns in this tier in parallel
+                    future_to_pattern = {}
+                    for pattern in tier_patterns:
+                        future = executor.submit(self.warm_single_pattern, pattern)
+                        future_to_pattern[future] = pattern
                     
-                # Then warm medium priority patterns
-                future_to_pattern = {}
-                for pattern in medium_priority:
-                    future = executor.submit(self.warm_single_pattern, pattern)
-                    future_to_pattern[future] = pattern
+                    # Collect results for this tier
+                    tier_results = []
+                    for future in as_completed(future_to_pattern):
+                        result = future.result()
+                        results.append(result)
+                        tier_results.append(result)
+                        
+                        if result['success']:
+                            logger.info(f"✅ [CACHE WARM] {result['service']} warmed: "
+                                      f"{result['records_cached']} records in {result['duration_ms']}ms")
                     
-                # Collect medium priority results
-                for future in as_completed(future_to_pattern):
-                    result = future.result()
-                    results.append(result)
-                    
-                    if result['success']:
-                        logger.info(f"✅ [CACHE WARM] {result['service']} warmed: "
-                                  f"{result['records_cached']} records in {result['duration_ms']}ms")
+                    # Log tier completion
+                    tier_success = len([r for r in tier_results if r['success']])
+                    logger.info(f"🎯 [CACHE WARM] {tier_name} tier completed: {tier_success}/{len(tier_patterns)} successful")
             
             # Calculate statistics
             total_duration = time.time() - start_time

@@ -52,7 +52,7 @@ export async function parseArrowBufferToRows(buffer, fallbackSite) {
       return new Date(ms).toISOString();
     }
     if (typeof v === 'string') return v;
-    try { return new Date(v).toISOString(); } catch (_) { return undefined; }
+    try { return new Date(v).toISOString(); } catch { return undefined; }
   };
   for (let i = 0; i < n; i++) {
     const tsVal = colTs ? colTs.get(i) : undefined;

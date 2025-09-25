@@ -139,7 +139,7 @@
 }
 
 /* Responsive Design */
-@media (max-width: 768px) {
+@media (width <= 768px) {
   .error-boundary-container {
     padding: 1rem;
     min-height: 150px;

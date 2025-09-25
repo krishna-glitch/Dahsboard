@@ -1,3 +1,4 @@
+import React from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { getWaterQualityData } from '../services/api';
 import { useToast } from '../components/modern/toastUtils';
@@ -29,7 +30,7 @@ export function useWaterQualityQuery({
     const params = {
       sites: selectedSites,
       time_range: timeRange,
-      no_downsample: true,
+      no_downsample: true, // Always fetch the full dataset as requested
       ...(timeRange === 'Custom Range' && startDate && endDate 
         ? { start_date: startDate, end_date: endDate } 
         : {}
@@ -55,22 +56,20 @@ export function useWaterQualityQuery({
     return params;
   };
 
-  // Create unique query key
+  // Create optimized query key - Only include server-side parameters
   const queryKey = [
     'water-quality',
     {
-      sites: selectedSites,
+      sites: selectedSites.sort().join(','), // Consistent ordering
       timeRange,
-      startDate,
-      endDate,
+      startDate: timeRange === 'Custom Range' ? startDate : null,
+      endDate: timeRange === 'Custom Range' ? endDate : null,
       useAdvancedFilters,
       selectedParameters,
       valueRanges,
       dataQualityFilter,
       alertsFilter,
-      selectedParameter,
-      compareMode,
-      compareParameter,
+      // Removed UI-only parameters: selectedParameter, compareMode, compareParameter
     },
   ];
 
@@ -100,18 +99,40 @@ export function useWaterQualityQuery({
           const recordsFormatted = data.length.toLocaleString();
           const rate = Math.round(data.length / (loadingTime || 1));
           
-          toast.showSuccess(
-            `Loaded ${recordsFormatted} water quality records for sites ${sitesText} • ${loadingTime}s • ${rate.toLocaleString()} rec/s`,
-            {
-              title: '📊 Data Loading Complete',
-              duration: 3000,
-              dedupeKey: `wq-success|${selectedSites.join(',')}|${timeRange}`,
-            }
+          const successMessage = React.createElement(
+            'div',
+            { className: 'toast-message' },
+            React.createElement(
+              'span',
+              { className: 'toast-message-primary' },
+              `Loaded ${recordsFormatted} water quality records`
+            ),
+            React.createElement(
+              'span',
+              { className: 'toast-message-meta' },
+              `Sites ${sitesText}`
+            ),
+            React.createElement(
+              'span',
+              { className: 'toast-message-meta' },
+              `${loadingTime}s`
+            ),
+            React.createElement(
+              'span',
+              { className: 'toast-message-meta' },
+              `${rate.toLocaleString()} rec/s`
+            )
           );
+
+          toast.showSuccess(successMessage, {
+            title: 'Data Loading Complete',
+            duration: 3000,
+            dedupeKey: `wq-success|${selectedSites.join(',')}|${timeRange}`,
+          });
         } else {
           toast.showWarning(
             `No water quality records found for sites ${selectedSites.join(', ')}`,
-            { 
+            {
               title: 'No Data Available',
               duration: 4000,
               dedupeKey: `wq-nodata|${selectedSites.join(',')}|${timeRange}`,
@@ -119,36 +140,46 @@ export function useWaterQualityQuery({
           );
         }
 
-        return data;
+        return {
+          data: data,
+          metadata: response?.metadata || {},
+        };
       } catch (error) {
-        log.error('[WQ Query] Data fetch error:', error);
+        // Check if the error is due to a cancelled request
+        const isCancellation = error.name === 'AbortError' || error.name === 'DOMException' || error.message.includes('cancelled');
         
-        const errorMessage = error?.message || String(error);
-        toast.showError(
-          `Failed to load water quality data: ${errorMessage}`,
-          {
-            title: 'Water Quality Data Failed',
-            actions: [{
-              id: 'retry',
-              label: 'Retry',
-              action: () => query.refetch(),
-            }],
-          }
-        );
+        if (isCancellation) {
+          log.debug('[WQ Query] Request cancelled intentionally.');
+        } else {
+          log.error('[WQ Query] Data fetch error:', error);
+          const errorMessage = error?.message || String(error);
+          toast.showError(
+            `Failed to load water quality data: ${errorMessage}`,
+            {
+              title: 'Water Quality Data Failed',
+              actions: [{
+                id: 'retry',
+                label: 'Retry',
+                action: () => query.refetch(),
+              }],
+            }
+          );
+        }
         
-        throw error;
+        throw error; // Always re-throw so react-query can handle the query state
       }
     },
     enabled: enabled && Array.isArray(selectedSites) && selectedSites.length > 0,
-    staleTime: 2 * 60 * 1000, // 2 minutes - data becomes stale after 2 minutes
-    gcTime: 10 * 60 * 1000, // 10 minutes - cache for 10 minutes
+    staleTime: 30 * 60 * 1000, // 30 minutes - Match Redis TTL
+    gcTime: 60 * 60 * 1000, // 60 minutes - Extended garbage collection
     refetchOnWindowFocus: false,
-    refetchOnMount: 'always', // Always fetch fresh data on mount
+    refetchOnMount: 'always',
     retry: 1,
   });
 
   return {
-    data: query.data || [],
+    data: query.data?.data || [],
+    metadata: query.data?.metadata || {},
     loading: query.isLoading,
     error: query.error?.message || null,
     refetch: query.refetch,

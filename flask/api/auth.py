@@ -2,22 +2,33 @@ from flask import Blueprint, jsonify, request, session
 from datetime import datetime
 from flask_login import login_user, logout_user, current_user
 import logging
+from sqlalchemy.orm import Session
 
 logger = logging.getLogger(__name__)
 
-from services.auth_service import AuthService
-from services.user_management import user_manager # Import user_manager to get user data for Flask-Login User object
-# User class will be handled by Flask-Login user_loader
+from auth_database import AuthSessionLocal, User as AuthUser
+from services.new_auth_service import NewAuthService
+from services.new_user_management import NewUserManager
 
 # Import comprehensive performance optimization (for session management optimization)
 from utils.advanced_performance_integration_simple import enterprise_performance
 
 auth_bp = Blueprint('auth_bp', __name__)
-auth_service = AuthService()
+auth_service = NewAuthService()
+user_manager = NewUserManager()
+
+# Dependency to get the database session
+def get_db():
+    db = AuthSessionLocal()
+    try:
+        yield db
+    finally:
+        db.close()
 
 @auth_bp.route('/login', methods=['POST'])
 def login():
     logger.info("Received request for login API.")
+    db = AuthSessionLocal()
     try:
         data = request.get_json()
         if not data:
@@ -29,19 +40,15 @@ def login():
         if not username or not password:
             return jsonify({'error': 'Username and password are required'}), 400
 
-        success, user_info = auth_service.authenticate_user(username, password)
+        success, user = auth_service.authenticate_user(db, username, password)
 
         if success:
             # Create User object for Flask-Login using centralized class
             from services.auth_models import User
-            
-            user = User(username)
-            # Make session permanent to persist across browser refreshes
-            session.permanent = True
-            # Rely solely on Flask-Login for session state; avoid manual flags
-            login_user(user, remember=True)
+
+            login_user(User(user.id), remember=True)
             logger.info(f"User {username} authenticated successfully with permanent session.")
-            return jsonify({'message': 'Login successful', 'user': user_info}), 200
+            return jsonify({'message': 'Login successful', 'user': {'username': user.username}}), 200
         else:
             logger.warning(f"Failed login attempt for user {username}.")
             return jsonify({'error': 'Invalid credentials'}), 401
@@ -49,13 +56,43 @@ def login():
     except Exception as e:
         logger.error(f"Error in login API: {e}", exc_info=True)
         return jsonify({'error': 'An unexpected error occurred during login', 'details': str(e)}), 500
+    finally:
+        db.close()
+
+@auth_bp.route('/register', methods=['POST'])
+def register():
+    logger.info("Received request for register API.")
+    db = AuthSessionLocal()
+    try:
+        data = request.get_json()
+        if not data:
+            return jsonify({'error': 'Invalid JSON data'}), 400
+
+        username = data.get('username')
+        password = data.get('password')
+
+        if not username or not password:
+            return jsonify({'error': 'Username and password are required'}), 400
+
+        user = user_manager.get_user_by_username(db, username)
+        if user:
+            return jsonify({'error': 'Username already registered'}), 400
+
+        user_manager.create_user(db, username, password)
+        logger.info(f"User {username} registered successfully.")
+        return jsonify({'message': 'User registered successfully'}), 201
+
+    except Exception as e:
+        logger.error(f"Error in register API: {e}", exc_info=True)
+        return jsonify({'error': 'An unexpected error occurred during registration', 'details': str(e)}), 500
+    finally:
+        db.close()
+
 
 @auth_bp.route('/logout', methods=['POST'])
 def logout():
     logger.info("Received request for logout API.")
     try:
-        auth_service.logout_user()
-        # Flask-Login logout; no manual session flags
         logout_user()
         logger.info("User logged out successfully.")
         return jsonify({'message': 'Logout successful'}), 200
@@ -67,23 +104,33 @@ def logout():
 @enterprise_performance(data_type='auth_status')
 def status():
     logger.info("Received request for auth status API.")
+    db = AuthSessionLocal()
     try:
         # Single source of truth: Flask-Login authentication state
         authenticated = bool(getattr(current_user, 'is_authenticated', False))
         user_info = {}
         if authenticated:
+            user_data = None
             try:
-                username = current_user.get_id()
-            except Exception:
-                username = None
-            if username:
-                user_data = user_manager.get_user_by_username(username)
-                if user_data:
-                    user_info = {k: v for k, v in user_data.items() if k != 'password'}
+                raw_id = current_user.get_id()
+                numeric_id = int(raw_id) if raw_id is not None else None
+            except (TypeError, ValueError):
+                numeric_id = None
+
+            if numeric_id is not None:
+                user_data = user_manager.get_user_by_id(db, numeric_id)
+
+            if user_data:
+                user_info = {
+                    'id': user_data.id,
+                    'username': user_data.username,
+                }
         return jsonify({'authenticated': authenticated, 'user': user_info}), 200
     except Exception as e:
         logger.error(f"Error in auth status API: {e}", exc_info=True)
         return jsonify({'error': 'An unexpected error occurred during status check', 'details': str(e)}), 500
+    finally:
+        db.close()
 
 @auth_bp.route('/health', methods=['GET'])
 def health():

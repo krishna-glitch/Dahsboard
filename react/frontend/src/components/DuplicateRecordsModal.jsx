@@ -1,5 +1,5 @@
 import React from 'react';
-import { Modal } from 'react-bootstrap';
+import Modal from 'react-bootstrap/Modal';
 import DuplicateRecordsTable from './DuplicateRecordsTable';
 
 const DuplicateRecordsModal = ({ show, onHide, site, duplicateRecords }) => {

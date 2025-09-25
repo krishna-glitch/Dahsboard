@@ -12,11 +12,14 @@
   --primary-color: #2563EB;       /* Professional blue - less garish */
   --primary-hover: #1D4ED8;       /* Darker blue for hover states */
   --secondary-color: #1E40AF;     /* Deep blue for supporting elements */
+  --primary-500: var(--primary-color);   /* Alias for component-specific palettes */
+  --primary-600: var(--primary-hover);   /* Alias aligning legacy tokens */
+  --primary-700: var(--secondary-color); /* Alias aligning legacy tokens */
   --success-color: #10B981;       /* Modern emerald green */
   --danger-color: #EF4444;        /* Clean red for errors */
   --warning-color: #F59E0B;       /* Amber for warnings */
   --info-color: #06B6D4;          /* Cyan for info states */
-  --light-color: #FFFFFF;         /* Pure white */
+  --light-color: #FFF;         /* Pure white */
   --dark-color: #111827;          /* True dark for text */
   
   /* Status Colors - Water Quality Specific */
@@ -30,19 +33,19 @@
   --search-border: #E2E8F0;       /* Light border */
   --search-hover: #F1F5F9;        /* Subtle hover */
   --search-selected: #EBF4FF;     /* Selection highlight */
-  --search-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06);
+  --search-shadow: 0 4px 6px -1px rgb(0 0 0 / 10%), 0 2px 4px -1px rgb(0 0 0 / 6%);
   
   /* Toast Notification Colors */
-  --toast-toolbar-bg: rgba(255, 255, 255, 0.95);
+  --toast-toolbar-bg: rgb(255 255 255 / 95%);
   --toast-toolbar-border: #E2E8F0;
-  --toast-toolbar-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+  --toast-toolbar-shadow: 0 2px 8px rgb(0 0 0 / 10%);
   --border-color: #E2E8F0;        /* Subtle borders */
   --border-hover: #CBD5E1;        /* Border hover states */
   --surface-color: #F8FAFC;       /* Subtle surface background */
-  --card-bg: #FFFFFF;             /* Card backgrounds */
+  --card-bg: #FFF;             /* Card backgrounds */
   
   /* Component State Colors */
-  --surface-primary: #FFFFFF;     /* Primary surface background */
+  --surface-primary: #FFF;     /* Primary surface background */
   --surface-secondary: #F8FAFC;   /* Secondary surface background */
   --surface-tertiary: #F1F5F9;    /* Tertiary surface background */
   --surface-interactive: #F8FAFC; /* Interactive element backgrounds */
@@ -52,7 +55,7 @@
   --text-secondary: #6B7280;      /* Secondary text */
   --text-tertiary: #9CA3AF;       /* Tertiary text */
   --text-disabled: #D1D5DB;       /* Disabled text */
-  --text-inverse: #FFFFFF;        /* Text on dark backgrounds */
+  --text-inverse: #FFF;        /* Text on dark backgrounds */
   
   /* Border Colors */
   --border-primary: #E5E7EB;      /* Primary borders */
@@ -65,19 +68,21 @@
      ============================================================================= */
   
   /* MetricCard Design Tokens - MODERN GLASS MORPHISM */
-  --metric-card-bg: rgba(255, 255, 255, 0.95);    /* Glass morphism background */
+  --metric-card-bg: rgb(255 255 255 / 95%);    /* Glass morphism background */
   --metric-card-backdrop-blur: blur(16px);         /* Sophisticated blur effect */
-  --metric-card-border: 1px solid rgba(255, 255, 255, 0.18); /* Subtle glass border */
+  --metric-card-border: 1px solid rgb(255 255 255 / 18%); /* Subtle glass border */
   --metric-card-border-radius: 16px;               /* Modern rounded corners */
   --metric-card-padding: 16px;                     /* Compact professional spacing */
   --metric-card-shadow: 
-    0 8px 32px rgba(0, 0, 0, 0.08),               /* Primary depth shadow */
-    0 1px 2px rgba(0, 0, 0, 0.05),                /* Surface definition */
-    inset 0 1px 0 rgba(255, 255, 255, 0.15);      /* Inner highlight */
+    0 8px 32px rgb(0 0 0 / 8%),               /* Primary depth shadow */
+    0 1px 2px rgb(0 0 0 / 5%),                /* Surface definition */
+    inset 0 1px 0 rgb(255 255 255 / 15%);      /* Inner highlight */
+
   --metric-card-shadow-hover: 
-    0 12px 40px rgba(0, 0, 0, 0.15),              /* Elevated hover state */
-    0 4px 12px rgba(0, 0, 0, 0.1),                /* Enhanced depth */
-    inset 0 1px 0 rgba(255, 255, 255, 0.25);      /* Brightened highlight */
+    0 12px 40px rgb(0 0 0 / 15%),              /* Elevated hover state */
+    0 4px 12px rgb(0 0 0 / 10%),                /* Enhanced depth */
+    inset 0 1px 0 rgb(255 255 255 / 25%);      /* Brightened highlight */
+
   --metric-card-title-color: #1F2937;      /* High contrast title */
   --metric-card-title-size: 0.8125rem;     /* Refined typography scale */
   --metric-card-title-weight: 600;         /* Semi-bold hierarchy */
@@ -91,18 +96,18 @@
   --metric-card-context-size: 0.8125rem;   /* Refined context size */
   
   /* Modern Status Colors with Glass Integration */
-  --metric-card-border-excellent: rgba(16, 185, 129, 0.3);  /* Success with transparency */
-  --metric-card-border-good: rgba(34, 197, 94, 0.25);       /* Good with transparency */
-  --metric-card-border-fair: rgba(245, 158, 11, 0.3);       /* Warning with transparency */
-  --metric-card-border-poor: rgba(239, 68, 68, 0.3);        /* Error with transparency */
-  --metric-card-border-unknown: rgba(148, 163, 184, 0.2);   /* Neutral with transparency */
+  --metric-card-border-excellent: rgb(16 185 129 / 30%);  /* Success with transparency */
+  --metric-card-border-good: rgb(34 197 94 / 25%);       /* Good with transparency */
+  --metric-card-border-fair: rgb(245 158 11 / 30%);       /* Warning with transparency */
+  --metric-card-border-poor: rgb(239 68 68 / 30%);        /* Error with transparency */
+  --metric-card-border-unknown: rgb(148 163 184 / 20%);   /* Neutral with transparency */
   
   /* Status Background Overlays for Enhanced Visual Feedback */
-  --metric-card-bg-excellent: rgba(236, 253, 245, 0.4);     /* Subtle green tint */
-  --metric-card-bg-good: rgba(240, 253, 244, 0.4);          /* Subtle success tint */
-  --metric-card-bg-fair: rgba(255, 251, 235, 0.4);          /* Subtle warning tint */
-  --metric-card-bg-poor: rgba(254, 242, 242, 0.4);          /* Subtle error tint */
-  --metric-card-bg-unknown: rgba(248, 250, 252, 0.4);       /* Neutral tint */
+  --metric-card-bg-excellent: rgb(236 253 245 / 40%);     /* Subtle green tint */
+  --metric-card-bg-good: rgb(240 253 244 / 40%);          /* Subtle success tint */
+  --metric-card-bg-fair: rgb(255 251 235 / 40%);          /* Subtle warning tint */
+  --metric-card-bg-poor: rgb(254 242 242 / 40%);          /* Subtle error tint */
+  --metric-card-bg-unknown: rgb(248 250 252 / 40%);       /* Neutral tint */
   
   /* EmptyState Design Tokens */
   --empty-state-bg: var(--surface-primary);
@@ -122,7 +127,7 @@
   --chart-border: var(--border-primary);
   --chart-border-radius: 12px;
   --chart-padding: 24px;
-  --chart-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+  --chart-shadow: 0 1px 3px rgb(0 0 0 / 10%);
   --chart-header-border: var(--border-secondary);
   --chart-title-color: var(--text-primary);
   --chart-title-size: 1.125rem;
@@ -144,7 +149,7 @@
   --icon-size-large: 1.5rem;
   --icon-size-xlarge: 2rem;
   --icon-color-primary: var(--text-secondary);
-  --icon-color-status: currentColor;
+  --icon-color-status: currentcolor;
   
   /* =============================================================================
      LAYOUT AND SPACING TOKENS
@@ -189,7 +194,7 @@
      ============================================================================= */
   
   /* Font Families */
-  --font-family-primary: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif;
+  --font-family-primary: 'Inter', -apple-system, blinkmacsystemfont, 'Segoe UI', system-ui, sans-serif;
   --font-family-mono: 'JetBrains Mono', 'Fira Code', 'Monaco', 'Consolas', monospace;
   
   /* Component Typography */
@@ -230,11 +235,11 @@
   
   /* Elevation System */
   --shadow-none: none;
-  --shadow-xs: 0 1px 2px rgba(0, 0, 0, 0.05);
-  --shadow-sm: 0 1px 3px rgba(0, 0, 0, 0.1);
-  --shadow-md: 0 4px 6px rgba(0, 0, 0, 0.07), 0 2px 4px rgba(0, 0, 0, 0.06);
-  --shadow-lg: 0 10px 15px rgba(0, 0, 0, 0.1), 0 4px 6px rgba(0, 0, 0, 0.05);
-  --shadow-xl: 0 20px 25px rgba(0, 0, 0, 0.1), 0 10px 10px rgba(0, 0, 0, 0.04);
+  --shadow-xs: 0 1px 2px rgb(0 0 0 / 5%);
+  --shadow-sm: 0 1px 3px rgb(0 0 0 / 10%);
+  --shadow-md: 0 4px 6px rgb(0 0 0 / 7%), 0 2px 4px rgb(0 0 0 / 6%);
+  --shadow-lg: 0 10px 15px rgb(0 0 0 / 10%), 0 4px 6px rgb(0 0 0 / 5%);
+  --shadow-xl: 0 20px 25px rgb(0 0 0 / 10%), 0 10px 10px rgb(0 0 0 / 4%);
   
   /* Interactive Shadows */
   --shadow-interactive: var(--shadow-sm);
@@ -242,9 +247,9 @@
   --shadow-interactive-active: var(--shadow-xs);
   
   /* Focus Shadows */
-  --shadow-focus-primary: 0 0 0 3px rgba(59, 130, 246, 0.2);
-  --shadow-focus-danger: 0 0 0 3px rgba(239, 68, 68, 0.2);
-  --shadow-focus-success: 0 0 0 3px rgba(34, 197, 94, 0.2);
+  --shadow-focus-primary: 0 0 0 3px rgb(59 130 246 / 20%);
+  --shadow-focus-danger: 0 0 0 3px rgb(239 68 68 / 20%);
+  --shadow-focus-success: 0 0 0 3px rgb(34 197 94 / 20%);
   
   /* =============================================================================
      BORDER RADIUS TOKENS

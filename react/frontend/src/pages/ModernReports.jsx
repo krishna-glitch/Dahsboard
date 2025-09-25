@@ -2,7 +2,7 @@ import React, { useEffect, useState, useCallback, useMemo } from 'react';
 import RoleGate from '../components/auth/RoleGate';
 import MetricCard from '../components/modern/MetricCard';
 import EmptyState from '../components/modern/EmptyState';
-import Modal from '../components/modern/Modal';
+import { Modal, Button } from 'react-bootstrap';
 import { getReportHistory, generateReport } from '../services/api';
 import { useOptimizedStore } from '../store/simpleOptimizedStore';
 import { useAdvancedMemo } from '../hooks/useOptimizedMemoization';
@@ -356,32 +356,19 @@ const ModernReports = () => {
         {/* Generate Report Modal */}
         <Modal
           show={showGenerateModal}
-          onClose={() => setShowGenerateModal(false)}
-          title="Generate New Report"
-          size="medium"
-          variant="default"
-          loading={generationStatus.includes('Generating')}
-          footerActions={
-            <>
-              <button 
-                onClick={() => setShowGenerateModal(false)}
-                className="btn btn-outline-secondary"
-                type="button"
-              >
-                Cancel
-              </button>
-              <button 
-                onClick={handleGenerateReport}
-                className="btn btn-primary"
-                type="button"
-                disabled={generationStatus.includes('Generating')}
-              >
-                <i className="bi bi-gear" aria-hidden="true"></i>
-                {generationStatus.includes('Generating') ? 'Generating...' : 'Generate Report'}
-              </button>
-            </>
-          }
+          onHide={() => setShowGenerateModal(false)}
+          size="lg"
+          centered
         >
+          <Modal.Header closeButton>
+            <Modal.Title>
+              {generationStatus.includes('Generating') && (
+                <div className="spinner-border spinner-border-sm me-2" role="status" aria-hidden="true"></div>
+              )}
+              Generate New Report
+            </Modal.Title>
+          </Modal.Header>
+          <Modal.Body>
           <div className="form-grid">
             <div className="form-group">
               <label className="form-label" htmlFor="report-type">Report Type</label>
@@ -442,6 +429,23 @@ const ModernReports = () => {
               {generationStatus}
             </div>
           )}
+          </Modal.Body>
+          <Modal.Footer>
+            <Button
+              variant="outline-secondary"
+              onClick={() => setShowGenerateModal(false)}
+            >
+              Cancel
+            </Button>
+            <Button
+              variant="primary"
+              onClick={handleGenerateReport}
+              disabled={generationStatus.includes('Generating')}
+            >
+              <i className="bi bi-gear" aria-hidden="true"></i>
+              {generationStatus.includes('Generating') ? ' Generating...' : ' Generate Report'}
+            </Button>
+          </Modal.Footer>
         </Modal>
       </div>
     </div>

@@ -13,10 +13,14 @@ import './styles/dashboard.css' // 8. Dashboard-specific components
 import './styles/error-boundaries.css' // 9. Error boundary styles
 import './App.css'; // 10. App-specific overrides LAST
 import { BrowserRouter } from 'react-router-dom'; // Import BrowserRouter
-import { TutorialProvider } from './contexts/TutorialContext.jsx';
+import { Toaster } from 'react-hot-toast'; // Toast provider
 
 // Initialize performance monitoring
 import './utils/performanceMonitor';
+
+// Initialize cache management system
+import { initializeCacheSystem } from './utils/cacheInitializer';
+initializeCacheSystem();
 
 // Load icon font CSS after initial paint to reduce render-blocking
 try {
@@ -33,9 +37,19 @@ try {
 ReactDOM.createRoot(document.getElementById('root')).render(
   // <React.StrictMode> - Temporarily disabled to fix infinite re-render issues
     <BrowserRouter>
-      <TutorialProvider>
-        <App />
-      </TutorialProvider>
+      <App />
+      <Toaster
+        position="top-right"
+        gutter={12}
+        containerClassName="app-toast-container"
+        toastOptions={{
+          duration: 4000,
+          className: 'app-toast',
+          style: {
+            maxWidth: 'clamp(560px, 60vw, 960px)',
+          },
+        }}
+      />
     </BrowserRouter>
   // </React.StrictMode>
 )

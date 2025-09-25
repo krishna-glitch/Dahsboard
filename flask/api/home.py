@@ -23,7 +23,7 @@ class NumpyEncoder(json.JSONEncoder):
 
 # Import comprehensive performance optimization
 from utils.advanced_performance_integration_simple import enterprise_performance
-from utils.api_cache_utils import cached_api_response
+from utils.redis_api_cache_utils import redis_cached_api_response
 
 # Initialize logger (using the existing advanced logging system)
 from config.advanced_logging_config import get_advanced_logger
@@ -48,9 +48,9 @@ def root():
     }), 200
 
 @home_bp.route('/data', methods=['GET'])
-# @login_required  # Temporarily disabled for testing
+@login_required
 @enterprise_performance(data_type='dashboard')
-@cached_api_response(ttl=300)
+@redis_cached_api_response(ttl=300)
 def get_home_data():
     logger.info("Received request for home data API.")
     try:

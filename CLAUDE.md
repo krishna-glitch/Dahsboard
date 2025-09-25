@@ -51,7 +51,8 @@ Key Flask features:
 - CORS configured for React frontend on localhost:5173
 - Token-based authentication with Flask-Login
 - Comprehensive error handling with JSON responses
-- Advanced logging and performance monitoring
+- Smart structured logging with noise reduction and clear categories
+- Simplified filtering system with essential parameters only (6 vs 19)
 - Security headers and CSP policies
 - Serves React build files from `/react/frontend/dist/`
 
@@ -101,7 +102,9 @@ All Flask endpoints follow `/api/v1/{domain}` pattern:
 - `react/frontend/vitest.config.js` - Test runner configuration  
 - `react/frontend/eslint.config.js` - Linting rules
 - `flask/config/database.py` - Database connection management
-- `flask/config/advanced_logging_config.py` - Centralized logging setup
+- `flask/config/improved_logging_config.py` - Smart structured logging with noise reduction
+- `flask/.env.logging` - Logging environment variables (LOG_LEVEL, LOG_VERBOSE, CACHE_DEBUG)
+- `flask/services/simple_filter_service.py` - Simplified filtering (replaces advanced_filter_service.py)
 
 ## Key Integration Points
 

@@ -7,9 +7,9 @@ from datetime import datetime, timedelta
 
 # Mock data for services
 MOCK_USER_DATA = {
-    'testuser': {'username': 'testuser', 'password': 'hashed_password', 'role': 'admin', 'is_active': True},
-    'analyst': {'username': 'analyst', 'password': 'hashed_password', 'role': 'analyst', 'is_active': True},
-    'viewer': {'username': 'viewer', 'password': 'hashed_password', 'role': 'viewer', 'is_active': True},
+    'testuser': {'id': 1, 'username': 'testuser', 'password': 'hashed_password', 'role': 'admin', 'is_active': True},
+    'analyst': {'id': 2, 'username': 'analyst', 'password': 'hashed_password', 'role': 'analyst', 'is_active': True},
+    'viewer': {'id': 3, 'username': 'viewer', 'password': 'hashed_password', 'role': 'viewer', 'is_active': True},
 }
 
 MOCK_WQ_DATA = pd.DataFrame({
@@ -24,6 +24,25 @@ MOCK_ALERTS_DATA = [
     {'alert_id': 'A2', 'site_code': 'S2', 'severity': 'high', 'message': 'Low DO', 'timestamp': datetime.now()},
 ]
 
+
+class MockUser:
+    def __init__(self, user_id, username, role):
+        self.id = user_id
+        self.username = username
+        self.role = role
+        self.is_active = True
+
+    @property
+    def is_authenticated(self):
+        return True
+
+    @property
+    def is_anonymous(self):
+        return False
+
+    def get_id(self):
+        return str(self.id)
+
 @pytest.fixture
 def client():
     app = create_app()
@@ -31,19 +50,83 @@ def client():
     with app.test_client() as client:
         yield client
 
-# Fixture to mock user_manager and AuthService for authentication tests
+# Fixture to mock user_manager and auth service for authentication tests
 @pytest.fixture(autouse=True)
 def mock_auth_services():
-    with patch('services.user_management.user_manager', autospec=True) as mock_user_manager,\
-         patch('services.auth_service.AuthService', autospec=True) as MockAuthService:
+    with patch('api.auth.user_manager', autospec=True) as mock_user_manager, \
+         patch('api.auth.auth_service', autospec=True) as mock_auth_service, \
+         patch('services.user_management.user_manager', autospec=True) as mock_legacy_user_manager, \
+         patch('services.new_user_management.NewUserManager.get_user_by_id', autospec=True) as mock_get_user_by_id:
 
-        mock_user_manager.get_user_by_username.side_effect = lambda username: MOCK_USER_DATA.get(username)
-        
-        mock_auth_service_instance = MockAuthService.return_value
-        mock_auth_service_instance.authenticate_user.side_effect = \
-            lambda username, password: (True, MOCK_USER_DATA[username]) if MOCK_USER_DATA.get(username) and password == 'testpassword' else (False, None)
-        
-        yield mock_user_user_manager, mock_auth_service_instance
+        def get_user(db, username):
+            user_data = MOCK_USER_DATA.get(username)
+            return MockUser(user_data['id'], user_data['username'], user_data['role']) if user_data else None
+
+        mock_user_manager.get_user_by_username.side_effect = get_user
+
+        def authenticate_user(db, username, password):
+            user_data = MOCK_USER_DATA.get(username)
+            if user_data and password == 'testpassword':
+                return True, MockUser(user_data['id'], user_data['username'], user_data['role'])
+            return False, None
+
+        mock_auth_service.authenticate_user.side_effect = authenticate_user
+        mock_auth_service.logout_user = MagicMock()
+
+        def lookup_user(identifier):
+            if identifier is None:
+                return None
+
+            key = identifier
+            if isinstance(identifier, str) and identifier.isdigit():
+                for record in MOCK_USER_DATA.values():
+                    if str(record['id']) == identifier:
+                        key = record['username']
+                        break
+
+            user_data = MOCK_USER_DATA.get(key)
+            if not user_data:
+                return None
+            return {
+                'username': user_data['username'],
+                'role': user_data['role'],
+                'is_active': user_data.get('is_active', True),
+                'last_login': datetime.now()
+            }
+
+        mock_legacy_user_manager.get_user_by_username.side_effect = lookup_user
+        mock_legacy_user_manager.get_user_list.return_value = [
+            {
+                'username': record['username'],
+                'role': record['role'],
+                'is_active': record.get('is_active', True),
+                'last_login': datetime.now()
+            }
+            for record in MOCK_USER_DATA.values()
+        ]
+        mock_legacy_user_manager.get_session_statistics.return_value = {
+            'active_sessions': 2,
+            'total_sessions_today': 5,
+            'average_session_duration_minutes': 45
+        }
+        mock_legacy_user_manager.get_user_activity_log.return_value = [
+            {
+                'username': 'testuser',
+                'action': 'login',
+                'timestamp': datetime.now(),
+                'ip_address': '127.0.0.1'
+            }
+        ]
+
+        def lookup_user_by_id(cls, db, user_id):
+            for record in MOCK_USER_DATA.values():
+                if str(record['id']) == str(user_id):
+                    return MockUser(record['id'], record['username'], record['role'])
+            return None
+
+        mock_get_user_by_id.side_effect = lookup_user_by_id
+
+        yield
 
 # Fixture to mock core_data_service and alert_engine for data fetching tests
 @pytest.fixture(autouse=True)
@@ -53,7 +136,9 @@ def mock_data_services():
          patch('services.consolidated_cache_service.cache_service', autospec=True) as mock_cache_service,\
          patch('utils.callback_optimizer.callback_optimizer', autospec=True) as mock_callback_optimizer,\
          patch('utils.chart_performance_optimizer.chart_optimizer', autospec=True) as mock_chart_optimizer,\
-         patch('services.cache_prewarmer.cache_prewarmer', autospec=True) as mock_cache_prewarmer:
+         patch('services.cache_prewarmer.cache_prewarmer', autospec=True) as mock_cache_prewarmer,\
+         patch('config.database.db.execute_query', autospec=True) as mock_execute_query,\
+         patch('services.database_date_service.database_date_service', autospec=True) as mock_date_service:
 
         # Mock for water_quality data
         mock_core_data_service.load_water_quality_data.return_value = MOCK_WQ_DATA
@@ -63,11 +148,45 @@ def mock_data_services():
         mock_alert_engine.get_active_alerts.return_value = MOCK_ALERTS_DATA
 
         # Mock for performance data
-        mock_cache_service.get_stats.return_value = {'hit_rate_percent': 90, 'memory_usage_mb': 100, 'memory_limit_mb': 1024}
+        mock_cache_service.get_detailed_stats.return_value = {
+            'hit_rate_percent': 90,
+            'memory_usage_mb': 100,
+            'memory_limit_mb': 1024,
+        }
         mock_callback_optimizer.get_optimization_stats.return_value = {'total_optimizations': 5}
         mock_chart_optimizer.get_performance_stats.return_value = {'charts_optimized': 10, 'data_points_reduced': 1000}
         mock_cache_prewarmer.get_prewarming_stats.return_value = {'cache_entries_created': 20, 'is_currently_prewarming': False}
-        
+
+        mock_date_service.get_database_latest_date.return_value = datetime.now()
+        mock_date_service.get_date_range_for_period.side_effect = lambda period: (
+            datetime.now() - timedelta(days=7), datetime.now()
+        )
+
+        sites_df = pd.DataFrame({
+            'site_id': ['S1', 'S2'],
+            'status': ['active', 'active']
+        })
+        latest_df = pd.DataFrame({'latest': [datetime.now()]})
+        recent_count_df = pd.DataFrame({'count': [len(MOCK_WQ_DATA)]})
+        activity_df = pd.DataFrame({
+            'measurement_timestamp': [datetime.now() - timedelta(hours=i) for i in range(5)],
+            'site_code': ['S1', 'S2', 'S1', 'S2', 'S1'],
+            'activity_type': ['Water Quality Measurement'] * 5
+        })
+
+        def fake_execute_query(query, params=None):
+            if 'FROM impact.site' in query:
+                return sites_df
+            if 'MAX(measurement_timestamp)' in query:
+                return latest_df
+            if 'COUNT(*) AS count' in query:
+                return recent_count_df
+            if 'SELECT wq.measurement_timestamp' in query:
+                return activity_df
+            return pd.DataFrame()
+
+        mock_execute_query.side_effect = fake_execute_query
+
         yield mock_core_data_service, mock_alert_engine, mock_cache_service, mock_callback_optimizer, mock_chart_optimizer, mock_cache_prewarmer
 
 

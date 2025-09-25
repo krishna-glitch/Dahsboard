@@ -1,9 +1,10 @@
 import React, { useEffect, useState, useCallback, useMemo, useRef } from 'react';
-import Plot from 'react-plotly.js';
+import Plot from '../components/PlotlyLite';
 import { useSearchParams } from 'react-router-dom';
 import MetricCard from '../components/modern/MetricCard';
 import EmptyState from '../components/modern/EmptyState';
 import ExportButton from '../components/ExportButton';
+import SimpleLoadingBar from '../components/modern/SimpleLoadingBar';
 import { useToast } from '../components/modern/toastUtils';
 import PerSiteCharts from '../components/comparison/PerSiteCharts';
 import { getSiteComparisonData, getAvailableSites, getWaterQualityData, getRedoxAnalysisData } from '../services/api';
@@ -25,14 +26,16 @@ const ModernSiteComparison = () => {
   const [availableSites, setAvailableSites] = useState([]);
   const [selectedSites, setSelectedSites] = useState(['S1', 'S2', 'S3']);
   const [selectedMetric, setSelectedMetric] = useState('conductivity');
-  const [timeRange, setTimeRange] = useState('7d');
-  const [customStartDate, setCustomStartDate] = useState('');
-  const [customEndDate, setCustomEndDate] = useState('');
+  const [timeRange, setTimeRange] = useState('Custom Range');
+  const [customStartDate, setCustomStartDate] = useState('2024-05-01');
+  const [customEndDate, setCustomEndDate] = useState('2024-05-31');
   const [sortKey, setSortKey] = useState('currentValue'); // or 'change24h'
   const [sortDir, setSortDir] = useState('desc'); // 'asc' or 'desc'
   // Removed Group By: always show exactly the selected sites
   // Removed previous-period comparison for now
   const [searchParams, setSearchParams] = useSearchParams();
+  const searchParamsString = useMemo(() => searchParams.toString(), [searchParams]);
+  const lastSyncedParamsRef = useRef('');
   // Derive data type from selectedMetric; no separate mode state
   const [selectedDepth, setSelectedDepth] = useState(100); // cm for redox
   const [seriesTraces, setSeriesTraces] = useState([]);
@@ -40,6 +43,7 @@ const ModernSiteComparison = () => {
   const [seriesError, setSeriesError] = useState(null);
   // Removed separate export format state; using ExportButton only
   const [chartViewMode, setChartViewMode] = useState('overlay'); // 'overlay' or 'per-site'
+  const [chartType, setChartType] = useState('line'); // 'line' | 'scatter'
   
   // NEW: Analysis mode state
   const [analysisMode, setAnalysisMode] = useState('concurrent'); // 'concurrent' or 'full_period'
@@ -140,58 +144,85 @@ const ModernSiteComparison = () => {
     }
   }, [selectedSites, selectedMetric, timeRange, customStartDate, customEndDate, analysisMode, concurrentWindowHours]);
 
-  // Consolidated data loading with proper state management
-  const dataLoadingRef = useRef(false);
-  
+  // Load sites once on mount
   useEffect(() => {
-    // Initialize data loading sequence
-    const initializeData = async () => {
-      if (dataLoadingRef.current) return; // Prevent concurrent initialization
-      
-      dataLoadingRef.current = true;
-      // URL -> state - Fixed to prevent potential setState during render issues
-      const sitesQ = searchParams.get('sites');
-      const metricQ = searchParams.get('metric');
-      const timeQ = searchParams.get('time_range');
-      
-      // Use setTimeout to ensure these are scheduled after render
-      setTimeout(() => {
-        if (sitesQ) setSelectedSites(sitesQ.split(','));
-        if (metricQ) setSelectedMetric(metricQ);
-        if (timeQ) setTimeRange(timeQ);
-        
-        // Handle custom date range URL params
-        const startDateQ = searchParams.get('start_date');
-        const endDateQ = searchParams.get('end_date');
-        if (startDateQ) setCustomStartDate(startDateQ);
-        if (endDateQ) setCustomEndDate(endDateQ);
-      }, 0);
-      await fetchAvailableSites();
-      dataLoadingRef.current = false;
-    };
-    
-    initializeData();
-  }, [fetchAvailableSites, searchParams]);
+    fetchAvailableSites();
+  }, [fetchAvailableSites]);
 
-  // State -> URL
+  // URL -> state synchronisation guarded against feedback loops
+  useEffect(() => {
+    if (!searchParamsString) {
+      lastSyncedParamsRef.current = '';
+      return;
+    }
+
+    if (searchParamsString === lastSyncedParamsRef.current) {
+      return;
+    }
+
+    const sitesQ = searchParams.get('sites');
+    const metricQ = searchParams.get('metric');
+    const timeQ = searchParams.get('time_range');
+    const startDateQ = searchParams.get('start_date');
+    const endDateQ = searchParams.get('end_date');
+
+    if (sitesQ) {
+      const parsed = sitesQ.split(',').filter(Boolean);
+      setSelectedSites(prev => {
+        const sameLength = prev.length === parsed.length;
+        const sameValues = sameLength && prev.every((v, i) => v === parsed[i]);
+        return sameValues ? prev : parsed;
+      });
+    }
+
+    if (metricQ) {
+      setSelectedMetric(prev => (prev === metricQ ? prev : metricQ));
+    }
+
+    if (timeQ) {
+      setTimeRange(prev => (prev === timeQ ? prev : timeQ));
+    }
+
+    if (startDateQ) {
+      setCustomStartDate(prev => (prev === startDateQ ? prev : startDateQ));
+    }
+
+    if (endDateQ) {
+      setCustomEndDate(prev => (prev === endDateQ ? prev : endDateQ));
+    }
+
+    lastSyncedParamsRef.current = searchParamsString;
+  }, [searchParams, searchParamsString]);
+
+  // State -> URL synchronisation
   useEffect(() => {
     const params = new URLSearchParams();
     params.set('sites', selectedSites.join(','));
     params.set('metric', selectedMetric);
     params.set('time_range', timeRange);
-    
-    // Include custom date range in URL if set
+
     if (timeRange === 'custom') {
       if (customStartDate) params.set('start_date', customStartDate);
       if (customEndDate) params.set('end_date', customEndDate);
     }
-    
+
+    const nextString = params.toString();
+    if (nextString === searchParamsString) {
+      lastSyncedParamsRef.current = nextString;
+      return;
+    }
+
+    if (nextString === lastSyncedParamsRef.current) {
+      return;
+    }
+
+    lastSyncedParamsRef.current = nextString;
     setSearchParams(params, { replace: true });
-  }, [selectedSites, selectedMetric, timeRange, customStartDate, customEndDate, setSearchParams]);
+  }, [selectedSites, selectedMetric, timeRange, customStartDate, customEndDate, setSearchParams, searchParamsString]);
 
   // Load comparison data with proper guards (only after sites are loaded and not during initialization)
   useEffect(() => {
-    if (!dataLoadingRef.current && !sitesLoading && selectedSites.length > 0 && availableSites.length > 0) {
+    if (!sitesLoading && selectedSites.length > 0 && availableSites.length > 0) {
       // Debounce API calls by 300ms to prevent rapid successive calls
       const debounceTimeout = setTimeout(() => {
         fetchComparisonData();
@@ -341,7 +372,7 @@ const ModernSiteComparison = () => {
             x: series.x,
             y: series.y,
             type: 'scatter',
-            mode: 'lines',
+            mode: chartType === 'line' ? 'lines' : 'markers',
             name: sitesLookup.get(sid)?.name || sid,
             line: { color: colors[sid] || colors.Unknown || '#6c757d', width: 2 },
           }));
@@ -392,7 +423,7 @@ const ModernSiteComparison = () => {
             x: series.x,
             y: series.y,
             type: 'scatter',
-            mode: 'lines',
+            mode: chartType === 'line' ? 'lines' : 'markers',
             name: `${sitesLookup.get(sid)?.name || sid}`,
             line: { color: colors[sid] || colors.Unknown || '#6c757d', width: 2 },
           }));
@@ -407,7 +438,7 @@ const ModernSiteComparison = () => {
     };
     build();
     return () => { aborted = true; };
-  }, [metaStart, metaEnd, selectedSites, selectedMetric, selectedDepth, availableSites, sitesLookup]);
+  }, [metaStart, metaEnd, selectedSites, selectedMetric, selectedDepth, availableSites, sitesLookup, chartType]);
 
   // Previous-period comparison removed
 
@@ -431,6 +462,10 @@ const ModernSiteComparison = () => {
     setChartViewMode(e.target.value);
   }, []);
 
+  const handleChartTypeChange = useCallback((e) => {
+    setChartType(e.target.value);
+  }, []);
+
   // Transform series traces for per-site view (memoized for performance)
   const perSiteChartData = useMemo(() => {
     if (chartViewMode !== 'per-site' || !seriesTraces.length) return [];
@@ -446,7 +481,7 @@ const ModernSiteComparison = () => {
           y: trace.y,
           name: selectedMetric === 'redox' ? 'Redox (Eh)' : selectedMetricInfo?.name || 'Value',
           type: trace.type || 'scatter',
-          mode: 'lines+markers',
+          mode: chartType === 'line' ? 'lines' : 'markers',
           line: { width: 2, color: SITE_COLORS[siteName] || trace.line?.color || '#1f77b4' },
           marker: { size: 4, color: SITE_COLORS[siteName] || trace.marker?.color || '#1f77b4' }
         });
@@ -457,7 +492,7 @@ const ModernSiteComparison = () => {
       siteName,
       data: [traceData]
     }));
-  }, [seriesTraces, chartViewMode, selectedMetric, selectedMetricInfo]);
+  }, [seriesTraces, chartViewMode, selectedMetric, selectedMetricInfo, chartType]);
 
   // Threshold bands for current metric
   const thresholdShapes = useMemo(() => {
@@ -587,10 +622,17 @@ const ModernSiteComparison = () => {
           </div>
         </div>
         <div className="main-content">
-          <EmptyState
-            type="loading"
-            title="Loading Site Comparison"
-            description="Fetching site data and comparison metrics..."
+          <SimpleLoadingBar
+            isVisible={loading || sitesLoading}
+            message={sitesLoading ? "Loading available sites..." :
+              `Loading ${selectedMetric} data for ${selectedSites.length} site${selectedSites.length !== 1 ? 's' : ''}...`}
+            stage={sitesLoading ? "initializing" : "loading"}
+            compact={false}
+            progress={null} // Show indeterminate for site comparison
+            current={comparisonData?.length || null}
+            total={null}
+            showPercentage={false}
+            showCounts={comparisonData?.length > 0 && !loading}
           />
         </div>
       </div>
@@ -700,7 +742,15 @@ const ModernSiteComparison = () => {
               </div>
             )}
           </div>
-          
+
+          <div className="control-group">
+            <label className="control-label">Chart Type</label>
+            <select className="control-select" value={chartType} onChange={handleChartTypeChange}>
+              <option value="line">Line</option>
+              <option value="scatter">Scatter</option>
+            </select>
+          </div>
+
           <div className="control-group">
             <label className="control-label">Time Range</label>
             <select 

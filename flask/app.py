@@ -1,10 +1,10 @@
 import os
-from flask import Flask, jsonify, send_from_directory
+from flask import Flask, jsonify, send_from_directory, abort
 from flask_cors import CORS
 from flask_login import LoginManager, UserMixin, login_user, logout_user, login_required, current_user
 
 from config import get_server_config
-from config.advanced_logging_config import initialize_advanced_logging, get_advanced_logger
+from config.improved_logging_config import configure_app_logging, get_smart_logger, LogCategory
 from utils.request_response_logger import setup_flask_request_logging
 from utils.orjson_provider import OrjsonProvider, ORJSON_AVAILABLE
  
@@ -23,19 +23,13 @@ try:  # pragma: no cover
 except Exception:  # pragma: no cover
     _BR_AVAILABLE = False
 
-# Initialize Advanced Comprehensive Logging System
-logging_config = initialize_advanced_logging(
-    log_level='DEBUG',
-    enable_console=True,
-    enable_file=True,
-    enable_json=True,
-    enable_performance=True
-)
-
-logger = get_advanced_logger(__name__)
+# Configure improved logging system
+configure_app_logging()
+logger = get_smart_logger(__name__, LogCategory.API)
 
 # Import advanced performance integration
 from utils.advanced_performance_integration_simple import init_performance_optimization
+from utils.cache_headers import init_cache_headers
 
 def create_app():
     """
@@ -56,7 +50,10 @@ def create_app():
     CORS(server, 
          origins=["http://localhost:5173", "http://127.0.0.1:5173", 
                  "http://localhost:5174", "http://127.0.0.1:5174",
-                 "http://localhost:5175", "http://127.0.0.1:5175"], 
+                 "http://localhost:5175", "http://127.0.0.1:5175",
+                 # Vite preview defaults (4173/4174)
+                 "http://localhost:4173", "http://127.0.0.1:4173",
+                 "http://localhost:4174", "http://127.0.0.1:4174"], 
          supports_credentials=True,
          expose_headers=[
             'X-Total-Records', 'X-Returned-Records', 'X-Chunk-Offset', 'X-Chunk-Size', 'X-Chunk-Has-More'
@@ -84,6 +81,9 @@ def create_app():
         except Exception as _e:  # pragma: no cover
             logger.warning("Flask-Compress initialization failed; continuing without compression")
 
+    # Phase 3 (revalidation): add conservative cache headers + ETag for safe JSON APIs
+    init_cache_headers(server, default_ttl_seconds=3600)
+
     # Improve static file caching for production builds
     try:
         server_config = get_server_config()
@@ -93,6 +93,7 @@ def create_app():
             server.config['SEND_FILE_MAX_AGE_DEFAULT'] = 60 * 60 * 24 * 7
     except Exception:
         pass
+
 
     login_manager = LoginManager()
     login_manager.init_app(server)
@@ -114,21 +115,24 @@ def create_app():
         return jsonify({'error': 'Internal Server Error', 'message': 'An unexpected error occurred on the server.'}), 500
 
     # User loader callback
-    from services.user_management import user_manager
-    from services.auth_models import User  # Import centralized User class
+    from services.new_user_management import NewUserManager
+    from auth_database import AuthSessionLocal
+
+    user_manager = NewUserManager()
 
     @login_manager.user_loader
     def load_user(user_id):
+        db = AuthSessionLocal()
         try:
-            user_data = user_manager.get_user_by_username(user_id)
-            if user_data and user_data.get('is_active', True):
-                return User(user_data['username'])
-            # If user missing (e.g., after a restart), try reloading from disk happened automatically in user_manager
-            # As a safe fallback, keep unauthenticated
-            return None
-        except Exception as e:
-            logger.warning(f"User loader failed for id={user_id}: {e}")
-            return None
+            try:
+                numeric_id = int(user_id)
+            except (TypeError, ValueError):
+                return None
+
+            user = user_manager.get_user_by_id(db, numeric_id)
+            return user
+        finally:
+            db.close()
 
     # Configure Flask server with secure settings
     server_config = get_server_config()
@@ -221,10 +225,13 @@ def create_app():
 
     @server.route('/<path:path>')
     def serve_static(path):
+        if path.startswith('api/'):
+            abort(404)
+
         if path != "" and os.path.exists(os.path.join(REACT_BUILD_DIR, path)):
             return send_from_directory(REACT_BUILD_DIR, path)
-        else:
-            return send_from_directory(REACT_BUILD_DIR, 'index.html')
+
+        return send_from_directory(REACT_BUILD_DIR, 'index.html')
 
     # Register blueprints here
     from api.home import home_bp
@@ -252,6 +259,7 @@ def create_app():
         logger.warning(f"Performance test API not available: {e}")
     from api.debug import debug_bp  # Client debug log API
     from api.data_quality import data_quality_bp
+    from api.code_quality import code_quality_bp  # Code quality analysis API
     # Add root route for API status
     # @server.route('/')
     # def api_status():
@@ -290,6 +298,7 @@ def create_app():
     # Global search removed to reduce confusion
     server.register_blueprint(debug_bp, url_prefix='/api/v1/debug')  # Register client debug API
     server.register_blueprint(data_quality_bp, url_prefix='/api/v1/data_quality')
+    server.register_blueprint(code_quality_bp, url_prefix='/api/v1/code_quality')  # Register code quality analysis API
 
     # Initialize advanced performance optimization with cache prewarming
     init_performance_optimization(server)

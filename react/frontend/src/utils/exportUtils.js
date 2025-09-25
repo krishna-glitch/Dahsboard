@@ -7,8 +7,8 @@
  * TODO: Eventually migrate all imports to use the new exporters directly.
  */
 
-// Re-export everything from the new lazy system
-export {
+// Import from the new lazy system to make them available in this module
+import {
   EXPORT_FORMATS,
   formatFilename,
   validateExportData,
@@ -18,6 +18,18 @@ export {
   performExport,
   performBatchExport
 } from './exporters';
+
+// Re-export everything for other modules that use this legacy file
+export {
+  EXPORT_FORMATS,
+  formatFilename,
+  validateExportData,
+  ChartExporter,
+  DataExporter,
+  InsightsExporter,
+  performExport,
+  performBatchExport
+};
 
 // Legacy data processing utilities (lightweight, can stay)
 export class DataProcessor {

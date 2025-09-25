@@ -5,8 +5,11 @@ const DB_NAME = 'redoxMonthCacheDB';
 const DB_VERSION = 1;
 const STORE_NAME = 'slices';
 
-function openDb() {
-  return new Promise((resolve, reject) => {
+let _dbPromise = null;
+
+function getDb() {
+  if (_dbPromise) return _dbPromise;
+  _dbPromise = new Promise((resolve, reject) => {
     try {
       const req = indexedDB.open(DB_NAME, DB_VERSION);
       req.onupgradeneeded = () => {
@@ -21,11 +24,12 @@ function openDb() {
       reject(e);
     }
   });
+  return _dbPromise;
 }
 
 async function idbGet(key) {
   try {
-    const db = await openDb();
+    const db = await getDb();
     return await new Promise((resolve, reject) => {
       const tx = db.transaction(STORE_NAME, 'readonly');
       const store = tx.objectStore(STORE_NAME);
@@ -33,14 +37,14 @@ async function idbGet(key) {
       req.onsuccess = () => resolve(req.result || null);
       req.onerror = () => reject(req.error);
     });
-  } catch (_) {
+  } catch {
     return null;
   }
 }
 
 async function idbSet(key, value) {
   try {
-    const db = await openDb();
+    const db = await getDb();
     return await new Promise((resolve, reject) => {
       const tx = db.transaction(STORE_NAME, 'readwrite');
       const store = tx.objectStore(STORE_NAME);
@@ -48,7 +52,7 @@ async function idbSet(key, value) {
       req.onsuccess = () => resolve(true);
       req.onerror = () => reject(req.error);
     });
-  } catch (_) {
+  } catch {
     return false;
   }
 }
@@ -73,7 +77,7 @@ export async function getMonthCache(key, ttlMs, sessionFallback = true) {
         if (!sttl || (now - (obj?.savedAt || 0)) <= sttl) return obj?.payload || null;
         sessionStorage.removeItem(key);
       }
-    } catch (_) {}
+    } catch { /* ignore */ }
   }
   return null;
 }
@@ -86,7 +90,6 @@ export async function setMonthCache(key, payload, ttlMs, sessionFallback = true)
   if (sessionFallback) {
     try {
       sessionStorage.setItem(key, JSON.stringify(record));
-    } catch (_) {}
+    } catch { /* ignore */ }
   }
 }
-

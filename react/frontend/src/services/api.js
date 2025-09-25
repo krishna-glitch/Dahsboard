@@ -1,20 +1,39 @@
 import axios from 'axios';
+import { normalizeParams, canonicalKeyFromParams } from '../utils/normalize';
+import { registerCache, DEFAULT_TTL } from '../utils/cacheManager';
 
 // API base URL
 // IMPORTANT: For cookie-based auth to persist across refresh, point dev to the real API origin
 // instead of relying on the Vite proxy. Browsers don't attach API cookies on proxied same-origin requests.
 const isDev = !!import.meta?.env?.DEV;
-// Use Vite proxy in dev to ensure same-origin cookies are set and sent reliably
-const API_BASE_URL = (import.meta?.env?.VITE_API_BASE_URL)
-  ? import.meta.env.VITE_API_BASE_URL
-  : (isDev ? '/api/v1' : 'http://127.0.0.1:5000/api/v1');
+// Prefer explicit env when provided
+let API_BASE_URL = (import.meta?.env?.VITE_API_BASE_URL) ? String(import.meta.env.VITE_API_BASE_URL) : '';
+if (!API_BASE_URL) {
+  if (isDev) {
+    // Dev server uses Vite proxy to keep same-origin
+    API_BASE_URL = '/api/v1';
+  } else {
+    // Preview/prod: default to backend on port 5000 with SAME HOSTNAME to preserve cookies (avoid 127.0.0.1 vs localhost mismatch)
+    const host = (typeof window !== 'undefined' && window.location && window.location.hostname) ? window.location.hostname : 'localhost';
+    const apiPort = (import.meta?.env?.VITE_API_PORT) ? String(import.meta.env.VITE_API_PORT) : '5000';
+    API_BASE_URL = `http://${host}:${apiPort}/api/v1`;
+  }
+}
 
-// Debug: Log the API base URL to console
-console.log('🔗 API_BASE_URL:', API_BASE_URL);
-console.log('🌍 Environment variables:', import.meta?.env);
+// Debug logs (guarded): set VITE_DEBUG_API=1 to enable
+const DEBUG_API = !!(import.meta?.env?.DEV) || String(import.meta?.env?.VITE_DEBUG_API || '').toLowerCase() === '1';
+if (DEBUG_API) {
+  // eslint-disable-next-line no-console
+  console.log('🔗 API_BASE_URL:', API_BASE_URL);
+  // eslint-disable-next-line no-console
+  console.log('🌍 Environment variables:', import.meta?.env);
+}
 
 // Request deduplication cache to prevent multiple identical requests
 const pendingRequests = new Map();
+
+// Register pending requests cache with short TTL (requests should not be pending long)
+registerCache('pendingRequests', pendingRequests, DEFAULT_TTL.SHORT, 50);
 
 // Create axios instance with default config
 const apiClient = axios.create({
@@ -103,20 +122,26 @@ const stableStringify = (value) => {
 
 // Generate cache key for request deduplication
 const generateRequestKey = (endpoint, method, body, params) => {
-  const key = `${method}:${endpoint}:${stableStringify(body || {})}:${stableStringify(params || {})}`;
-  return key;
+  try {
+    const norm = normalizeParams(endpoint, params);
+    const canonical = canonicalKeyFromParams(norm);
+    return `${method}:${canonical}`;
+  } catch {
+    // Fallback to stable stringify if normalization fails
+    return `${method}:${endpoint}:${stableStringify(body || {})}:${stableStringify(params || {})}`;
+  }
 };
 
 export const fetchData = async (endpoint, method = 'GET', body = null, params = null, signal = null, allowDuplicates = false) => {
-  console.log('🔥 [API DEBUG] fetchData called:', { endpoint, method, params, allowDuplicates });
+  if (DEBUG_API) console.log('🔥 [API DEBUG] fetchData called:', { endpoint, method, params, allowDuplicates });
   
   // Generate request key for deduplication (unless explicitly allowed)
   const requestKey = allowDuplicates ? null : generateRequestKey(endpoint, method, body, params);
-  console.log('🔥 [API DEBUG] Generated requestKey:', requestKey);
+  if (DEBUG_API) console.log('🔥 [API DEBUG] Generated requestKey:', requestKey);
   
   // Check for pending identical request
   if (requestKey && pendingRequests.has(requestKey)) {
-    console.log(`🔄 [API DEBUG] Deduplicating request: ${requestKey}`);
+    if (DEBUG_API) console.log(`🔄 [API DEBUG] Deduplicating request: ${requestKey}`);
     return pendingRequests.get(requestKey);
   }
 
@@ -157,34 +182,35 @@ export const fetchData = async (endpoint, method = 'GET', body = null, params = 
   }
 
   // Create request promise
-  console.log('🔥 [API DEBUG] Making request to:', `${API_BASE_URL}/${endpoint}`, 'with config:', config);
+  if (DEBUG_API) console.log('🔥 [API DEBUG] Making request to:', `${API_BASE_URL}/${endpoint}`, 'with config:', config);
   const requestPromise = apiClient.request(config);
   
   // Store in pending requests if deduplication enabled
   if (requestKey) {
-    console.log('🔥 [API DEBUG] Storing request in pending:', requestKey);
+    if (DEBUG_API) console.log('🔥 [API DEBUG] Storing request in pending:', requestKey);
+    // Cache size management is handled automatically by the cache manager
     pendingRequests.set(requestKey, requestPromise);
     
     // Clean up after request completes (success or failure)
     requestPromise
       .then(result => {
-        console.log('🔥 [API DEBUG] Request completed successfully:', requestKey);
+        if (DEBUG_API) console.log('🔥 [API DEBUG] Request completed successfully:', requestKey);
         pendingRequests.delete(requestKey);
         return result;
       })
       .catch(error => {
-        console.log('🔥 [API DEBUG] Request failed:', requestKey, error);
+        if (DEBUG_API) console.log('🔥 [API DEBUG] Request failed:', requestKey, error);
         pendingRequests.delete(requestKey);
         throw error;
       });
   }
 
-  console.log('🔥 [API DEBUG] Returning request promise for:', endpoint);
+  if (DEBUG_API) console.log('🔥 [API DEBUG] Returning request promise for:', endpoint);
   return requestPromise.then(result => {
-    console.log('🔥 [API DEBUG] Final response for', endpoint, ':', result);
+    if (DEBUG_API) console.log('🔥 [API DEBUG] Final response for', endpoint, ':', result);
     return result;
   }).catch(error => {
-    console.error('🔥 [API DEBUG] Final error for', endpoint, ':', error);
+    if (DEBUG_API) console.error('🔥 [API DEBUG] Final error for', endpoint, ':', error);
     throw error;
   });
 };
@@ -332,7 +358,7 @@ export const getProcessedEhTimeSeries = async ({ siteId, startTs, endTs, chunkSi
     ...(Number.isFinite(depthTolerance) && depthTolerance > 0 && { depth_tolerance: depthTolerance }),
     ...(Number.isFinite(targetPoints) && targetPoints > 0 && { target_points: targetPoints })
   };
-  console.log('🚀 [API] Calling optimized time series endpoint with caching and chunked loading support');
+  if (DEBUG_API) console.log('🚀 [API] Calling optimized time series endpoint with caching and chunked loading support');
   return fetchData('redox_analysis/processed/time_series', 'GET', null, params, signal, true);
 };
 
@@ -386,7 +412,7 @@ export const getProcessedEhRollingMean = async ({ siteId, startTs, endTs, window
     end_ts: endTs,
     window_hours: windowHours 
   };
-  console.log('🚀 [API] Calling high-performance Polars rolling mean endpoint with caching');
+  if (DEBUG_API) console.log('🚀 [API] Calling high-performance Polars rolling mean endpoint with caching');
   return fetchData('redox_analysis/processed/rolling_mean', 'GET', null, params, signal, true);
 };
 
@@ -413,10 +439,10 @@ export const getAuthHealth = async (signal = null) => {
   return fetchData('auth/health', 'GET', null, null, signal, true);
 };
 
-export const getWaterQualityData = async (params, signal = null, options = {}) => {
-  // Allow duplicates for water quality to ensure fresh data on filter changes
+export const getWaterQualityData = async (params, signal = null) => {
+  // Use request deduplication to prevent infinite loops while allowing fresh data on filter changes
   // Wire through abort signal so callers can cancel in-flight requests
-  const res = await fetchData('water_quality/data', 'GET', null, params, signal, true);
+  const res = await fetchData('water_quality/data', 'GET', null, params, signal, false);
   // Normalize possible tuple-like responses and shapes
   const body = Array.isArray(res) ? (res[0] || {}) : (res || {});
   const rows = Array.isArray(body.water_quality_data) ? body.water_quality_data
