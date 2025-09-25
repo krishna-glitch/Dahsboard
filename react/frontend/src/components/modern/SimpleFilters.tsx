@@ -1,13 +1,28 @@
 import React, { useEffect, useState } from 'react';
 import { useForm, Controller } from 'react-hook-form';
+import { Modal, Button as BootstrapButton, Form as BootstrapForm, Alert } from 'react-bootstrap';
 import Select from 'react-select';
 import { TIME_RANGE_OPTIONS } from '../../constants/appConstants';
 import { getTimeRanges } from '../../services/api';
-import { getAllPresets, getDefaultPreset, setDefaultPreset } from '../../utils/presetManager';
+import {
+  getAllPresets,
+  getDefaultPreset,
+  setDefaultPreset,
+  createPresetFromSettings,
+  saveUserPreset,
+  findPresetByName,
+} from '../../utils/presetManager';
 import { SimpleFiltersProps, FilterFormData, TimeRangeOption } from '../../types/filters';
-import { createFilterValidation } from '../../utils/formValidation';
+import { createFilterValidation, createCreatePresetValidation } from '../../utils/formValidation';
 import styles from './SimpleFilters.module.css';
 import Icon from './Icon';
+import { useToast } from './toastUtils';
+
+interface SavePresetFormData {
+  name: string;
+  description: string;
+  overwriteExisting: boolean;
+}
 
 /**
  * Simple Filters Component - React Hook Form + TypeScript Implementation
@@ -27,10 +42,13 @@ const SimpleFilters: React.FC<SimpleFiltersProps> = ({
   collapsed = false,
   onToggleCollapse = () => {},
   maxDate = '',
-  minDate = ''
+  minDate = '',
+  presetSettings = null,
+  onPresetSaved,
 }) => {
-  // Get validation rules
+  const toast = useToast();
   const validationRules = createFilterValidation(minDate, maxDate);
+  const presetValidationRules = createCreatePresetValidation();
 
   // React Hook Form setup with TypeScript
   const {
@@ -55,8 +73,31 @@ const SimpleFilters: React.FC<SimpleFiltersProps> = ({
 
   // Local state for non-form data
   const [timeRanges, setTimeRanges] = useState<TimeRangeOption[]>(TIME_RANGE_OPTIONS);
-  const [allPresets, setAllPresets] = useState({});
-  const [defaultPresetId, setDefaultPresetId] = useState('quick-overview');
+  const [allPresets, setAllPresets] = useState(getAllPresets());
+  const [defaultPresetId, setDefaultPresetId] = useState(getDefaultPreset());
+  const [showSavePresetModal, setShowSavePresetModal] = useState(false);
+
+  const {
+    register: registerSave,
+    handleSubmit: handleSaveSubmit,
+    reset: resetSaveForm,
+    watch: watchSaveForm,
+    setError: setSaveError,
+    formState: saveFormState,
+  } = useForm<SavePresetFormData>({
+    mode: 'onChange',
+    defaultValues: {
+      name: '',
+      description: '',
+      overwriteExisting: false,
+    },
+  });
+
+  const saveNameValue = watchSaveForm('name');
+  const overwriteExisting = watchSaveForm('overwriteExisting');
+  const duplicatePreset = saveNameValue ? findPresetByName(saveNameValue) : null;
+  const duplicateIsSystem = duplicatePreset?.category === 'system';
+  const duplicateIsUser = Boolean(duplicatePreset) && !duplicateIsSystem;
 
   const availableSites = [
     { value: 'S1', label: 'Site 1', available: true },
@@ -119,13 +160,10 @@ const SimpleFilters: React.FC<SimpleFiltersProps> = ({
 
   // Load presets
   useEffect(() => {
-    const loadPresets = () => {
-      const presets = getAllPresets();
-      const defaultId = getDefaultPreset();
-      setAllPresets(presets);
-      setDefaultPresetId(defaultId);
-    };
-    loadPresets();
+    const presets = getAllPresets();
+    const defaultId = getDefaultPreset();
+    setAllPresets(presets);
+    setDefaultPresetId(defaultId);
   }, []);
 
   // Custom validation functions
@@ -200,6 +238,25 @@ const SimpleFilters: React.FC<SimpleFiltersProps> = ({
     }
   };
 
+  const reloadPresets = () => {
+    setAllPresets(getAllPresets());
+    setDefaultPresetId(getDefaultPreset());
+  };
+
+  const handleOpenSavePreset = () => {
+    if (!presetSettings) {
+      toast.showInfo('Load the dashboard first to save a preset.');
+      return;
+    }
+    resetSaveForm({ name: '', description: '', overwriteExisting: false });
+    setShowSavePresetModal(true);
+  };
+
+  const handleCloseSavePreset = () => {
+    setShowSavePresetModal(false);
+    resetSaveForm({ name: '', description: '', overwriteExisting: false });
+  };
+
   // Check if form has changes
   const hasChanges = () => {
     return JSON.stringify(watchedValues.sites) !== JSON.stringify(selectedSites) ||
@@ -214,6 +271,64 @@ const SimpleFilters: React.FC<SimpleFiltersProps> = ({
            (watchedValues.timeRange === 'Custom Range' &&
             (!watchedValues.startDate || !watchedValues.endDate));
   };
+
+  const onSavePresetSubmit = handleSaveSubmit((data) => {
+    if (!presetSettings) {
+      toast.showError('Preset saving is currently unavailable.');
+      return;
+    }
+
+    const trimmedName = data.name.trim();
+    const trimmedDescription = data.description.trim();
+
+    if (!trimmedName) {
+      setSaveError('name', {
+        type: 'required',
+        message: 'Preset name is required',
+      });
+      return;
+    }
+
+    if (duplicateIsSystem) {
+      setSaveError('name', {
+        type: 'conflict',
+        message: 'System preset names cannot be overwritten.',
+      });
+      return;
+    }
+
+    if (duplicateIsUser && !data.overwriteExisting) {
+      setSaveError('overwriteExisting', {
+        type: 'manual',
+        message: 'Preset exists. Enable overwrite to replace it.',
+      });
+      return;
+    }
+
+    try {
+      const newPreset = createPresetFromSettings(presetSettings, trimmedName, trimmedDescription);
+      if (duplicateIsUser && duplicatePreset) {
+        newPreset.id = duplicatePreset.id;
+        newPreset.createdAt = duplicatePreset.createdAt;
+      }
+
+      const savedPreset = saveUserPreset(newPreset);
+      if (!savedPreset) {
+        toast.showError('Failed to save preset');
+        return;
+      }
+
+      toast.showSuccess(duplicateIsUser ? `Updated preset: ${savedPreset.name}` : `Saved preset: ${savedPreset.name}`);
+      reloadPresets();
+      if (onPresetSaved) {
+        onPresetSaved(savedPreset);
+      }
+      handleCloseSavePreset();
+    } catch (error) {
+      console.error('[SimpleFilters] Failed to save preset', error);
+      toast.showError(error instanceof Error ? error.message : 'Failed to save preset');
+    }
+  });
 
   if (collapsed) {
     return (
@@ -445,6 +560,15 @@ const SimpleFilters: React.FC<SimpleFiltersProps> = ({
             <button
               type="button"
               className={`${styles.actionButton} ${styles.secondaryButton}`}
+              onClick={handleOpenSavePreset}
+              disabled={loading || !presetSettings}
+            >
+              <Icon name="bookmark-plus" size="var(--icon-size-small)" />
+              Save Preset
+            </button>
+            <button
+              type="button"
+              className={`${styles.actionButton} ${styles.secondaryButton}`}
               onClick={() => reset()}
               disabled={loading || !isDirty}
             >
@@ -466,6 +590,89 @@ const SimpleFilters: React.FC<SimpleFiltersProps> = ({
           </div>
         </form>
       </div>
+      <Modal show={showSavePresetModal} onHide={handleCloseSavePreset} centered>
+        <BootstrapForm onSubmit={onSavePresetSubmit} noValidate>
+          <Modal.Header closeButton>
+            <Modal.Title className="d-flex align-items-center gap-2">
+              <Icon name="bookmark-plus" size="var(--icon-size-small)" />
+              <span>Save Current View as Preset</span>
+            </Modal.Title>
+          </Modal.Header>
+          <Modal.Body>
+            {duplicatePreset && duplicateIsSystem && (
+              <Alert variant="danger" className="d-flex align-items-start">
+                <Icon name="shield-lock" className="me-2 mt-1" size="var(--icon-size-small)" />
+                <div>
+                  <strong>{duplicatePreset.name}</strong> is a system preset. Choose a different name.
+                </div>
+              </Alert>
+            )}
+            {duplicateIsUser && !overwriteExisting && (
+              <Alert variant="warning" className="d-flex align-items-start">
+                <Icon name="exclamation-triangle" className="me-2 mt-1" size="var(--icon-size-small)" />
+                <div>
+                  A preset named <strong>{duplicatePreset?.name}</strong> already exists. Enable overwrite to replace it.
+                </div>
+              </Alert>
+            )}
+            <div className="mb-3">
+              <BootstrapForm.Label htmlFor="preset-save-name">
+                Preset name <span className="text-danger">*</span>
+              </BootstrapForm.Label>
+              <BootstrapForm.Control
+                id="preset-save-name"
+                type="text"
+                placeholder="Dashboard view name"
+                isInvalid={Boolean(saveFormState.errors.name)}
+                {...registerSave('name', presetValidationRules.name)}
+              />
+              <BootstrapForm.Control.Feedback type="invalid">
+                {saveFormState.errors.name?.message}
+              </BootstrapForm.Control.Feedback>
+            </div>
+            <div className="mb-3">
+              <BootstrapForm.Label htmlFor="preset-save-description">Description</BootstrapForm.Label>
+              <BootstrapForm.Control
+                id="preset-save-description"
+                as="textarea"
+                rows={3}
+                placeholder="Optional context for teammates"
+                isInvalid={Boolean(saveFormState.errors.description)}
+                {...registerSave('description', presetValidationRules.description)}
+              />
+              <BootstrapForm.Control.Feedback type="invalid">
+                {saveFormState.errors.description?.message}
+              </BootstrapForm.Control.Feedback>
+            </div>
+            {duplicateIsUser && (
+              <BootstrapForm.Check
+                type="switch"
+                id="preset-save-overwrite"
+                label="Overwrite existing preset with these settings"
+                {...registerSave('overwriteExisting')}
+              />
+            )}
+          </Modal.Body>
+          <Modal.Footer>
+            <BootstrapButton variant="secondary" type="button" onClick={handleCloseSavePreset}>
+              Cancel
+            </BootstrapButton>
+            <BootstrapButton
+              variant="primary"
+              type="submit"
+              disabled={
+                !presetSettings ||
+                !saveFormState.isValid ||
+                duplicateIsSystem ||
+                (duplicateIsUser && !overwriteExisting)
+              }
+            >
+              <Icon name="save" size="var(--icon-size-small)" />
+              Save Preset
+            </BootstrapButton>
+          </Modal.Footer>
+        </BootstrapForm>
+      </Modal>
     </div>
   );
 };

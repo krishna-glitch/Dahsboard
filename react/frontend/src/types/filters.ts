@@ -29,6 +29,8 @@ export interface SimpleFiltersProps {
   onToggleCollapse?: () => void;
   maxDate?: string;
   minDate?: string;
+  presetSettings?: Record<string, unknown> | null;
+  onPresetSaved?: (preset: Record<string, unknown>) => void;
 }
 
 // Sidebar filters component props

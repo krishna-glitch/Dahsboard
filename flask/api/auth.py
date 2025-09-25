@@ -45,8 +45,8 @@ def login():
         if success:
             # Create User object for Flask-Login using centralized class
             from services.auth_models import User
-            
-            login_user(user, remember=True)
+
+            login_user(User(user.id), remember=True)
             logger.info(f"User {username} authenticated successfully with permanent session.")
             return jsonify({'message': 'Login successful', 'user': {'username': user.username}}), 200
         else:
@@ -93,8 +93,6 @@ def register():
 def logout():
     logger.info("Received request for logout API.")
     try:
-        auth_service.logout_user()
-        # Flask-Login logout; no manual session flags
         logout_user()
         logger.info("User logged out successfully.")
         return jsonify({'message': 'Logout successful'}), 200
@@ -112,14 +110,21 @@ def status():
         authenticated = bool(getattr(current_user, 'is_authenticated', False))
         user_info = {}
         if authenticated:
+            user_data = None
             try:
-                username = current_user.get_id()
-            except Exception:
-                username = None
-            if username:
-                user_data = user_manager.get_user_by_username(db, username)
-                if user_data:
-                    user_info = {'username': user_data.username}
+                raw_id = current_user.get_id()
+                numeric_id = int(raw_id) if raw_id is not None else None
+            except (TypeError, ValueError):
+                numeric_id = None
+
+            if numeric_id is not None:
+                user_data = user_manager.get_user_by_id(db, numeric_id)
+
+            if user_data:
+                user_info = {
+                    'id': user_data.id,
+                    'username': user_data.username,
+                }
         return jsonify({'authenticated': authenticated, 'user': user_info}), 200
     except Exception as e:
         logger.error(f"Error in auth status API: {e}", exc_info=True)

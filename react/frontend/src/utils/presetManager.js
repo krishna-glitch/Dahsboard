@@ -111,7 +111,7 @@ export function saveUserPreset(preset) {
       ...preset,
       id: presetId,
       category: 'user',
-      createdAt: new Date().toISOString(),
+      createdAt: preset.createdAt || new Date().toISOString(),
       updatedAt: new Date().toISOString()
     };
 
@@ -123,6 +123,13 @@ export function saveUserPreset(preset) {
     console.error('Error saving preset:', error);
     return null;
   }
+}
+
+export function findPresetByName(name) {
+  if (!name) return null;
+  const normalized = name.trim().toLowerCase();
+  const allPresets = getAllPresets();
+  return Object.values(allPresets).find(preset => preset.name.trim().toLowerCase() === normalized) || null;
 }
 
 // Delete user preset

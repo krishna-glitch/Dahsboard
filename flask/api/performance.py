@@ -44,11 +44,13 @@ except ImportError as e:
 from services.consolidated_cache_service import cache_service
 from utils.callback_optimizer import callback_optimizer
 from utils.chart_performance_optimizer import chart_optimizer
+from utils.decorators import role_required
 
 performance_bp = Blueprint('performance_bp', __name__)
 
 @performance_bp.route('/summary', methods=['GET'])
-# @login_required  # Temporarily disabled to allow unauthenticated access to performance monitoring
+@login_required
+@role_required(['admin', 'analyst'])
 def get_performance_summary():
     logger.info("Received request for performance summary API.")
     try:
@@ -81,7 +83,8 @@ def get_performance_summary():
         return jsonify({'error': 'Failed to retrieve performance summary', 'details': str(e)}), 500
 
 @performance_bp.route('/detailed', methods=['GET'])
-# @login_required
+@login_required
+@role_required(['admin', 'analyst'])
 def get_detailed_performance_data():
     logger.info("Received request for detailed performance data API.")
     try:

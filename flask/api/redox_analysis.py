@@ -2,8 +2,12 @@ from flask import Blueprint, jsonify, request
 from flask_login import login_required
 import logging
 import pandas as pd
+from datetime import datetime, timedelta
 
 from services.core_data_service import core_data_service, DataQuery
+from services.config_service import config_service
+from services.adaptive_data_resolution import adaptive_resolution
+from services.monthly_cache_service import fetch_year_window
 from utils.optimized_serializer import serialize_dataframe_optimized
 # Redis-enhanced caching - falls back to memory if Redis unavailable
 from utils.redis_api_cache_utils import redis_cached_api_response
@@ -157,46 +161,61 @@ def get_redox_analysis_data():
         logger.info(f"[ADAPTIVE RESOLUTION] {resolution_config['aggregation_method']} aggregation "
                    f"for {days_back} days ({resolution_config['performance_tier']} tier)")
 
-        # Implement smart data loading strategy (same as water quality)
-        logger.info(f"[REDOX DEBUG] Loading {days_back}-day dataset with performance mode: {performance_mode}")
-        
-        # FIXED: Reduce excessive limits that cause database timeouts
-        if performance_mode == 'maximum':
-            # Reduced limits to prevent database timeouts
-            if days_back <= 7:
-                initial_limit = 15000  # 1 week - reduced from 50K
-            elif days_back <= 30:
-                initial_limit = 20000  # 1 month - reduced from 100K
-            else:
-                initial_limit = 25000  # Longer periods - reduced from 200K
-        else:
-            # For other modes, use smaller limits for faster loading
-            performance_limits = {
-                'fast': 3000,    # Reduced from 5K
-                'balanced': 8000, # Reduced from 15K
-                'high_detail': 15000  # Reduced from 30K
-            }
-            initial_limit = performance_limits.get(performance_mode, 8000)
-        
-        logger.info(f"[SMART LOADING] Using initial limit: {initial_limit} for {performance_mode} mode")
-        
-        # Load data using direct method with limit and timeout handling
-        logger.info(f"[REDOX DEBUG] Starting database query with limit {initial_limit}...")
-        
-        try:
-            df = core_data_service.load_redox_data(
+        use_monthly_cache = days_back >= 330
+
+        if use_monthly_cache:
+            logger.info("[REDOX] Monthly cache path engaged for year-long request")
+
+            def month_loader(month_start: datetime, month_end: datetime) -> pd.DataFrame:
+                return core_data_service.load_redox_data(
+                    sites=selected_sites,
+                    start_date=month_start,
+                    end_date=month_end,
+                    limit=25000,
+                )
+
+            df = fetch_year_window(
+                page='redox',
                 sites=selected_sites,
-                start_date=start_date,
+                parameters=[],
                 end_date=end_date,
-                limit=initial_limit
+                loader=month_loader,
             )
-            logger.info(f"[REDOX DEBUG] Database query completed successfully")
-            
-        except Exception as db_error:
-            logger.error(f"[REDOX ERROR] Database query failed: {str(db_error)}")
-            # Return empty dataframe and let the frontend handle gracefully
-            df = pd.DataFrame()
-            logger.info(f"[REDOX FALLBACK] Returning empty dataset due to database error")
+        else:
+            # Implement smart data loading strategy (same as water quality)
+            logger.info(f"[REDOX DEBUG] Loading {days_back}-day dataset with performance mode: {performance_mode}")
+
+            if performance_mode == 'maximum':
+                if days_back <= 7:
+                    initial_limit = 15000
+                elif days_back <= 30:
+                    initial_limit = 20000
+                else:
+                    initial_limit = 25000
+            else:
+                performance_limits = {
+                    'fast': 3000,
+                    'balanced': 8000,
+                    'high_detail': 15000,
+                }
+                initial_limit = performance_limits.get(performance_mode, 8000)
+
+            logger.info(f"[SMART LOADING] Using initial limit: {initial_limit} for {performance_mode} mode")
+            logger.info(f"[REDOX DEBUG] Starting database query with limit {initial_limit}...")
+
+            try:
+                df = core_data_service.load_redox_data(
+                    sites=selected_sites,
+                    start_date=start_date,
+                    end_date=end_date,
+                    limit=initial_limit,
+                )
+                logger.info("[REDOX DEBUG] Database query completed successfully")
+
+            except Exception as db_error:
+                logger.error(f"[REDOX ERROR] Database query failed: {str(db_error)}")
+                df = pd.DataFrame()
+                logger.info("[REDOX FALLBACK] Returning empty dataset due to database error")
 
         if not df.empty:
             logger.info(f"[REDOX DEBUG] Loaded {len(df)} redox records successfully")

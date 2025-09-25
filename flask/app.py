@@ -1,5 +1,5 @@
 import os
-from flask import Flask, jsonify, send_from_directory
+from flask import Flask, jsonify, send_from_directory, abort
 from flask_cors import CORS
 from flask_login import LoginManager, UserMixin, login_user, logout_user, login_required, current_user
 
@@ -81,6 +81,9 @@ def create_app():
         except Exception as _e:  # pragma: no cover
             logger.warning("Flask-Compress initialization failed; continuing without compression")
 
+    # Phase 3 (revalidation): add conservative cache headers + ETag for safe JSON APIs
+    init_cache_headers(server, default_ttl_seconds=3600)
+
     # Improve static file caching for production builds
     try:
         server_config = get_server_config()
@@ -114,7 +117,6 @@ def create_app():
     # User loader callback
     from services.new_user_management import NewUserManager
     from auth_database import AuthSessionLocal
-    from services.auth_models import User  # Import centralized User class
 
     user_manager = NewUserManager()
 
@@ -122,10 +124,13 @@ def create_app():
     def load_user(user_id):
         db = AuthSessionLocal()
         try:
-            user = user_manager.get_user_by_username(db, user_id)
-            if user:
-                return User(user.username)
-            return None
+            try:
+                numeric_id = int(user_id)
+            except (TypeError, ValueError):
+                return None
+
+            user = user_manager.get_user_by_id(db, numeric_id)
+            return user
         finally:
             db.close()
 
@@ -220,10 +225,13 @@ def create_app():
 
     @server.route('/<path:path>')
     def serve_static(path):
+        if path.startswith('api/'):
+            abort(404)
+
         if path != "" and os.path.exists(os.path.join(REACT_BUILD_DIR, path)):
             return send_from_directory(REACT_BUILD_DIR, path)
-        else:
-            return send_from_directory(REACT_BUILD_DIR, 'index.html')
+
+        return send_from_directory(REACT_BUILD_DIR, 'index.html')
 
     # Register blueprints here
     from api.home import home_bp

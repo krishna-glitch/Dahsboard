@@ -13,6 +13,7 @@ from services.consolidated_cache_service import cached, cache_service
 from utils.api_cache_utils import cached_api_response
 from services.advanced_filter_service import advanced_filter_service
 from utils.optimized_serializer import serialize_dataframe_optimized
+from services.monthly_cache_service import fetch_year_window
 
 # Initialize logger
 from config.advanced_logging_config import get_advanced_logger
@@ -154,44 +155,63 @@ def get_water_quality_data():
         logger.info(f"[ADAPTIVE RESOLUTION] {resolution_config['aggregation_method']} aggregation "
                    f"for {days_back} days ({resolution_config['performance_tier']} tier)")
 
-        # Implement smart data loading strategy
-        logger.info(f"[WATER QUALITY] Loading {days_back}-day dataset with performance mode: {performance_mode}")
-        
-        # Calculate intelligent limit based on performance mode and time range
-        # If client requests full detail, elevate to maximum mode
-        if no_downsample:
-            performance_mode = 'maximum'
-        if performance_mode == 'maximum':
-            # For maximum detail, set reasonable upper bound but still limit for performance
-            if days_back <= 7:
-                initial_limit = 50000  # 1 week - can handle more data
-            elif days_back <= 30:
-                initial_limit = 100000  # 1 month 
-            else:
-                initial_limit = 200000  # Longer periods
+        use_monthly_cache = (days_back >= 330) and not chunk_size and not offset
+
+        if use_monthly_cache:
+            logger.info("[WATER QUALITY] Monthly cache path engaged for year-long request")
+
+            def month_loader(month_start: datetime, month_end: datetime) -> pd.DataFrame:
+                return core_data_service.load_water_quality_data(
+                    sites=selected_sites,
+                    start_date=month_start,
+                    end_date=month_end,
+                    limit=200000,
+                )
+
+            df = fetch_year_window(
+                page='water_quality',
+                sites=selected_sites,
+                parameters=filter_config.parameters or [],
+                end_date=end_date,
+                loader=month_loader,
+            )
         else:
-            # For other modes, use smaller limits for faster loading
-            performance_limits = {
-                'fast': 5000,
-                'balanced': 15000, 
-                'high_detail': 30000
-            }
-            initial_limit = performance_limits.get(performance_mode, 15000)
-        
-        # If client requested chunking, ensure we fetch at least enough rows to cover the desired window
-        if chunk_size and chunk_size > 0:
-            try:
-                initial_limit = max(initial_limit or 0, (offset or 0) + chunk_size)
-            except Exception:
-                pass
-        logger.info(f"[SMART LOADING] Using initial limit: {initial_limit} for {performance_mode} mode (chunk_size={chunk_size} offset={offset})")
-        
-        df = core_data_service.load_water_quality_data(
-            sites=selected_sites,
-            start_date=start_date,
-            end_date=end_date,
-            limit=initial_limit  # Pass the calculated limit
-        )
+            # Implement smart data loading strategy
+            logger.info(f"[WATER QUALITY] Loading {days_back}-day dataset with performance mode: {performance_mode}")
+
+            # Calculate intelligent limit based on performance mode and time range
+            if no_downsample:
+                performance_mode = 'maximum'
+            if performance_mode == 'maximum':
+                if days_back <= 7:
+                    initial_limit = 50000
+                elif days_back <= 30:
+                    initial_limit = 100000
+                else:
+                    initial_limit = 200000
+            else:
+                performance_limits = {
+                    'fast': 5000,
+                    'balanced': 15000,
+                    'high_detail': 30000,
+                }
+                initial_limit = performance_limits.get(performance_mode, 15000)
+
+            if chunk_size and chunk_size > 0:
+                try:
+                    initial_limit = max(initial_limit or 0, (offset or 0) + chunk_size)
+                except Exception:
+                    pass
+            logger.info(
+                f"[SMART LOADING] Using initial limit: {initial_limit} for {performance_mode} mode (chunk_size={chunk_size} offset={offset})"
+            )
+
+            df = core_data_service.load_water_quality_data(
+                sites=selected_sites,
+                start_date=start_date,
+                end_date=end_date,
+                limit=initial_limit,
+            )
 
         if not df.empty:
             logger.info(f"[WATER QUALITY] Loaded {len(df)} water quality records successfully")
@@ -397,6 +417,5 @@ def get_available_sites():
                 'error_occurred': True
             }
         }), 500
-
 
 

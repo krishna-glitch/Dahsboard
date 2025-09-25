@@ -8,6 +8,7 @@ from datetime import datetime, timedelta
 from utils.secure_file_handler import secure_file_handler
 from services.core_data_service import core_data_service
 from services.upload_history_service import upload_history_service
+from services.monthly_cache_service import schedule_monthly_refresh
 from utils.errors import APIError
 from services.s3_service import list_objects as s3_list_objects, generate_presigned_get_url as s3_sign_get, generate_presigned_put_url as s3_sign_put, is_configured as s3_is_configured
 
@@ -115,12 +116,20 @@ def upload_file():
             logger.error(f"Failed to add upload to history: {e}")
             # Continue execution even if history tracking fails
 
-        return jsonify({
+        response_payload = {
             'summary': response_summary,
             'validation_details': validation_results,
             'security_details': security_issues,
             'upload_details': upload_warnings
-        }), 200
+        }
+
+        data_type_normalized = data_type.lower()
+        if data_type_normalized in ('water_quality', 'water-quality'):
+            schedule_monthly_refresh('water_quality', df)
+        elif data_type_normalized in ('redox', 'redox_analysis'):
+            schedule_monthly_refresh('redox', df)
+
+        return jsonify(response_payload), 200
 
     except Exception as e:
         logger.error(f"Error in get_upload_history API: {e}", exc_info=True)

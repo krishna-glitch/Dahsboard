@@ -131,6 +131,30 @@ const ModernWaterQuality = () => {
     return getFallbackYAxisParameter(initialSelectedParameter);
   });
 
+  const presetSettings = useMemo(() => ({
+    selectedSites,
+    timeRange,
+    startDate,
+    endDate,
+    selectedParameter,
+    compareMode,
+    compareParameter,
+    chartType,
+    activeView,
+    filtersCollapsed,
+  }), [
+    selectedSites,
+    timeRange,
+    startDate,
+    endDate,
+    selectedParameter,
+    compareMode,
+    compareParameter,
+    chartType,
+    activeView,
+    filtersCollapsed,
+  ]);
+
   // ---- Data Fetch via React Query (single call) ----
   const {
     data: rows = [],
@@ -483,6 +507,7 @@ const ModernWaterQuality = () => {
         loading={isFetching}
         maxDate={maxDateAvailable}
         minDate={minDateAvailable}
+        presetSettings={presetSettings}
       />
 
       <div className="main-content">

@@ -48,7 +48,7 @@ def root():
     }), 200
 
 @home_bp.route('/data', methods=['GET'])
-# @login_required  # Temporarily disabled for testing
+@login_required
 @enterprise_performance(data_type='dashboard')
 @redis_cached_api_response(ttl=300)
 def get_home_data():

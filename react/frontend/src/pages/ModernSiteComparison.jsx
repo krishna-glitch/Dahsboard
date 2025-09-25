@@ -35,6 +35,7 @@ const ModernSiteComparison = () => {
   // Removed previous-period comparison for now
   const [searchParams, setSearchParams] = useSearchParams();
   const searchParamsString = useMemo(() => searchParams.toString(), [searchParams]);
+  const lastSyncedParamsRef = useRef('');
   // Derive data type from selectedMetric; no separate mode state
   const [selectedDepth, setSelectedDepth] = useState(100); // cm for redox
   const [seriesTraces, setSeriesTraces] = useState([]);
@@ -143,53 +144,57 @@ const ModernSiteComparison = () => {
     }
   }, [selectedSites, selectedMetric, timeRange, customStartDate, customEndDate, analysisMode, concurrentWindowHours]);
 
-  // Consolidated data loading with proper state management
-  const dataLoadingRef = useRef(false);
-  
+  // Load sites once on mount
   useEffect(() => {
-    const initializeData = async () => {
-      if (dataLoadingRef.current) return;
-      dataLoadingRef.current = true;
+    fetchAvailableSites();
+  }, [fetchAvailableSites]);
 
-      const sitesQ = searchParams.get('sites');
-      const metricQ = searchParams.get('metric');
-      const timeQ = searchParams.get('time_range');
-      const startDateQ = searchParams.get('start_date');
-      const endDateQ = searchParams.get('end_date');
+  // URL -> state synchronisation guarded against feedback loops
+  useEffect(() => {
+    if (!searchParamsString) {
+      lastSyncedParamsRef.current = '';
+      return;
+    }
 
-      if (sitesQ) {
-        const parsed = sitesQ.split(',').filter(Boolean);
-        setSelectedSites((prev) => {
-          const sameLength = prev.length === parsed.length;
-          const sameValues = sameLength && prev.every((v, i) => v === parsed[i]);
-          return sameValues ? prev : parsed;
-        });
-      }
+    if (searchParamsString === lastSyncedParamsRef.current) {
+      return;
+    }
 
-      if (metricQ) {
-        setSelectedMetric((prev) => (prev === metricQ ? prev : metricQ));
-      }
+    const sitesQ = searchParams.get('sites');
+    const metricQ = searchParams.get('metric');
+    const timeQ = searchParams.get('time_range');
+    const startDateQ = searchParams.get('start_date');
+    const endDateQ = searchParams.get('end_date');
 
-      if (timeQ) {
-        setTimeRange((prev) => (prev === timeQ ? prev : timeQ));
-      }
+    if (sitesQ) {
+      const parsed = sitesQ.split(',').filter(Boolean);
+      setSelectedSites(prev => {
+        const sameLength = prev.length === parsed.length;
+        const sameValues = sameLength && prev.every((v, i) => v === parsed[i]);
+        return sameValues ? prev : parsed;
+      });
+    }
 
-      if (startDateQ) {
-        setCustomStartDate((prev) => (prev === startDateQ ? prev : startDateQ));
-      }
+    if (metricQ) {
+      setSelectedMetric(prev => (prev === metricQ ? prev : metricQ));
+    }
 
-      if (endDateQ) {
-        setCustomEndDate((prev) => (prev === endDateQ ? prev : endDateQ));
-      }
+    if (timeQ) {
+      setTimeRange(prev => (prev === timeQ ? prev : timeQ));
+    }
 
-      await fetchAvailableSites();
-      dataLoadingRef.current = false;
-    };
+    if (startDateQ) {
+      setCustomStartDate(prev => (prev === startDateQ ? prev : startDateQ));
+    }
 
-    initializeData();
-  }, [fetchAvailableSites, searchParamsString]);
+    if (endDateQ) {
+      setCustomEndDate(prev => (prev === endDateQ ? prev : endDateQ));
+    }
 
-  // State -> URL
+    lastSyncedParamsRef.current = searchParamsString;
+  }, [searchParams, searchParamsString]);
+
+  // State -> URL synchronisation
   useEffect(() => {
     const params = new URLSearchParams();
     params.set('sites', selectedSites.join(','));
@@ -202,14 +207,22 @@ const ModernSiteComparison = () => {
     }
 
     const nextString = params.toString();
-    if (nextString !== searchParamsString) {
-      setSearchParams(params, { replace: true });
+    if (nextString === searchParamsString) {
+      lastSyncedParamsRef.current = nextString;
+      return;
     }
+
+    if (nextString === lastSyncedParamsRef.current) {
+      return;
+    }
+
+    lastSyncedParamsRef.current = nextString;
+    setSearchParams(params, { replace: true });
   }, [selectedSites, selectedMetric, timeRange, customStartDate, customEndDate, setSearchParams, searchParamsString]);
 
   // Load comparison data with proper guards (only after sites are loaded and not during initialization)
   useEffect(() => {
-    if (!dataLoadingRef.current && !sitesLoading && selectedSites.length > 0 && availableSites.length > 0) {
+    if (!sitesLoading && selectedSites.length > 0 && availableSites.length > 0) {
       // Debounce API calls by 300ms to prevent rapid successive calls
       const debounceTimeout = setTimeout(() => {
         fetchComparisonData();

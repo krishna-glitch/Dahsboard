@@ -12,6 +12,9 @@
   --primary-color: #2563EB;       /* Professional blue - less garish */
   --primary-hover: #1D4ED8;       /* Darker blue for hover states */
   --secondary-color: #1E40AF;     /* Deep blue for supporting elements */
+  --primary-500: var(--primary-color);   /* Alias for component-specific palettes */
+  --primary-600: var(--primary-hover);   /* Alias aligning legacy tokens */
+  --primary-700: var(--secondary-color); /* Alias aligning legacy tokens */
   --success-color: #10B981;       /* Modern emerald green */
   --danger-color: #EF4444;        /* Clean red for errors */
   --warning-color: #F59E0B;       /* Amber for warnings */

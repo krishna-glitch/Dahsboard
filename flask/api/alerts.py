@@ -17,7 +17,7 @@ logger = get_advanced_logger(__name__)
 alerts_bp = Blueprint('alerts_bp', __name__)
 
 @alerts_bp.route('/data', methods=['GET'])
-# @login_required  # Temporarily disabled for testing
+@login_required
 @enterprise_performance(data_type='alerts')
 def get_alerts_data():
     start_time = time.time()

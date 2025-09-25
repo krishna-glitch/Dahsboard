@@ -218,6 +218,29 @@ const ModernRedoxAnalysis = () => {
   // Cached date range hook
   const { dateRange: cachedDateRange } = useCachedDateRange(selectedSites);
 
+  const presetSettings = useMemo(() => ({
+    selectedSites,
+    timeRange,
+    startDate,
+    endDate,
+    selectedParameter: 'redox',
+    compareMode: chartViewMode,
+    compareParameter: snapshotMode,
+    chartType,
+    activeView: selectedView,
+    filtersCollapsed,
+  }), [
+    selectedSites,
+    timeRange,
+    startDate,
+    endDate,
+    chartViewMode,
+    snapshotMode,
+    chartType,
+    selectedView,
+    filtersCollapsed,
+  ]);
+
   // Constants
   const CHUNK_CONCURRENCY = 2;
   const DEBOUNCE_MS = 500;
@@ -1952,6 +1975,7 @@ const ModernRedoxAnalysis = () => {
         loading={fetchState.loading}
         maxDate={availableMaxDate}
         minDate={availableMinDate}
+        presetSettings={presetSettings}
       />
 
       <div className="main-content">
