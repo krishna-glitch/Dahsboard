@@ -81,9 +81,16 @@ def create_app():
         except Exception as _e:  # pragma: no cover
             logger.warning("Flask-Compress initialization failed; continuing without compression")
 
-    # Phase 3 (revalidation): add conservative cache headers + ETag for safe JSON APIs
-    # This is safe to enable in dev/prod; it only affects whitelisted paths and 200 JSON responses
-    init_cache_headers(server, default_ttl_seconds=3600)
+    # Improve static file caching for production builds
+    try:
+        server_config = get_server_config()
+        # Cache static files longer in production for faster loads
+        if not server_config.debug:
+            # One week; assets are content-hashed in Vite builds
+            server.config['SEND_FILE_MAX_AGE_DEFAULT'] = 60 * 60 * 24 * 7
+    except Exception:
+        pass
+
 
     login_manager = LoginManager()
     login_manager.init_app(server)

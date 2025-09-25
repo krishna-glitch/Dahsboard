@@ -3,7 +3,7 @@ import ReactDOM from 'react-dom/client'
 import App from './App.jsx'
 /* CSS Load Order - Proper Cascade Hierarchy */
 import 'bootstrap/dist/css/bootstrap.min.css' // 1. External framework
-import 'bootstrap-icons/font/bootstrap-icons.css' // 2. Icons
+// Defer Bootstrap Icons CSS to avoid render-blocking
 import './styles/design-tokens.css' // 3. Design system foundation
 import './index.css' // 4. Base styles and remaining tokens
 import './styles/modern-layout.css' // 5. Layout systems
@@ -21,6 +21,18 @@ import './utils/performanceMonitor';
 // Initialize cache management system
 import { initializeCacheSystem } from './utils/cacheInitializer';
 initializeCacheSystem();
+
+// Load icon font CSS after initial paint to reduce render-blocking
+try {
+  const deferIcons = () => import('bootstrap-icons/font/bootstrap-icons.css');
+  if (typeof window !== 'undefined') {
+    if ('requestIdleCallback' in window) {
+      window.requestIdleCallback(() => deferIcons());
+    } else {
+      setTimeout(() => deferIcons(), 0);
+    }
+  }
+} catch (_) { /* no-op */ }
 
 ReactDOM.createRoot(document.getElementById('root')).render(
   // <React.StrictMode> - Temporarily disabled to fix infinite re-render issues
