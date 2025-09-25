@@ -34,6 +34,7 @@ const ModernSiteComparison = () => {
   // Removed Group By: always show exactly the selected sites
   // Removed previous-period comparison for now
   const [searchParams, setSearchParams] = useSearchParams();
+  const searchParamsString = useMemo(() => searchParams.toString(), [searchParams]);
   // Derive data type from selectedMetric; no separate mode state
   const [selectedDepth, setSelectedDepth] = useState(100); // cm for redox
   const [seriesTraces, setSeriesTraces] = useState([]);
@@ -146,34 +147,47 @@ const ModernSiteComparison = () => {
   const dataLoadingRef = useRef(false);
   
   useEffect(() => {
-    // Initialize data loading sequence
     const initializeData = async () => {
-      if (dataLoadingRef.current) return; // Prevent concurrent initialization
-      
+      if (dataLoadingRef.current) return;
       dataLoadingRef.current = true;
-      // URL -> state - Fixed to prevent potential setState during render issues
+
       const sitesQ = searchParams.get('sites');
       const metricQ = searchParams.get('metric');
       const timeQ = searchParams.get('time_range');
-      
-      // Use setTimeout to ensure these are scheduled after render
-      setTimeout(() => {
-        if (sitesQ) setSelectedSites(sitesQ.split(','));
-        if (metricQ) setSelectedMetric(metricQ);
-        if (timeQ) setTimeRange(timeQ);
-        
-        // Handle custom date range URL params
-        const startDateQ = searchParams.get('start_date');
-        const endDateQ = searchParams.get('end_date');
-        if (startDateQ) setCustomStartDate(startDateQ);
-        if (endDateQ) setCustomEndDate(endDateQ);
-      }, 0);
+      const startDateQ = searchParams.get('start_date');
+      const endDateQ = searchParams.get('end_date');
+
+      if (sitesQ) {
+        const parsed = sitesQ.split(',').filter(Boolean);
+        setSelectedSites((prev) => {
+          const sameLength = prev.length === parsed.length;
+          const sameValues = sameLength && prev.every((v, i) => v === parsed[i]);
+          return sameValues ? prev : parsed;
+        });
+      }
+
+      if (metricQ) {
+        setSelectedMetric((prev) => (prev === metricQ ? prev : metricQ));
+      }
+
+      if (timeQ) {
+        setTimeRange((prev) => (prev === timeQ ? prev : timeQ));
+      }
+
+      if (startDateQ) {
+        setCustomStartDate((prev) => (prev === startDateQ ? prev : startDateQ));
+      }
+
+      if (endDateQ) {
+        setCustomEndDate((prev) => (prev === endDateQ ? prev : endDateQ));
+      }
+
       await fetchAvailableSites();
       dataLoadingRef.current = false;
     };
-    
+
     initializeData();
-  }, [fetchAvailableSites, searchParams]);
+  }, [fetchAvailableSites, searchParamsString]);
 
   // State -> URL
   useEffect(() => {
@@ -181,15 +195,17 @@ const ModernSiteComparison = () => {
     params.set('sites', selectedSites.join(','));
     params.set('metric', selectedMetric);
     params.set('time_range', timeRange);
-    
-    // Include custom date range in URL if set
+
     if (timeRange === 'custom') {
       if (customStartDate) params.set('start_date', customStartDate);
       if (customEndDate) params.set('end_date', customEndDate);
     }
-    
-    setSearchParams(params, { replace: true });
-  }, [selectedSites, selectedMetric, timeRange, customStartDate, customEndDate, setSearchParams]);
+
+    const nextString = params.toString();
+    if (nextString !== searchParamsString) {
+      setSearchParams(params, { replace: true });
+    }
+  }, [selectedSites, selectedMetric, timeRange, customStartDate, customEndDate, setSearchParams, searchParamsString]);
 
   // Load comparison data with proper guards (only after sites are loaded and not during initialization)
   useEffect(() => {
