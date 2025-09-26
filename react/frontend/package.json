@@ -15,7 +15,9 @@
     "preview": "vite preview",
     "test": "vitest",
     "test:run": "vitest run",
-    "test:coverage": "vitest --coverage"
+    "test:coverage": "vitest --coverage",
+    "security:audit": "npm audit --omit=dev",
+    "security:audit:full": "npm audit"
   },
   "dependencies": {
     "@apache-arrow/esnext-esm": "^21.0.0",

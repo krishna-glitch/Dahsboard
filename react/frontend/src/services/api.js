@@ -2,6 +2,16 @@ import axios from 'axios';
 import { normalizeParams, canonicalKeyFromParams } from '../utils/normalize';
 import { registerCache, DEFAULT_TTL } from '../utils/cacheManager';
 
+class ApiError extends Error {
+  constructor(type, message, originalError = null, meta = null) {
+    super(message);
+    this.name = 'ApiError';
+    this.type = type;
+    this.originalError = originalError;
+    this.meta = meta;
+  }
+}
+
 // API base URL
 // IMPORTANT: For cookie-based auth to persist across refresh, point dev to the real API origin
 // instead of relying on the Vite proxy. Browsers don't attach API cookies on proxied same-origin requests.
@@ -66,16 +76,6 @@ apiClient.interceptors.response.use(
     // Use structured logging-like format; callers can decide UX
     console.warn('API Error:', { message: error?.message, code: error?.code, status: error?.response?.status });
     
-    // Custom Error class for API-related errors
-    class ApiError extends Error {
-      constructor(type, message, originalError = null) {
-        super(message);
-        this.name = 'ApiError';
-        this.type = type;
-        this.originalError = originalError;
-      }
-    }
-
     if (error.response) {
       // Server responded with error status (e.g., 4xx, 5xx)
       const message = error.response.data?.message || error.response.data?.error || 'Server error';

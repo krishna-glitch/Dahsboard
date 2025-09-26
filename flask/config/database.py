@@ -9,9 +9,18 @@ import uuid
 from typing import Optional, Dict, Any, List, Tuple
 from datetime import datetime, date
 import pandas as pd
-import polars as pl
-import boto3
-from botocore.exceptions import ClientError, NoCredentialsError
+
+try:
+    import polars as pl
+except ImportError:
+    pl = None
+
+try:
+    import boto3
+    from botocore.exceptions import ClientError, NoCredentialsError
+except ImportError:
+    boto3 = None
+    ClientError = NoCredentialsError = Exception
 
 # Import memory optimization
 try:
@@ -61,30 +70,49 @@ class RedshiftDataAPIConnection:
     def _get_connection_params(self) -> Dict[str, str]:
         """Get Redshift Data API connection parameters from centralized config"""
         
+        fallback_params = {
+            'workgroup_name': os.getenv('REDSHIFT_WORKGROUP_NAME', 'impact-data-workgroup'),
+            'database': os.getenv('REDSHIFT_DATABASE', 'impact_db'),
+            'schema': os.getenv('REDSHIFT_SCHEMA', 'impact'),
+            'region': os.getenv('AWS_DEFAULT_REGION', 'us-east-1'),
+        }
+
         try:
-            from config import get_database_config
-            db_config = get_database_config()
-            
+            from config.new_settings import DATABASE_URL
+            from urllib.parse import urlparse
+
+            if not DATABASE_URL:
+                raise ValueError("DATABASE_URL is empty")
+
+            result = urlparse(DATABASE_URL)
+            derived_workgroup = result.hostname
+            derived_database = result.path.lstrip('/') if result.path else ''
+
+            # When running locally we may use sqlite:/// URLs which do not provide
+            # any Redshift-specific host information. In that scenario we fall back
+            # to the environment defaults so AWS SDK still receives a valid string.
+            if not derived_workgroup or not derived_database or result.scheme.startswith('sqlite'):
+                logger.warning("DATABASE_URL does not include Redshift connection details; falling back to environment configuration")
+                derived_workgroup = fallback_params['workgroup_name']
+                derived_database = fallback_params['database']
+            else:
+                logger.info("Using centralized configuration for Redshift Data API")
+
             params = {
-                'workgroup_name': db_config.workgroup_name,
-                'database': db_config.database,
-                'schema': db_config.schema,
-                'region': db_config.region,
+                'workgroup_name': derived_workgroup or fallback_params['workgroup_name'],
+                'database': derived_database or fallback_params['database'],
+                'schema': fallback_params['schema'],
+                'region': fallback_params['region'],
             }
-            
-            logger.info("Using centralized configuration for Redshift Data API")
+
+            if not params['workgroup_name']:
+                raise ValueError("Redshift workgroup is undefined")
+
             return params
-        except ImportError:
-            # Fallback to environment variables if centralized config not available
-            params = {
-                'workgroup_name': os.getenv('REDSHIFT_WORKGROUP_NAME', 'impact-data-workgroup'),
-                'database': os.getenv('REDSHIFT_DATABASE', 'impact_db'),
-                'schema': os.getenv('REDSHIFT_SCHEMA', 'impact'),
-                'region': os.getenv('AWS_DEFAULT_REGION', 'us-east-1'),
-            }
-            
+        except (ImportError, ValueError):
+            # Fallback to environment variables if centralized config not available or invalid
             logger.warning("Using fallback environment variables for Redshift Data API configuration")
-            return params
+            return fallback_params
     
     @property
     def redshift_data_client(self):
@@ -554,6 +582,44 @@ class RedshiftDataAPIConnection:
         """Close connections (no-op for Data API)"""
         logger.info("Redshift Data API connections closed (no persistent connections)")
 
+
+
+class SQLiteConnection:
+    """Simple SQLite fallback for local development."""
+
+    def __init__(self, db_path: str):
+        import sqlite3
+        self._db_path = db_path
+        self._conn = sqlite3.connect(db_path, detect_types=sqlite3.PARSE_DECLTYPES | sqlite3.PARSE_COLNAMES)
+        self._conn.row_factory = sqlite3.Row
+
+    def execute_query(self, query: str, params: Optional[Dict] = None):
+        import sqlite3
+        try:
+            cursor = self._conn.cursor()
+            cursor.execute(query, params or {})
+            rows = cursor.fetchall()
+            if not rows:
+                return pd.DataFrame()
+            columns = [desc[0] for desc in cursor.description]
+            data = [tuple(row[col] for col in columns) for row in rows]
+            return pd.DataFrame(data, columns=columns)
+        except sqlite3.Error as exc:
+            raise QueryError(str(exc))
+
+    def test_connection(self) -> bool:
+        try:
+            self._conn.execute('SELECT 1')
+            return True
+        except Exception:
+            return False
+
+    def get_database_stats(self) -> Dict[str, Any]:
+        return {'engine': 'sqlite', 'path': self._db_path}
+
+    def close_connections(self):
+        self._conn.close()
+
 # Database Factory for Dependency Injection
 class DatabaseFactory:
     """Factory for creating database connections with dependency injection support"""
@@ -562,10 +628,15 @@ class DatabaseFactory:
     _connection = None
     
     @classmethod
-    def get_connection(cls) -> RedshiftDataAPIConnection:
+    def get_connection(cls):
         """Get database connection (singleton pattern for backward compatibility)"""
         if cls._connection is None:
-            cls._connection = RedshiftDataAPIConnection()
+            db_url = os.getenv('DATABASE_URL', '').lower()
+            if db_url.startswith('sqlite'):
+                path = db_url.split('///', 1)[-1] or 'app.db'
+                cls._connection = SQLiteConnection(path)
+            else:
+                cls._connection = RedshiftDataAPIConnection()
         return cls._connection
     
     @classmethod

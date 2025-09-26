@@ -3,7 +3,10 @@ import os
 import json
 from datetime import datetime
 
+from app_extensions import csrf
+
 debug_bp = Blueprint('debug_bp', __name__)
+csrf.exempt(debug_bp)
 
 LOG_DIR = os.path.abspath(os.path.join(os.path.dirname(__file__), '..'))
 LOG_PATH = os.path.join(LOG_DIR, 'client_debug.log')
@@ -31,4 +34,3 @@ def client_log():
         return jsonify({'ok': ok}), 200
     except Exception as e:
         return jsonify({'ok': False, 'error': str(e)}), 500
-

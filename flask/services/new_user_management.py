@@ -1,4 +1,5 @@
 from sqlalchemy.orm import Session
+from sqlalchemy.exc import SQLAlchemyError
 from auth_database import User
 from services.new_auth_service import NewAuthService
 
@@ -16,6 +17,10 @@ class NewUserManager:
         hashed_password = self.auth_service.get_password_hash(password)
         db_user = User(username=username, hashed_password=hashed_password)
         db.add(db_user)
-        db.commit()
+        try:
+            db.commit()
+        except SQLAlchemyError:
+            db.rollback()
+            raise
         db.refresh(db_user)
         return db_user

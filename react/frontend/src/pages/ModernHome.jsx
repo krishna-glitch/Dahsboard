@@ -7,6 +7,22 @@ import '../styles/landing-pages.css';
 import styles from '../styles/ModernHome.module.css';
 import { useHomeQuery } from '../hooks/useHomeQuery';
 
+
+const mapStatusToCard = (status) => {
+  switch (status) {
+    case 'error':
+      return 'poor';
+    case 'warning':
+      return 'fair';
+    case 'success':
+      return 'excellent';
+    case 'empty':
+      return 'unknown';
+    default:
+      return 'unknown';
+  }
+};
+
 /**
  * Modern Home Page - Professional Dashboard Landing
  * Uses CSS Grid layout and design system tokens
@@ -15,20 +31,18 @@ const ModernHome = () => {
   const { user } = useAuth();
   const { data, isLoading, error, refetch } = useHomeQuery();
 
-  const stats = data?.stats || {
-    active_sites: null,
-    total_sites: null,
-    recent_measurements: null,
-    data_quality: null,
-    active_alerts: null,
-    data_current_through: null,
-  };
-  const meta = data?.meta || { last_updated: null };
-  const latestBySite = useMemo(() => data?.latestBySite || [], [data?.latestBySite]);
+  const stats = data?.stats;
+  const meta = data?.meta;
+  const latestBySite = data?.latestBySite;
 
   // Memoized components for performance
   const latestWaterQualityRecords = useMemo(() => {
-    const records = (latestBySite || []).filter(r => r.last_water_quality).slice(0, 4);
+    if (latestBySite?.status === 'error') {
+        return <div className={styles.inlineError}>{latestBySite.message}</div>;
+    }
+    const records = (latestBySite?.data || []).filter(r => r.last_water_quality).slice(0, 4);
+    if (records.length === 0) return <div className={styles.inlineMuted}>No recent records</div>;
+
     return (
       <div className={styles.latestRecord}>
         {records.map((r, idx) => (
@@ -42,7 +56,12 @@ const ModernHome = () => {
   }, [latestBySite]);
 
   const latestRedoxRecords = useMemo(() => {
-    const records = (latestBySite || []).filter(r => r.last_redox).slice(0, 4);
+    if (latestBySite?.status === 'error') {
+        return <div className={styles.inlineError}>{latestBySite.message}</div>;
+    }
+    const records = (latestBySite?.data || []).filter(r => r.last_redox).slice(0, 4);
+    if (records.length === 0) return <div className={styles.inlineMuted}>No recent records</div>;
+
     return (
       <div className={styles.latestRecord}>
         {records.map((r, idx) => (
@@ -56,12 +75,14 @@ const ModernHome = () => {
   }, [latestBySite]);
 
   const waterQualityContext = useMemo(() => {
-    const n = (latestBySite || []).filter(r => r.last_water_quality).length;
+    if (latestBySite?.status !== 'success') return null;
+    const n = (latestBySite?.data || []).filter(r => r.last_water_quality).length;
     return n > 4 ? `+${n-4} more sites` : null;
   }, [latestBySite]);
 
   const redoxContext = useMemo(() => {
-    const n = (latestBySite || []).filter(r => r.last_redox).length;
+    if (latestBySite?.status !== 'success') return null;
+    const n = (latestBySite?.data || []).filter(r => r.last_redox).length;
     return n > 4 ? `+${n-4} more sites` : null;
   }, [latestBySite]);
 
@@ -105,15 +126,15 @@ const ModernHome = () => {
           </div>
         )}
         {/* Data currency ribbon */}
-        {(stats.data_current_through || meta.last_updated) && (
+        {(stats?.data_current_through || meta?.last_updated) && (
           <div className="info-bar">
-            {stats.data_current_through && (
+            {stats?.data_current_through && (
               <span>
                 <i className="bi bi-calendar-week me-1"></i>
                 Data current through {String(stats.data_current_through).slice(0, 10)}
               </span>
             )}
-            {meta.last_updated && (
+            {meta?.last_updated && (
               <span>
                 <i className="bi bi-clock-history me-1"></i>
                 Last updated {new Date(meta.last_updated).toLocaleString()}
@@ -131,7 +152,7 @@ const ModernHome = () => {
         )}
         {/* Quick Stats Grid */}
         <div className="metrics-grid">
-          {isLoading && stats.active_sites === null ? (
+          {isLoading && !data ? (
             <>
               <SkeletonMetricCard />
               <SkeletonMetricCard />
@@ -144,43 +165,43 @@ const ModernHome = () => {
             <>
               <MetricCard
                 title="Active Sites"
-                value={stats.active_sites == null ? '-' : String(stats.active_sites)}
+                value={stats?.status === 'error' ? 'Error' : (stats?.active_sites ?? '-')}
                 icon="geo-alt"
-                status="good"
-                context={stats.total_sites != null ? `of ${stats.total_sites} total` : 'Currently monitoring'}
+                status={mapStatusToCard(stats?.status)}
+                context={stats?.status === 'error' ? stats.message : (stats?.total_sites != null ? `of ${stats.total_sites} total` : 'Currently monitoring')}
               />
               <MetricCard
                 title="Recent Readings"
-                value={stats.recent_measurements == null ? '-' : stats.recent_measurements.toLocaleString()}
+                value={stats?.status === 'error' ? 'Error' : (stats?.recent_measurements != null ? stats.recent_measurements.toLocaleString() : '-')}
                 icon="bar-chart"
-                status="excellent"
-                context="Last 24 hours"
+                status={mapStatusToCard(stats?.recent_window?.status || stats?.status)}
+                context={stats?.status === 'error' ? stats.message : stats?.contextLabel}
               />
               <MetricCard
                 title="Data Quality"
-                value={stats.data_quality == null ? '-' : `${stats.data_quality.toFixed(1)}%`}
+                value={stats?.status === 'error' ? 'Error' : (Number.isFinite(stats?.data_quality) ? `${stats.data_quality.toFixed(1)}%` : '-')}
                 icon="check-circle"
-                status="excellent"
-                context="System operational"
+                status={mapStatusToCard(stats?.status)}
+                context={stats?.status === 'error' ? stats.message : 'System operational'}
               />
               <MetricCard
                 title="Active Alerts"
-                value={stats.active_alerts == null ? '0' : String(stats.active_alerts)}
+                value={(stats?.active_alerts ?? 0).toString()}
                 icon="bell"
-                status="good"
-                context="No active issues"
+                status={mapStatusToCard(stats?.status)}
+                context={stats?.status === 'error' ? stats.message : (stats?.active_alerts ? 'Action required' : 'No active issues')}
               />
               <MetricCard
                 title="Latest WQ Records"
                 icon="calendar-week"
-                status="good"
+                status={latestBySite?.status === 'error' ? 'error' : 'good'}
                 value={latestWaterQualityRecords}
                 context={waterQualityContext}
               />
               <MetricCard
                 title="Latest Redox Records"
                 icon="calendar-week"
-                status="good"
+                status={latestBySite?.status === 'error' ? 'error' : 'good'}
                 value={latestRedoxRecords}
                 context={redoxContext}
               />

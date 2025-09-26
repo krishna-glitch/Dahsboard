@@ -15,23 +15,47 @@ vi.mock('../../services/api', () => ({
 const mockHomeData = {
   dashboard_data: {
     dashboard_stats: {
-      active_sites: 3,
-      total_sites: 4,
-      data_quality: 95,
-      system_health: 'Healthy',
-      recent_measurements: 1500
+      status: 'success',
+      message: null,
+      data: {
+        active_sites: 3,
+        total_sites: 4,
+        data_quality: 95,
+        active_alerts: 0,
+        recent_measurements: 1500,
+        recent_measurements_window: {
+          start: '2024-01-30T12:00:00Z',
+          end: '2024-01-31T12:00:00Z',
+          is_current: true,
+          status: 'success'
+        },
+        data_current_through: '2024-01-31T12:00:00Z',
+        latest_measurement_timestamp: '2024-01-31T12:00:00Z'
+      }
+    },
+    latest_per_site: {
+      status: 'success',
+      message: null,
+      data: [
+        { site_code: 'S1', last_water_quality: '2024-01-31T11:00:00Z', last_redox: '2024-01-31T10:30:00Z' },
+        { site_code: 'S2', last_water_quality: '2024-01-30T16:00:00Z', last_redox: null }
+      ]
     },
     system_health_data: {
-      timestamps: ['2024-01-31T10:00:00Z', '2024-01-31T11:00:00Z'],
-      values: [99.1, 99.3]
-    },
-    recent_activity: [
-      {
-        measurement_timestamp: '2024-01-31T10:00:00Z',
-        site_code: 'S1'
+      status: 'success',
+      data: {
+        timestamps: ['2024-01-31T10:00:00Z', '2024-01-31T11:00:00Z'],
+        values: [99.1, 99.3]
       }
-    ]
-  }
+    },
+    recent_activity: {
+      status: 'success',
+      data: [
+        { measurement_timestamp: '2024-01-31T10:00:00Z', site_code: 'S1' }
+      ]
+    }
+  },
+  metadata: { last_updated: '2024-01-31T12:00:00Z' }
 };
 
 const renderHome = () => {

@@ -5,8 +5,10 @@ High-Performance Cache Service backed by Redis
 import os
 import logging
 import pickle
+import uuid
+import threading
 from functools import wraps
-from typing import Any, Callable, Optional
+from typing import Any, Callable, Optional, Tuple
 
 import redis
 
@@ -23,6 +25,8 @@ class HighPerformanceCacheService:
         """
         redis_url = os.environ.get("REDIS_URL", "redis://localhost:6379/0")
         self.default_ttl = default_ttl
+        self._local_locks = {}
+        self._local_locks_lock = threading.Lock()
         try:
             self.redis_client = redis.from_url(redis_url, decode_responses=False)
             self.redis_client.ping()  # Check the connection
@@ -97,6 +101,50 @@ class HighPerformanceCacheService:
         except redis.exceptions.RedisError as e:
             logger.error(f"Failed to get Redis info: {e}")
             return {"error": str(e)}
+
+    # ------------------------------------------------------------------
+    # Cooperative locking helpers to mitigate cache stampedes
+    # ------------------------------------------------------------------
+
+    def acquire_lock(self, key: str, ttl: int = 30) -> Optional[Tuple[str, str, object]]:
+        """Attempt to acquire a short-lived lock for the given cache key."""
+        lock_key = f"lock:{key}"
+
+        if self.redis_client:
+            token = uuid.uuid4().hex
+            try:
+                acquired = self.redis_client.set(lock_key, token, nx=True, ex=max(1, ttl))
+                if acquired:
+                    return ('redis', lock_key, token)
+            except redis.exceptions.RedisError as exc:
+                logger.debug(f"Redis lock acquisition failed for {key}: {exc}")
+            return None
+
+        with self._local_locks_lock:
+            lock = self._local_locks.setdefault(lock_key, threading.Lock())
+
+        if lock.acquire(blocking=False):
+            return ('local', lock_key, lock)
+        return None
+
+    def release_lock(self, handle: Optional[Tuple[str, str, object]]):
+        """Release a previously acquired lock."""
+        if not handle:
+            return
+
+        mode, lock_key, token = handle
+
+        if mode == 'redis' and self.redis_client:
+            try:
+                script = "if redis.call('get', KEYS[1]) == ARGV[1] then return redis.call('del', KEYS[1]) else return 0 end"
+                self.redis_client.eval(script, 1, lock_key, token)
+            except redis.exceptions.RedisError as exc:
+                logger.debug(f"Redis lock release failed for {lock_key}: {exc}")
+        elif mode == 'local' and isinstance(token, threading.Lock):
+            try:
+                token.release()
+            except RuntimeError:
+                pass
 
 # Global high-performance cache service instance, now backed by Redis
 high_performance_cache = HighPerformanceCacheService()

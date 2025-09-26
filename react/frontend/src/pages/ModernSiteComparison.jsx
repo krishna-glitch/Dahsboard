@@ -230,7 +230,7 @@ const ModernSiteComparison = () => {
       
       return () => clearTimeout(debounceTimeout);
     }
-  }, [selectedSites, selectedMetric, timeRange, customStartDate, customEndDate, sitesLoading, availableSites, fetchComparisonData]);
+  }, [selectedSites, selectedMetric, timeRange, customStartDate, customEndDate, sitesLoading, availableSites]);
 
   // Optimized lookups to prevent inefficient array searches in render
   const sitesLookup = useMemo(() => {

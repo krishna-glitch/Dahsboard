@@ -5,6 +5,7 @@ Creates proper cache keys that include site parameters to prevent filtering issu
 
 import hashlib
 import json
+import time
 from functools import wraps
 from flask import request, jsonify
 from services.consolidated_cache_service import cache_service
@@ -261,15 +262,13 @@ def cached_api_response(ttl: int = 900):
             # Generate proper cache key
             endpoint_name = func.__name__
             cache_key = generate_api_cache_key(endpoint_name)
-            
+
             # Get current fidelity level for hierarchical checking
             max_fidelity = request.args.get('max_fidelity', '').lower() in ('1', 'true', 'yes', 'on', 't')
             requested_fidelity = 'max' if max_fidelity else 'std'
-            
-            # Try hierarchical cache lookup
-            cached_result, cache_type = get_compatible_cached_data(cache_key, requested_fidelity)
-            if cached_result is not None:
-                etag = _compute_etag(cached_result)
+
+            def respond_with_cached(data, cache_type_label):
+                etag = _compute_etag(data)
                 if _if_none_match_matches(etag):
                     resp_304 = FlaskResponse(status=304)
                     resp_304.headers['ETag'] = etag
@@ -277,24 +276,52 @@ def cached_api_response(ttl: int = 900):
                     resp_304.headers['X-Cache'] = 'HIT-304'
                     return resp_304
 
-                if cache_type == 'max_for_std':
-                    logger.cache_operation("hit", cache_key, f"max fidelity for {endpoint_name}")
-                    resp = jsonify(cached_result)
-                    resp.headers['Cache-Control'] = f'public, max-age={ttl}'
-                    resp.headers['X-Cache'] = 'HIT(max_fidelity)'
-                    resp.headers['ETag'] = etag
-                    return resp
+                header_suffix = 'HIT'
+                if cache_type_label == 'max_for_std':
+                    header_suffix = 'HIT(max_fidelity)'
+                elif cache_type_label:
+                    header_suffix = f'HIT({cache_type_label})'
 
-                logger.cache_operation("hit", cache_key, endpoint_name)
-                resp = jsonify(cached_result)
+                resp = jsonify(data)
                 resp.headers['Cache-Control'] = f'public, max-age={ttl}'
-                resp.headers['X-Cache'] = 'HIT'
+                resp.headers['X-Cache'] = header_suffix
                 resp.headers['ETag'] = etag
                 return resp
-            
+
+            # Try hierarchical cache lookup
+            cached_result, cache_type = get_compatible_cached_data(cache_key, requested_fidelity)
+            if cached_result is not None:
+                logger.cache_operation("hit", cache_key, endpoint_name)
+                return respond_with_cached(cached_result, cache_type)
+
             # Execute function
             logger.cache_operation("miss", cache_key, endpoint_name)
-            result = func(*args, **kwargs)
+            lock_handle = None
+            lock_release_required = False
+            acquire_lock = getattr(cache_service, 'acquire_lock', None)
+            release_lock = getattr(cache_service, 'release_lock', None)
+
+            if acquire_lock and release_lock:
+                lock_handle = acquire_lock(cache_key, ttl=min(ttl, 30))
+                lock_release_required = lock_handle is not None
+
+                if not lock_handle:
+                    # Another worker is regenerating - wait briefly for data
+                    wait_deadline = time.time() + min(ttl, 10)
+                    while time.time() < wait_deadline:
+                        time.sleep(0.05)
+                        cached_result, cache_type = get_compatible_cached_data(cache_key, requested_fidelity)
+                        if cached_result is not None:
+                            logger.cache_operation("hit", cache_key, f"waited:{endpoint_name}")
+                            return respond_with_cached(cached_result, cache_type)
+                    lock_handle = acquire_lock(cache_key, ttl=min(ttl, 30))
+                    lock_release_required = lock_handle is not None
+
+            try:
+                result = func(*args, **kwargs)
+            finally:
+                if lock_release_required and release_lock:
+                    release_lock(lock_handle)
 
             # Determine if result is cacheable JSON (dict) and extract payload if wrapped
             def extract_json_payload(resp_like):

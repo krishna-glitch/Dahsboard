@@ -1,23 +1,23 @@
 import { defineConfig } from 'vite';
 import react from '@vitejs/plugin-react';
-import viteCompression from 'vite-plugin-compression';
 import { fileURLToPath } from 'node:url';
 
 // https://vite.dev/config/
 export default defineConfig(async () => {
-  const plugins = [
-    react(),
-    // Enable gzip compression for better Lighthouse scores
-    viteCompression({
-      algorithm: 'gzip',
-      ext: '.gz',
-    }),
-    // Enable brotli compression (preferred)
-    viteCompression({
-      algorithm: 'brotliCompress',
-      ext: '.br',
-    }),
-  ];
+  const plugins = [react()];
+
+  try {
+    const { default: viteCompression } = await import('vite-plugin-compression');
+    plugins.push(
+      // Enable gzip compression for better Lighthouse scores
+      viteCompression({ algorithm: 'gzip', ext: '.gz' }),
+      // Enable brotli compression (preferred)
+      viteCompression({ algorithm: 'brotliCompress', ext: '.br' })
+    );
+  } catch (err) {
+    // eslint-disable-next-line no-console
+    console.warn('[vite] vite-plugin-compression not available; continuing without precompression');
+  }
 
   if (process.env.ANALYZE === '1' || process.env.VISUALIZE === '1') {
     try {
@@ -37,6 +37,14 @@ export default defineConfig(async () => {
   return {
     plugins,
     base: './',
+    server: {
+      proxy: {
+        '/api': {
+          target: process.env.VITE_DEV_API_URL || 'http://127.0.0.1:5000',
+          changeOrigin: true,
+        },
+      },
+    },
     resolve: {
       alias: [
         { find: 'apache-arrow', replacement: '@apache-arrow/esnext-esm' },

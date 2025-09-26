@@ -1,39 +1,65 @@
+from __future__ import annotations
+
+import logging
+from datetime import datetime, timedelta, timezone
+from typing import Any, Dict, Optional
+
+import numpy as np
+import pandas as pd
 from flask import Blueprint, jsonify
 from flask_login import login_required
-import logging
-import pandas as pd
-import numpy as np
-import json
-from datetime import datetime, timedelta
-from config.database import db
-from utils.errors import APIError
 
-# Custom JSON encoder to handle numpy types
-class NumpyEncoder(json.JSONEncoder):
-    def default(self, obj):
-        if isinstance(obj, np.integer):
-            return int(obj)
-        elif isinstance(obj, np.floating):
-            return float(obj)
-        elif isinstance(obj, np.ndarray):
-            return obj.tolist()
-        elif pd.isna(obj):
-            return None
-        return super(NumpyEncoder, self).default(obj)
-
-# Import comprehensive performance optimization
+from config.advanced_logging_config import get_advanced_logger
+from config.database import DatabaseError, db
 from utils.advanced_performance_integration_simple import enterprise_performance
 from utils.redis_api_cache_utils import redis_cached_api_response
 
-# Initialize logger (using the existing advanced logging system)
-from config.advanced_logging_config import get_advanced_logger
+home_bp = Blueprint('home_bp', __name__)
 logger = get_advanced_logger(__name__)
 
-home_bp = Blueprint('home_bp', __name__)
+
+def _ensure_utc(ts: Optional[Any]) -> Optional[datetime]:
+    if ts is None or pd.isna(ts):
+        return None
+    if isinstance(ts, pd.Timestamp):
+        ts = ts.to_pydatetime()
+    elif isinstance(ts, datetime):
+        pass
+    elif isinstance(ts, str):
+        for fmt in ('%Y-%m-%dT%H:%M:%S.%fZ', '%Y-%m-%dT%H:%M:%S.%f%z', '%Y-%m-%dT%H:%M:%S%z', '%Y-%m-%d %H:%M:%S', '%Y-%m-%dT%H:%M:%S'):
+            try:
+                dt = datetime.strptime(ts, fmt)
+                if fmt.endswith('Z'):
+                    dt = dt.replace(tzinfo=timezone.utc)
+                return dt if dt.tzinfo else dt.replace(tzinfo=timezone.utc)
+            except ValueError:
+                continue
+        try:
+            return pd.to_datetime(ts, utc=True).to_pydatetime()
+        except Exception:
+            return None
+    else:
+        return None
+    return ts if ts.tzinfo else ts.replace(tzinfo=timezone.utc)
+
+
+def _run_query(sql: str, params: Optional[Dict[str, Any]] = None) -> pd.DataFrame:
+    try:
+        result = db.execute_query(sql, params)
+        return result if result is not None else pd.DataFrame()
+    except DatabaseError as exc:
+        logger.warning("Home query failed: %s", exc)
+        return pd.DataFrame()
+
+
+def _to_records(df: pd.DataFrame) -> list[dict[str, Any]]:
+    if df is None or df.empty:
+        return []
+    return df.replace({np.nan: None}).to_dict('records')
+
 
 @home_bp.route('/', methods=['GET'])
 def root():
-    """Root endpoint to verify API is running"""
     return jsonify({
         'message': 'Water Quality Analysis API is running',
         'status': 'operational',
@@ -47,166 +73,147 @@ def root():
         }
     }), 200
 
+
 @home_bp.route('/data', methods=['GET'])
 @login_required
 @enterprise_performance(data_type='dashboard')
 @redis_cached_api_response(ttl=300)
 def get_home_data():
     logger.info("Received request for home data API.")
-    try:
-        from config.database import db
-        import pandas as pd
 
-        dashboard_data = {}
+    now_utc = datetime.now(timezone.utc)
+    dashboard_data: Dict[str, Dict[str, Any]] = {}
 
-        # 1. Load dashboard statistics
-        stats = {}
+    # Site statistics
+    sites_df = _run_query("SELECT site_id, status, code FROM impact.site")
+    total_sites = len(sites_df)
+    active_sites = len(sites_df[sites_df['status'] == 'active']) if 'status' in sites_df.columns else total_sites
 
-        # Active Sites Count
-        sites_query = "SELECT site_id, status FROM impact.site"
-        sites_result = db.execute_query(sites_query)
+    # Latest measurement window
+    latest_df = _run_query("SELECT MAX(measurement_timestamp) AS latest FROM impact.water_quality")
+    latest_ts = _ensure_utc(latest_df.iloc[0]['latest']) if not latest_df.empty else None
+    window_start = window_end = None
+    recent_measurements = 0
+    recent_status = 'empty'
 
-        if not sites_result.empty:
-            total_sites = int(len(sites_result))
-            active_sites = int(len(sites_result[sites_result['status'] == 'active'])) if 'status' in sites_result.columns else total_sites
-            stats['active_sites'] = active_sites
-            stats['total_sites'] = total_sites
+    if latest_ts is not None:
+        window_end = latest_ts
+        window_start = window_end - timedelta(hours=24)
+        count_df = _run_query(
+            "SELECT COUNT(*) AS cnt FROM impact.water_quality "
+            "WHERE measurement_timestamp BETWEEN :start AND :end",
+            {'start': window_start, 'end': window_end}
+        )
+        recent_measurements = int(count_df.iloc[0]['cnt']) if not count_df.empty else 0
+        if recent_measurements > 0:
+            recent_status = 'success'
+            if (now_utc - window_end) > timedelta(hours=24):
+                recent_status = 'warning'
         else:
-            stats['active_sites'] = 0
-            stats['total_sites'] = 0
+            recent_status = 'empty'
 
-        # Recent measurements count (last 24 hours relative to NOW)
-        try:
-            # Determine latest measurement overall (data currency)
-            latest_ts_df = db.execute_query("SELECT MAX(measurement_timestamp) AS latest FROM impact.water_quality")
-            latest_ts = pd.to_datetime(latest_ts_df['latest'].iloc[0]) if not latest_ts_df.empty else pd.NaT
-            if pd.isna(latest_ts):
-                latest_ts = None
+    dashboard_stats_payload = {
+        'total_sites': total_sites,
+        'active_sites': active_sites,
+        'recent_measurements': recent_measurements,
+        'recent_measurements_window': {
+            'start': window_start.isoformat() if window_start else None,
+            'end': window_end.isoformat() if window_end else None,
+            'is_current': window_end is not None and (now_utc - window_end) <= timedelta(hours=24),
+            'status': recent_status,
+        },
+        'recent_measurements_status': recent_status,
+        'latest_measurement_timestamp': window_end.isoformat() if window_end else None,
+        'data_current_through': window_end.isoformat() if window_end else None,
+        'data_quality': 98.5,
+        'active_alerts': 0,
+    }
 
-            # Count measurements in the last 24 hours relative to current time
-            now_ts = pd.Timestamp.utcnow()
-            window_start_now = now_ts - pd.Timedelta(hours=24)
-            recent_measurements_query = """
-                SELECT COUNT(*) AS count
-                FROM impact.water_quality
-                WHERE measurement_timestamp BETWEEN :start_ts AND :end_ts
-            """
-            recent_result = db.execute_query(recent_measurements_query, {
-                'start_ts': window_start_now.to_pydatetime(),
-                'end_ts': now_ts.to_pydatetime()
-            })
-            recent_24h = int(recent_result.iloc[0]['count']) if not recent_result.empty else 0
+    status_label = 'success'
+    status_message = None
+    if recent_status == 'empty':
+        status_label = 'empty'
+        status_message = 'No measurements recorded yet.'
+    elif recent_status == 'warning':
+        status_label = 'warning'
+        status_message = 'No measurements in the last 24 hours.'
 
-            # If data is stale (latest older than window), clamp to 0 to avoid misleading counts
-            if latest_ts is None or latest_ts < window_start_now:
-                stats['recent_measurements'] = 0
-            else:
-                stats['recent_measurements'] = recent_24h
+    dashboard_data['dashboard_stats'] = {
+        'status': status_label,
+        'message': status_message,
+        'data': dashboard_stats_payload,
+    }
 
-            # Expose the data currency date (UTC ISO date) if available
-            if latest_ts is not None:
-                stats['data_current_through'] = latest_ts.isoformat()
-        except Exception as e:
-            logger.warning(f"Could not get recent measurements: {e}")
-            stats['recent_measurements'] = 0
+    # Recent activity and latest per site
+    recent_activity_df = _run_query(
+        """
+        SELECT wq.measurement_timestamp AS measurement_timestamp,
+               s.code AS site_code,
+               'Water Quality Measurement' AS activity_type
+        FROM impact.water_quality wq
+        JOIN impact.site s ON wq.site_id = s.site_id
+        ORDER BY wq.measurement_timestamp DESC
+        LIMIT 5
+        """
+    )
+    recent_activity_records = _to_records(recent_activity_df)
+    dashboard_data['recent_activity'] = {
+        'status': 'success' if recent_activity_records else 'empty',
+        'message': None if recent_activity_records else 'No recent activity recorded.',
+        'data': recent_activity_records,
+    }
 
-        # System health (simplified)
-        stats['system_health'] = "Operational"
-        stats['data_quality'] = 98.5  # Mock value
+    latest_per_site_df = _run_query(
+        """
+        SELECT s.code AS site_code,
+               MAX(wq.measurement_timestamp) AS last_water_quality,
+               MAX(re.measurement_timestamp) AS last_redox
+        FROM impact.site s
+        LEFT JOIN impact.water_quality wq ON s.site_id = wq.site_id
+        LEFT JOIN impact.redox_event re ON s.site_id = re.site_id
+        GROUP BY s.code
+        ORDER BY s.code
+        """
+    )
+    if not latest_per_site_df.empty:
+        latest_per_site_df['last_water_quality'] = latest_per_site_df['last_water_quality'].apply(
+            lambda ts: _ensure_utc(ts).isoformat() if ts else None
+        )
+        latest_per_site_df['last_redox'] = latest_per_site_df['last_redox'].apply(
+            lambda ts: _ensure_utc(ts).isoformat() if ts else None
+        )
+    latest_site_records = _to_records(latest_per_site_df)
+    dashboard_data['latest_per_site'] = {
+        'status': 'success' if latest_site_records else 'empty',
+        'message': None if latest_site_records else 'No site activity available.',
+        'data': latest_site_records,
+    }
 
-        logger.info(f"Stats data types: {[(k, type(v).__name__) for k, v in stats.items()]}")
-        dashboard_data['dashboard_stats'] = stats
-
-        # 2. Load recent activity
-        try:
-            # Get the last 5 water quality measurements overall (robust even if data is older than 24h)
-            activity_query = """
-                SELECT wq.measurement_timestamp, s.code AS site_code, 'Water Quality Measurement' AS activity_type
-                FROM impact.water_quality wq
-                JOIN impact.site s ON wq.site_id = s.site_id
-                ORDER BY wq.measurement_timestamp DESC
-                LIMIT 5
-            """
-            activity_result = db.execute_query(activity_query)
-            # Convert to native Python types to avoid JSON serialization issues
-            if not activity_result.empty:
-                records = []
-                for _, row in activity_result.iterrows():
-                    record = {}
-                    for col in activity_result.columns:
-                        val = row[col]
-                        if pd.isna(val):
-                            record[col] = None
-                        elif isinstance(val, (np.integer, np.int64, np.int32)):
-                            record[col] = int(val)
-                        elif isinstance(val, (np.floating, np.float64, np.float32)):
-                            record[col] = float(val)
-                        elif hasattr(val, 'isoformat'):
-                            record[col] = val.isoformat()
-                        else:
-                            record[col] = str(val)
-                    records.append(record)
-                dashboard_data['recent_activity'] = records
-            else:
-                dashboard_data['recent_activity'] = []
-        except Exception as e:
-            logger.warning(f"Could not get recent activity: {e}")
-            dashboard_data['recent_activity'] = []
-
-        # 3. System health data for chart
-        # Simplified mock data instead of real performance testing
+    # Synthetic system health data (placeholder)
+    try:
+        health_data = {
+            'timestamps': [(now_utc - timedelta(minutes=i)).strftime('%H:%M') for i in range(10, 0, -1)],
+            'values': [95, 97, 96, 98, 97, 99, 98, 97, 98, 99],
+        }
         dashboard_data['system_health_data'] = {
-            'timestamps': [(datetime.now() - timedelta(minutes=i)).strftime('%H:%M') for i in range(10, 0, -1)],
-            'values': [95, 97, 96, 98, 97, 99, 98, 97, 98, 99]  # Mock health percentages
+            'status': 'success',
+            'data': health_data,
+        }
+    except Exception as exc:  # pragma: no cover
+        logger.warning("Could not generate system health data: %s", exc)
+        dashboard_data['system_health_data'] = {
+            'status': 'error',
+            'message': 'Could not generate system health chart.',
+            'data': {},
         }
 
-        # 4. Latest record per site for Water Quality and Redox (site-wise KPI)
-        try:
-            latest_per_site_query = """
-                SELECT 
-                  s.code AS site_code,
-                  MAX(wq.measurement_timestamp) AS last_water_quality,
-                  MAX(re.measurement_timestamp) AS last_redox
-                FROM impact.site s
-                LEFT JOIN impact.water_quality wq ON s.site_id = wq.site_id
-                LEFT JOIN impact.redox_event re ON s.site_id = re.site_id
-                GROUP BY s.code
-                ORDER BY s.code
-            """
-            latest_df = db.execute_query(latest_per_site_query)
-            latest_records = []
-            if not latest_df.empty:
-                for _, row in latest_df.iterrows():
-                    site_code = row.get('site_code')
-                    lwq = row.get('last_water_quality')
-                    lrx = row.get('last_redox')
-                    latest_records.append({
-                        'site_code': None if pd.isna(site_code) else str(site_code),
-                        'last_water_quality': None if pd.isna(lwq) else lwq.isoformat() if hasattr(lwq, 'isoformat') else str(lwq),
-                        'last_redox': None if pd.isna(lrx) else lrx.isoformat() if hasattr(lrx, 'isoformat') else str(lrx),
-                    })
-            dashboard_data['latest_per_site'] = latest_records
-        except Exception as e:
-            logger.warning(f"Could not compute latest per site records: {e}")
-            dashboard_data['latest_per_site'] = []
-
-        metadata = {
-            'last_updated': datetime.now().isoformat(),
-            'record_count': int(len(dashboard_data.get('recent_activity', []))),
+    response_data = {
+        'dashboard_data': dashboard_data,
+        'metadata': {
+            'last_updated': now_utc.isoformat(),
             'performance': {'loading_time_ms': 50.0},
-            'has_data': True
-        }
+            'has_data': bool(latest_site_records or recent_activity_records or total_sites),
+        },
+    }
 
-        response_data = {
-            'dashboard_data': dashboard_data,
-            'metadata': metadata
-        }
-        logger.info("Successfully prepared home data API response.")
-        
-        # Use custom encoder to handle numpy types
-        from flask import Response
-        json_str = json.dumps(response_data, cls=NumpyEncoder, ensure_ascii=False)
-        return Response(json_str, mimetype='application/json'), 200
-    except Exception as e:
-        logger.error(f"Error in get_home_data API: {e}", exc_info=True)
-        return jsonify({'error': 'Failed to retrieve home data', 'details': str(e)}), 500
+    return jsonify(response_data), 200

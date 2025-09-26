@@ -2,7 +2,7 @@
 Request Response Logger for Flask Migration
 """
 
-from flask import Flask, request
+from flask import Flask, request, g
 import logging
 
 logger = logging.getLogger(__name__)
@@ -14,10 +14,12 @@ def setup_flask_request_logging(app: Flask):
     def log_request_info():
         # Reduce log verbosity in production
         level = logging.INFO if app.debug else logging.DEBUG
-        logger.log(level, f"Request: {request.method} {request.path}")
+        correlation_id = getattr(g, 'correlation_id', 'unknown')
+        logger.log(level, f"[{correlation_id}] Request: {request.method} {request.path}")
     
     @app.after_request
     def log_response_info(response):
         level = logging.INFO if app.debug else logging.DEBUG
-        logger.log(level, f"Response: {response.status_code} {request.path}")
+        correlation_id = getattr(g, 'correlation_id', 'unknown')
+        logger.log(level, f"[{correlation_id}] Response: {response.status_code} {request.path}")
         return response

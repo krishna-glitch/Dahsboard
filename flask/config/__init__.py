@@ -22,6 +22,7 @@ class ServerConfig:
     session_timeout_seconds: int = 2592000
     force_https: bool = False
     strict_transport_security: bool = False
+    allowed_origins: Optional[str] = None
     
     # Performance settings
     max_content_length: int = 16 * 1024 * 1024  # 16MB
@@ -41,5 +42,8 @@ def get_server_config() -> ServerConfig:
         secret_key=os.getenv('FLASK_SECRET_KEY', 'dev-secret-key-change-in-production'),
         session_cookie_secure=os.getenv('SESSION_COOKIE_SECURE', 'False').lower() == 'true',
         force_https=os.getenv('FORCE_HTTPS', 'False').lower() == 'true',
+        strict_transport_security=os.getenv('STRICT_TRANSPORT_SECURITY', 'False').lower() == 'true',
+        session_cookie_samesite=os.getenv('SESSION_COOKIE_SAMESITE', 'Lax'),
         session_timeout_seconds=timeout_seconds,
+        allowed_origins=os.getenv('FLASK_ALLOWED_ORIGINS'),
     )

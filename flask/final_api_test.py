@@ -29,7 +29,18 @@ def final_test():
         # Step 4: Test performance status (requires auth)
         perf_response = client.get('/api/v1/performance_status/comprehensive-status')
         print(f"✅ Performance Status: {perf_response.status_code}")
-        
+
+        # Step 5: Test home page data (DEBUGGING)
+        home_response = client.get('/api/v1/home/data')
+        print(f"✅ Home Page Data: {home_response.status_code}")
+        print("--- HOME PAGE RESPONSE JSON ---")
+        try:
+            print(json.dumps(home_response.get_json(), indent=2))
+        except Exception as e:
+            print(f"Could not parse JSON response: {e}")
+            print(home_response.data)
+        print("-----------------------------")
+
         print("="*50)
         print("🎉 Flask backend is fully functional!")
         print("📊 All critical endpoints tested and working")

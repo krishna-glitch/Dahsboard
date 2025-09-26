@@ -13,7 +13,7 @@ from services.consolidated_cache_service import cached, cache_service
 from utils.api_cache_utils import cached_api_response
 from services.advanced_filter_service import advanced_filter_service
 from utils.optimized_serializer import serialize_dataframe_optimized
-from services.monthly_cache_service import fetch_year_window
+from services.monthly_cache_service import fetch_range_window
 
 # Initialize logger
 from config.advanced_logging_config import get_advanced_logger
@@ -125,6 +125,21 @@ def get_water_quality_data():
     logger.info(f"   Advanced filters: parameters={filter_config.parameters}, "
                f"quality={filter_config.data_quality.value}, alerts={filter_config.alert_level.value}")
 
+    load_warnings: List[str] = []
+
+    def _safe_load_chunk(sites, start, end, limit=None):
+        try:
+            return core_data_service.load_water_quality_data(
+                sites=sites,
+                start_date=start,
+                end_date=end,
+                limit=limit,
+            )
+        except Exception as load_error:
+            logger.error(f"[WATER QUALITY] Database query failed: {load_error}")
+            load_warnings.append(str(load_error))
+            return pd.DataFrame()
+
     try:
         # Set time_range default if needed
         if not time_range:
@@ -155,23 +170,24 @@ def get_water_quality_data():
         logger.info(f"[ADAPTIVE RESOLUTION] {resolution_config['aggregation_method']} aggregation "
                    f"for {days_back} days ({resolution_config['performance_tier']} tier)")
 
-        use_monthly_cache = (days_back >= 330) and not chunk_size and not offset
+        use_monthly_cache = (days_back >= 30) and not chunk_size and not offset
 
         if use_monthly_cache:
-            logger.info("[WATER QUALITY] Monthly cache path engaged for year-long request")
+            logger.info("[WATER QUALITY] Monthly cache path engaged for request")
 
             def month_loader(month_start: datetime, month_end: datetime) -> pd.DataFrame:
-                return core_data_service.load_water_quality_data(
+                return _safe_load_chunk(
                     sites=selected_sites,
-                    start_date=month_start,
-                    end_date=month_end,
+                    start=month_start,
+                    end=month_end,
                     limit=200000,
                 )
 
-            df = fetch_year_window(
+            df = fetch_range_window(
                 page='water_quality',
                 sites=selected_sites,
                 parameters=filter_config.parameters or [],
+                start_date=start_date,
                 end_date=end_date,
                 loader=month_loader,
             )
@@ -206,10 +222,10 @@ def get_water_quality_data():
                 f"[SMART LOADING] Using initial limit: {initial_limit} for {performance_mode} mode (chunk_size={chunk_size} offset={offset})"
             )
 
-            df = core_data_service.load_water_quality_data(
+            df = _safe_load_chunk(
                 sites=selected_sites,
-                start_date=start_date,
-                end_date=end_date,
+                start=start_date,
+                end=end_date,
                 limit=initial_limit,
             )
 
@@ -313,7 +329,8 @@ def get_water_quality_data():
                 } if chunk_size else None),
                 'advanced_filters': filter_stats if 'filter_stats' in locals() else None,
                 'has_data': not df.empty,
-                'no_downsample': no_downsample
+                'no_downsample': no_downsample,
+                'warnings': load_warnings or None,
             }
         }
 
@@ -417,5 +434,3 @@ def get_available_sites():
                 'error_occurred': True
             }
         }), 500
-
-

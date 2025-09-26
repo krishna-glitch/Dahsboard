@@ -7,7 +7,7 @@ from datetime import datetime, timedelta
 from services.core_data_service import core_data_service, DataQuery
 from services.config_service import config_service
 from services.adaptive_data_resolution import adaptive_resolution
-from services.monthly_cache_service import fetch_year_window
+from services.monthly_cache_service import fetch_range_window
 from utils.optimized_serializer import serialize_dataframe_optimized
 # Redis-enhanced caching - falls back to memory if Redis unavailable
 from utils.redis_api_cache_utils import redis_cached_api_response
@@ -161,10 +161,10 @@ def get_redox_analysis_data():
         logger.info(f"[ADAPTIVE RESOLUTION] {resolution_config['aggregation_method']} aggregation "
                    f"for {days_back} days ({resolution_config['performance_tier']} tier)")
 
-        use_monthly_cache = days_back >= 330
+        use_monthly_cache = days_back >= 30
 
         if use_monthly_cache:
-            logger.info("[REDOX] Monthly cache path engaged for year-long request")
+            logger.info("[REDOX] Monthly cache path engaged for request")
 
             def month_loader(month_start: datetime, month_end: datetime) -> pd.DataFrame:
                 return core_data_service.load_redox_data(
@@ -174,10 +174,11 @@ def get_redox_analysis_data():
                     limit=25000,
                 )
 
-            df = fetch_year_window(
+            df = fetch_range_window(
                 page='redox',
                 sites=selected_sites,
                 parameters=[],
+                start_date=start_date,
                 end_date=end_date,
                 loader=month_loader,
             )

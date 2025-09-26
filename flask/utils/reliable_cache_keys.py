@@ -15,6 +15,12 @@ import pandas as pd
 from config.advanced_logging_config import get_advanced_logger
 logger = get_advanced_logger(__name__)
 
+
+def _secure_digest(payload: bytes) -> str:
+    """Return a deterministic, non-cryptographic digest for cache keys."""
+    return hashlib.blake2b(payload, digest_size=16).hexdigest()
+
+
 class ReliableCacheKeyGenerator:
     """
     Generates reliable, deterministic cache keys that avoid common pitfalls
@@ -75,12 +81,11 @@ class ReliableCacheKeyGenerator:
         
         # Join components and create final hash
         key_string = "|".join(key_components)
-        
-        # Use SHA-256 for reliable, collision-resistant hashing
-        cache_key = hashlib.sha256(key_string.encode('utf-8')).hexdigest()
-        
-        # Return truncated hash with prefix for readability
-        return f"{prefix}:{cache_key[:32]}"
+
+        # Use blake2b for compact, deterministic hashing without security intent
+        cache_key = _secure_digest(key_string.encode('utf-8'))
+
+        return f"{prefix}:{cache_key}"
     
     @staticmethod
     def _serialize_args(args: Tuple) -> str:
@@ -94,14 +99,14 @@ class ReliableCacheKeyGenerator:
                 serializable_args.append(ReliableCacheKeyGenerator._make_serializable(arg))
             
             # Use JSON for deterministic serialization
-            return hashlib.md5(
+            return _secure_digest(
                 json.dumps(serializable_args, sort_keys=True, default=str).encode('utf-8')
-            ).hexdigest()
+            )
             
         except Exception as e:
             logger.warning(f"Failed to serialize args safely, using fallback: {e}")
             # Fallback to string representation with warning
-            return hashlib.md5(str(args).encode('utf-8')).hexdigest()
+            return _secure_digest(str(args).encode('utf-8'))
     
     @staticmethod
     def _serialize_dict(data: Dict) -> str:
@@ -122,19 +127,19 @@ class ReliableCacheKeyGenerator:
                 clean_dict[clean_key] = clean_value
             
             # Sort keys for deterministic output
-            return hashlib.md5(
+            return _secure_digest(
                 json.dumps(clean_dict, sort_keys=True, default=str).encode('utf-8')
-            ).hexdigest()
+            )
             
         except Exception as e:
             logger.warning(f"Failed to serialize dict safely, using fallback: {e}")
             # Fallback with safer serialization
             try:
                 safe_items = [(str(k), str(v)) for k, v in data.items() if k not in ['request', '_request', 'self']]
-                return hashlib.md5(str(sorted(safe_items)).encode('utf-8')).hexdigest()
+                return _secure_digest(str(sorted(safe_items)).encode('utf-8'))
             except (TypeError, ValueError, AttributeError) as e:
                 logger.warning(f"Fallback serialization failed, using length hash: {e}")
-                return hashlib.md5(str(len(data)).encode('utf-8')).hexdigest()
+                return _secure_digest(str(len(data)).encode('utf-8'))
     
     @staticmethod
     def _make_serializable(obj: Any) -> Any:

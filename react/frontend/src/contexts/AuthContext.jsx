@@ -1,149 +1,157 @@
-import React, { useState, useEffect, useCallback, useMemo, useRef } from 'react';
+import React, { useMemo, useState, useCallback } from 'react';
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { loginUser, logoutUser, getAuthStatus } from '../services/api';
 import { AuthContext } from './AuthContextDefinition';
 import { clearLegacyAuthData } from '../utils/authCleanup';
 
-const AUTH_STATES = {
-  CHECKING: 'checking',
-  AUTHENTICATED: 'authenticated',
-  UNAUTHENTICATED: 'unauthenticated',
+const AUTH_STATUS_QUERY_KEY = ['auth-status'];
+
+const mapAuthPayload = (payload) => {
+  if (!payload) {
+    return { authenticated: false, user: null };
+  }
+  if (payload.success === false) {
+    return { authenticated: false, user: null };
+  }
+  const data = payload.data || payload;
+  return {
+    authenticated: Boolean(data?.authenticated),
+    user: data?.user || null,
+  };
 };
 
 export const AuthProvider = ({ children }) => {
-  const [status, setStatus] = useState(AUTH_STATES.CHECKING);
-  const [user, setUser] = useState(null);
-  const [loginError, setLoginError] = useState(null);
+  const queryClient = useQueryClient();
   const [authError, setAuthError] = useState(null);
-  const [isRefreshing, setIsRefreshing] = useState(false);
-  const inFlightRef = useRef(null);
-  const isMountedRef = useRef(true);
 
-  useEffect(() => () => {
-    isMountedRef.current = false;
+  // Ensure legacy storage artifacts are cleared once on mount
+  React.useEffect(() => {
+    clearLegacyAuthData();
   }, []);
 
-  const applyAuthResponse = useCallback((response) => {
-    if (!isMountedRef.current) return;
-
-    if (response?.authenticated && response.user) {
-      setUser(response.user);
-      setStatus(AUTH_STATES.AUTHENTICATED);
-    } else {
-      setUser(null);
-      setStatus(AUTH_STATES.UNAUTHENTICATED);
-    }
-  }, []);
-
-  const performStatusCheck = useCallback(async (forceLoading = false) => {
-    if (inFlightRef.current) {
-      return inFlightRef.current;
-    }
-
-    if (forceLoading) {
-      if (isMountedRef.current) {
-        setStatus(AUTH_STATES.CHECKING);
-      }
-    } else if (isMountedRef.current) {
-      setIsRefreshing(true);
-    }
-
-    const request = (async () => {
+  const authStatusQuery = useQuery({
+    queryKey: AUTH_STATUS_QUERY_KEY,
+    queryFn: async () => {
       try {
         const response = await getAuthStatus();
-        if (isMountedRef.current) {
-          setAuthError(null);
-          applyAuthResponse(response);
-        }
-        return response;
+        setAuthError(null);
+        return mapAuthPayload(response);
       } catch (error) {
-        const errorType = (error && typeof error === 'object' && 'type' in error) ? error.type : '';
-
-        if (isMountedRef.current) {
-          if (errorType === 'UNAUTHORIZED') {
-            setAuthError(null);
-          } else {
-            const message = error instanceof Error ? error.message : 'Authentication check failed';
-            setAuthError(message);
-          }
-          applyAuthResponse(null);
+        if (error?.type === 'UNAUTHORIZED') {
+          setAuthError(null);
+          return { authenticated: false, user: null };
         }
-        return null;
-      } finally {
-        if (isMountedRef.current) {
-          setIsRefreshing(false);
-        }
+        const message = error instanceof Error ? error.message : 'Authentication check failed';
+        setAuthError(message);
+        return { authenticated: false, user: null };
       }
-    })();
+    },
+    staleTime: 60 * 1000,
+    gcTime: 5 * 60 * 1000,
+    refetchOnWindowFocus: false,
+  });
 
-    inFlightRef.current = request.finally(() => {
-      inFlightRef.current = null;
-    });
+  const { data: authData, isLoading, isFetching, refetch, fetchStatus } = authStatusQuery;
 
-    return inFlightRef.current;
-  }, [applyAuthResponse]);
+  const loginMutation = useMutation({
+    mutationFn: async ({ username, password }) => {
+      const payload = await loginUser(username, password);
+      return payload;
+    },
+    onSuccess: (payload) => {
+      const mapped = mapAuthPayload({ success: true, data: { authenticated: true, user: payload?.data?.user } });
+      queryClient.setQueryData(AUTH_STATUS_QUERY_KEY, mapped);
+      setAuthError(null);
+    },
+    onError: (error) => {
+      const message = error instanceof Error ? error.message : 'Login failed';
+      setAuthError(message);
+    },
+    onSettled: () => {
+      queryClient.invalidateQueries({ queryKey: AUTH_STATUS_QUERY_KEY });
+    }
+  });
 
-  useEffect(() => {
-    clearLegacyAuthData();
-    performStatusCheck(true);
-  }, [performStatusCheck]);
+  const logoutMutation = useMutation({
+    mutationFn: async () => {
+      const payload = await logoutUser();
+      return payload;
+    },
+    onSuccess: () => {
+      queryClient.setQueryData(AUTH_STATUS_QUERY_KEY, { authenticated: false, user: null });
+      setAuthError(null);
+    },
+    onError: (error) => {
+      const message = error instanceof Error ? error.message : 'Logout failed';
+      setAuthError(message);
+    },
+    onSettled: () => {
+      queryClient.invalidateQueries({ queryKey: AUTH_STATUS_QUERY_KEY });
+    }
+  });
 
   const login = useCallback(async (username, password) => {
     try {
-      setLoginError(null);
-      const response = await loginUser(username, password);
-
-      if (response?.user) {
-        applyAuthResponse({ authenticated: true, user: response.user });
-        return { success: true };
+      const payload = await loginMutation.mutateAsync({ username, password });
+      if (payload?.success) {
+        return { success: true, user: payload?.data?.user || null };
       }
-
-      const message = response?.error || 'Login failed';
-      setLoginError(message);
-      return { success: false, error: message };
+      const primaryError = Array.isArray(payload?.errors) ? payload.errors[0] : null;
+      const errorMessage = primaryError?.message || 'Login failed';
+      const errorCode = primaryError?.code || 'LOGIN_FAILED';
+      const errorMeta = primaryError?.meta || null;
+      return { success: false, error: errorMessage, code: errorCode, meta: errorMeta, errors: payload?.errors || [] };
     } catch (error) {
       const message = error instanceof Error ? error.message : 'Login failed';
-      setLoginError(message);
-      return { success: false, error: message };
+      const type = (error && typeof error === 'object' && 'type' in error) ? error.type : 'LOGIN_FAILED';
+      const meta = (error && typeof error === 'object' && 'meta' in error) ? error.meta : null;
+      setAuthError(message);
+      return { success: false, error: message, code: type, meta };
     }
-  }, [applyAuthResponse]);
+  }, [loginMutation]);
 
   const logout = useCallback(async () => {
     try {
-      await logoutUser();
+      await logoutMutation.mutateAsync();
     } catch (error) {
-      console.error('Logout failed:', error);
-    } finally {
-      if (isMountedRef.current) {
-        setLoginError(null);
-        setAuthError(null);
-        applyAuthResponse(null);
-      }
+      const message = error instanceof Error ? error.message : 'Logout failed';
+      setAuthError(message);
+      throw error;
     }
-  }, [applyAuthResponse]);
+  }, [logoutMutation]);
 
-  const checkAuthStatus = useCallback((force = false) => {
-    return performStatusCheck(Boolean(force));
-  }, [performStatusCheck]);
+
+const checkAuthStatus = useCallback((force = false) => {
+  if (force || fetchStatus === 'idle') {
+    return refetch();
+  }
+  return Promise.resolve(authData);
+}, [authData, fetchStatus, refetch]);
 
   const clearError = useCallback(() => {
-    setLoginError(null);
     setAuthError(null);
-  }, []);
+    loginMutation.reset();
+    logoutMutation.reset();
+  }, [loginMutation, logoutMutation]);
 
-  const value = useMemo(() => ({
-    user,
-    loading: status === AUTH_STATES.CHECKING || isRefreshing,
-    error: loginError || authError,
-    isAuthenticated: status === AUTH_STATES.AUTHENTICATED,
-    status,
-    login,
-    logout,
-    checkAuthStatus,
-    clearError,
-  }), [user, status, isRefreshing, loginError, authError, login, logout, checkAuthStatus, clearError]);
+  const contextValue = useMemo(() => {
+    const data = authData || { authenticated: false, user: null };
+    const loading = isLoading || isFetching || loginMutation.isPending;
+    return {
+      user: data.user,
+      loading,
+      error: authError,
+      isAuthenticated: data.authenticated,
+      status: data.authenticated ? 'authenticated' : (loading ? 'checking' : 'unauthenticated'),
+      login,
+      logout,
+      checkAuthStatus,
+      clearError,
+    };
+  }, [authData, isLoading, isFetching, loginMutation.isPending, authError, login, logout, checkAuthStatus, clearError]);
 
   return (
-    <AuthContext.Provider value={value}>
+    <AuthContext.Provider value={contextValue}>
       {children}
     </AuthContext.Provider>
   );

@@ -11,7 +11,7 @@
   },
   "test_user": {
     "username": "test_user",
-    "password": "ecd71870d1963316a97e3ac3408c9835ad8cf0f3c1bc703527c30265534f75ae",
+    "password": "test123",
     "full_name": "Test User",
     "email": "test@test.com",
     "role": "user",
